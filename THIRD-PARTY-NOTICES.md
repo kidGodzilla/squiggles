@@ -1,4 +1,4 @@
-Characters, rooms and parts of the room UI in ui/cast.js come from agent-standup by Arthur, used under the MIT License:
+Parts of the room UI are adapted from agent-standup by Arthur, used under the MIT License: the tile layout and animations (ui/room.css), the shared screen window (ui/room.js, presentation mode) and the voice setup (voice/). The characters and rooms in ui/cast.js are original to Squiggles; agent-standup's name and characters are not used.
 
 MIT License
 

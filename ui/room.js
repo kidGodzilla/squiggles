@@ -17,7 +17,7 @@ const S = {
 const P = (id) => persona(S.sq[id]);
 
 // =====================================================================
-//  audio: voices, radio, a few office sounds (from agent-standup)
+//  audio: voices, radio, a few office sounds (voice setup adapted from agent-standup, MIT)
 // =====================================================================
 const AUD = {
   ctx: null,
@@ -195,7 +195,7 @@ function oops(id) { const t = tileOf(id); if (t) { t.classList.remove('oops'); v
 function toast(msg) { const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; const c = $('#toasts'); c.appendChild(t); while (c.children.length > 3) c.firstChild.remove(); setTimeout(() => t.remove(), 3500); }
 
 // =====================================================================
-//  the shared screen, rebuilt from tool calls (agent-standup's presentation mode)
+//  the shared screen, rebuilt from tool calls (adapted from agent-standup's presentation mode, MIT)
 // =====================================================================
 function pushTool(id, ev) {
   const buf = (S.term[id] = S.term[id] || []);

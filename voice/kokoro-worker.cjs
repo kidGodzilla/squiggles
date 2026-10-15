@@ -12,7 +12,7 @@ function wav(samples, rate) {   // Float32 in [-1, 1] → 16-bit mono WAV
   return buf;
 }
 async function main() {
-  const dir = process.env.AGENT_STANDUP_KOKORO_DIR, dtype = process.env.AGENT_STANDUP_KOKORO_DTYPE || 'q4f16';
+  const dir = process.env.SQUIGGLES_KOKORO_DIR, dtype = process.env.SQUIGGLES_KOKORO_DTYPE || 'q4f16';
   const req = createRequire(path.join(dir, 'node_modules', 'x.js'));   // resolve from the install folder, not from the extension
   const tf = req('@huggingface/transformers'); tf.env.cacheDir = path.join(dir, 'models');
   const { KokoroTTS } = req('kokoro-js'); const tts = await KokoroTTS.from_pretrained(MODEL, { dtype, device: 'cpu' });

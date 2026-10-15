@@ -3,9 +3,9 @@
 const fs = require('fs'), os = require('os'), path = require('path'), { spawn } = require('child_process');
 
 const WIN = process.platform === 'win32';
-const DIR = process.env.AGENT_STANDUP_KOKORO_DIR || (WIN ? path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), 'agent-standup', 'kokoro') : path.join(os.homedir(), '.cache', 'agent-standup', 'kokoro'));
+const DIR = process.env.SQUIGGLES_KOKORO_DIR || (WIN ? path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), 'squiggles', 'kokoro') : path.join(os.homedir(), '.cache', 'squiggles', 'kokoro'));
 const PKG = 'kokoro-js@1.2.1', DTYPE = 'q4', SIZE_MB = 730, MAX_RESTARTS = 3;
-const WORKER = process.env.AGENT_STANDUP_KOKORO_WORKER || path.join(__dirname, 'kokoro-worker.cjs'), LOG = path.join(DIR, 'install.log');
+const WORKER = process.env.SQUIGGLES_KOKORO_WORKER || path.join(__dirname, 'kokoro-worker.cjs'), LOG = path.join(DIR, 'install.log');
 
 // In the order agents get them (the lead takes the first), so successive agents sound distinct. French has a single voice in Kokoro.
 const VOICES = [['af_heart', 'Heart', 'en_US'], ['am_fenrir', 'Fenrir', 'en_US'], ['bf_emma', 'Emma', 'en_GB'], ['am_michael', 'Michael', 'en_US'], ['af_bella', 'Bella', 'en_US'], ['bm_george', 'George', 'en_GB'], ['af_sarah', 'Sarah', 'en_US'], ['am_puck', 'Puck', 'en_US'], ['ff_siwis', 'Siwis', 'fr_FR']].map(([name, label, locale]) => ({ name, label, locale }));
@@ -43,7 +43,7 @@ let worker = null, restarts = 0, seq = 0; const queue = []; let busy = false;
 function startWorker() {
   if (worker) return worker;
   if (restarts >= MAX_RESTARTS) throw new Error('kokoro worker gave up');
-  const p = spawn(process.execPath, [WORKER], { env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', AGENT_STANDUP_KOKORO_DIR: DIR, AGENT_STANDUP_KOKORO_DTYPE: DTYPE }, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+  const p = spawn(process.execPath, [WORKER], { env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', SQUIGGLES_KOKORO_DIR: DIR, SQUIGGLES_KOKORO_DTYPE: DTYPE }, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
   const w = (worker = { p, ready: false, pending: new Map(), err: '' }); let buf = '';
   p.stdout.on('data', (d) => {
     buf += d; let i;
