@@ -1,0 +1,59 @@
+# Squiggles
+
+A room for a small team of Claude Code agents. Each squiggle owns one area, wakes on a schedule, keeps a journal and works from a shared task board. You talk to the lead; the lead hires, briefs and checks the rest.
+
+A fresh room has only the lead. It asks your name and what you work on, turns that into goals, and proposes the first hires.
+
+## Requirements
+
+- macOS
+- Node 20 or newer
+- [Claude Code](https://claude.com/claude-code), logged in (`claude` on your PATH)
+- Optional: Google Chrome (draws the app icon), Tailscale (share the room on your tailnet)
+
+Every wake is a Claude Code session and counts against your plan's usage.
+
+## Set up with Claude Code
+
+Paste this into Claude Code:
+
+> Set up Squiggles for me. Clone https://github.com/kidGodzilla/squiggles.git to ~/squiggles (pull if it already exists). Check that `node --version` is 20 or newer and `claude` is on my PATH; stop and tell me if not. Run `bash ~/squiggles/bin/install-app.sh`, which adds Squiggles.app and a login item that keeps the server running. Wait until http://127.0.0.1:4317 answers (port is in ~/.squiggles/config.json), then open it. Tell me to say hello to the lead.
+
+## Set up by hand
+
+```sh
+git clone https://github.com/kidGodzilla/squiggles.git ~/squiggles
+cd ~/squiggles
+bash bin/install-app.sh            # Squiggles.app + login item
+open http://127.0.0.1:4317
+```
+
+To try it without a login item: `node server.mjs`, then open the URL it prints.
+
+Later, open the room from Spotlight ("Squiggles"). Server log: `~/Library/Logs/squiggles.log`.
+
+## Where things live
+
+| | |
+|---|---|
+| `~/squiggles` | the code; `git pull` upgrades it |
+| `~/.squiggles` | your room: `config.json`, squiggles, charters, journals, board (override with `SQUIGGLES_HOME`) |
+
+`config.json` settings: `port`, `userName`, `tailnet` (show "Share on tailnet"), `model` (`opus` or `sonnet`), `codex` (allow Codex models). Restart after editing: `node ~/squiggles/bin/agents.mjs restart`.
+
+The lead and you share one CLI: `node ~/squiggles/bin/agents.mjs` (run it with no arguments for usage).
+
+Upgrading and customising without conflicts: [docs/upgrading.md](docs/upgrading.md).
+
+## Uninstall
+
+```sh
+launchctl bootout gui/$(id -u)/local.squiggles.server
+rm ~/Library/LaunchAgents/local.squiggles.server.plist
+rm -rf ~/Applications/Squiggles.app ~/squiggles
+rm -rf ~/.squiggles               # your room: charters, journals, board
+```
+
+## License
+
+Apache-2.0. Parts of the room UI and voice setup are adapted from agent-standup (MIT); see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
