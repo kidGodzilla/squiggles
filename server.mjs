@@ -13,17 +13,19 @@ import { createMeetings, local, markPast, meetingNotes, parseWhen } from './meet
 import { createInbox } from './inbox.mjs';
 import { createHumans } from './humans.mjs';
 
+const home = (p) => String(p || '').replace(/^~(?=\/|$)/, os.homedir());
+// Code (ROOT) is written by git only; the room lives in DATA. See docs/upgrading.md.
 const ROOT = path.dirname(new URL(import.meta.url).pathname);
+const DATA = path.resolve(home(process.env.SQUIGGLES_HOME || '~/.squiggles'));
 const PORT = Number(process.env.PORT || 4317);
-const SQ = path.join(ROOT, 'squiggles');
-const RUNS = path.join(ROOT, 'runs');
+const SQ = path.join(DATA, 'squiggles');
+const RUNS = path.join(DATA, 'runs');
 const MEDIA = path.join(RUNS, 'media');
 const STATE = path.join(RUNS, 'state.json');
 const TTS_DIR = path.join(RUNS, 'tts');
 for (const d of [SQ, RUNS, MEDIA, TTS_DIR]) fs.mkdirSync(d, { recursive: true });
 
 const kokoro = createRequire(import.meta.url)('./voice/kokoro.cjs');
-const home = (p) => String(p || '').replace(/^~(?=\/|$)/, os.homedir());
 const now = () => new Date().toISOString();
 const readText = (f, d = '') => { try { return fs.readFileSync(f, 'utf8'); } catch { return d; } };
 
@@ -76,15 +78,15 @@ function emit(id, ev) {
   const line = `data: ${JSON.stringify({ id, ev })}\n\n`;
   for (const res of clients) res.write(line);
 }
-const board = createBoard(ROOT, () => {
+const board = createBoard(DATA, () => {
   const line = `data: ${JSON.stringify({ id: '*board', ev: { k: 'board' } })}\n\n`;
   for (const res of clients) res.write(line);
 });
-const meetings = createMeetings(ROOT, () => {
+const meetings = createMeetings(DATA, () => {
   const line = `data: ${JSON.stringify({ id: '*board', ev: { k: 'meetings' } })}\n\n`;
   for (const res of clients) res.write(line);
 }, { isSquiggle: (id) => !!loadSquiggle(id) });
-const humans = createHumans(ROOT, () => {
+const humans = createHumans(DATA, () => {
   const line = `data: ${JSON.stringify({ id: '*board', ev: { k: 'humans' } })}\n\n`;
   for (const res of clients) res.write(line);
 });
@@ -146,7 +148,7 @@ function launch(s) {
   const r = R(s.id);
   const args = ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose',
     '--append-system-prompt', systemPrompt(s), '--permission-mode', s.permissionMode || 'auto', '--permission-prompts', 'none',
-    '--add-dir', sqDir(s.id), '--add-dir', os.homedir(),
+    '--add-dir', sqDir(s.id), '--add-dir', DATA, '--add-dir', os.homedir(),
     // Squiggles roam the home folder freely, except these.
     '--disallowedTools', ...['Downloads', 'Desktop', 'Documents'].flatMap((d) => [`Read(~/${d}/**)`, `Edit(~/${d}/**)`, `Write(~/${d}/**)`])];
   if (modelFor(s)) args.push('--model', modelFor(s));
@@ -154,7 +156,7 @@ function launch(s) {
   args.push('--autocompact', String(s.autocompact ?? (s.lead ? 300000 : 200000)), '--max-turns', String(s.maxTurns ?? 40));
   const effort = s.effort ?? (s.lead ? '' : 'medium'); if (effort) args.push('--effort', effort);
   const cli = `node ${ROOT}/bin/agents.mjs`;
-  if (s.lead) args.push('--allowedTools', `Bash(${cli} *)`, 'Read', 'Grep', 'Glob', `Edit(${SQ}/**)`, `Write(${SQ}/**)`, `Edit(${ROOT}/goals.json)`);
+  if (s.lead) args.push('--allowedTools', `Bash(${cli} *)`, 'Read', 'Grep', 'Glob', `Edit(${SQ}/**)`, `Write(${SQ}/**)`, `Edit(${DATA}/goals.json)`);
   // A squiggle may see the team and rewrite its own responsibility and journal, nobody else's.
   else args.push('--allowedTools', `Bash(${cli} list)`, `Bash(${cli} charter ${s.id} *)`, `Bash(${cli} charter ${s.id})`, `Edit(${sqDir(s.id)}/journal.md)`,
     `Bash(${cli} tasks*)`, `Bash(${cli} task *)`, `Bash(${cli} goals)`, `Bash(${cli} restart)`, `Bash(${cli} room reload)`);
@@ -548,7 +550,7 @@ function meetingTick() {
 setInterval(() => { try { meetingTick(); } catch (e) { console.error('meetings:', e.message); } }, 20000);
 
 // ---------- inbox: text files James drops in ~/Agents/inbox wake the lead, then move to inbox/read/ ----------
-const drop = createInbox(path.join(ROOT, 'inbox'));
+const drop = createInbox(path.join(DATA, 'inbox'));
 setInterval(() => {
   try {
     const lead = listSquiggles().find((x) => x.lead);
