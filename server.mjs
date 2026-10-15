@@ -138,9 +138,13 @@ const statusLine = (text) => {
 
 // ---------- processes ----------
 const TEAM = () => listSquiggles().map((s) => `- ${s.id}: ${s.name}, ${s.role}`).join('\n');
+// Prompt placeholders: {{user}} / {{User}} (config.userName, else "the user"), {{cli}}, {{data}}.
+const fillPrompt = (t) => t.replace(/\{\{(user|User|cli|data)\}\}/g, (_, k) => ({
+  user: CONFIG.userName || 'the user', User: CONFIG.userName || 'The user', cli: `node ${ROOT}/bin/agents.mjs`, data: DATA,
+})[k]);
 function systemPrompt(s) {
   const dir = sqDir(s.id);
-  const base = readText(path.join(ROOT, 'prompts', s.lead ? 'lead.md' : 'squiggle.md'));
+  const base = fillPrompt(readText(path.join(ROOT, 'prompts', s.lead ? 'lead.md' : 'squiggle.md')));
   return `${base}\n\nYou are ${s.name} (id: ${s.id}). Your role: ${s.role}.\nCharter: ${dir}/charter.md\nJournal: ${dir}/journal.md\nHarness CLI: node ${ROOT}/bin/agents.mjs\n\nThe team:\n${TEAM()}`;
 }
 // Always pass a model: unset would inherit the CLI default, which may be Fable; squiggles never run on Fable.
