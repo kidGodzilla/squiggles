@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111218">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Agents">
+<link rel="manifest" href="/ui/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/ui/icon-180.png">
+<title>Agents</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E〰️%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="/ui/room.css">
+</head>
+<body class="locked">
+<header>
+  <div class="brand"><span class="logo">〰</span><b>Agents</b></div>
+  <nav class="tabs"><button data-view="room" class="on">Room</button><button data-view="lead" title="The lead's office: just the two of you, everyone else quiet">Lead</button><button data-view="team" title="Everyone on the team: what they care about, what they guard, how they run">Team</button><button data-view="calendar" title="Meetings with squiggles and goal due dates">Calendar</button><button data-view="goals">Goals</button><button data-view="tasks">Tasks</button><button data-view="merge" title="Branches waiting for you to merge">Merge</button><button type="button" class="tmore" aria-expanded="false">More</button></nav>
+  <div id="summary"></div>
+  <div class="sp"></div>
+  <button class="chip me" id="meBtn" hidden title="Who is using this browser"></button>
+  <div class="more">
+    <button class="chip" id="moreBtn" aria-haspopup="true" aria-expanded="false" title="Radio, voices, lock and more">More<svg viewBox="0 0 12 12"><path d="M3 4.5 6 7.5 9 4.5"/></svg></button>
+    <div id="morePanel" class="morep" role="menu">
+      <div id="moreCount"></div>
+      <label class="ctl" title="Radio"><span>Radio</span>
+        <select id="station"></select>
+      </label>
+      <input id="musicVol" type="range" min="0" max="1" step="0.05" title="Music volume">
+      <button class="chip" id="voiceBtn" title="Voices on or off">Voices on</button>
+      <select class="chip" id="chatter" title="Idle chatter">
+        <option value="quiet">Quiet</option><option value="normal" selected>Some chatter</option><option value="lively">Lively</option>
+      </select>
+      <button class="chip" id="lockBtn" title="Lock: back to the splash, sound off (the team keeps working)"><svg viewBox="0 0 16 16"><rect x="3.5" y="7" width="9" height="6.5" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg>Lock</button>
+      <label class="ctl share" title="Anyone on the tailnet can open the room"><span>Share on tailnet</span><input type="checkbox" id="shareOn"></label>
+      <a id="shareUrl" target="_blank" rel="noopener" hidden></a>
+      <button class="chip" id="shareCopy" hidden>Copy link</button>
+      <button class="chip primary" id="newBtn">New squiggle</button>
+    </div>
+  </div>
+</header>
+
+<div id="limit" class="limitbar"></div>
+<div id="meetOn" class="limitbar meeton"><span id="meetOnT"></span><button class="chip" id="meetOnJoin">Join</button></div>
+<main>
+  <section id="room">
+    <div id="present">
+      <div class="pwin">
+        <div class="pbar"><span id="ptitle"></span><span id="pbadge"></span></div>
+        <div id="pbody"></div>
+        <div id="pstat"></div>
+      </div>
+      <div id="ptodo"></div>
+      <div id="pcam" class="tile"></div>
+      <div id="pcap"></div>
+    </div>
+    <div id="stage"></div>
+    <button class="chip" id="officeBack">Back to the Room</button>
+    <div id="meetBar"><div><b id="meetTitle"></b> <span id="meetWhen"></span></div><p id="meetAgenda"></p><div class="row"><span id="meetTurn" hidden></span><button class="chip go" id="meetNext" hidden></button><button class="chip" id="meetBack">Back to the Room</button><button class="chip" id="meetEnd">End meeting</button></div></div>
+    <form id="callBar"><span id="callState">Not in a call</span><input id="callUrl" type="url" placeholder="Teams meeting link" autocomplete="off"><input id="callUntil" type="time" title="Ends at (optional): Lead leaves 5 minutes after"><button class="chip go" id="callJoin">Join call</button><button type="button" class="chip" id="callLeave">Leave</button></form>
+    <div id="toasts"></div>
+  </section>
+  <section id="teamView" class="bview">
+    <div class="btool"><input id="teamq" type="search" placeholder="Search the team"><span id="teamcount"></span><span class="sp"></span><button class="chip" id="teamMeet">New meeting</button><button class="chip" id="teamPerson">+ Person</button><button class="chip" id="teamHire">+ Hire</button></div>
+    <div class="people" id="peopleList"></div>
+    <div class="team" id="teamList"></div>
+  </section>
+  <section id="calView" class="bview">
+    <div class="btool"><div class="seg"><button id="calPrev" aria-label="Previous week">&lsaquo;</button><button id="calToday">This week</button><button id="calNext" aria-label="Next week">&rsaquo;</button></div><span id="calRange"></span><span class="sp"></span><button class="chip" id="calNow">New meeting</button><button class="chip" id="calAdd">+ Meeting</button></div>
+    <div class="cal" id="calWeek"></div>
+  </section>
+  <section id="goalsView" class="bview">
+    <div class="btool"><input id="gq" type="search" placeholder="Search goals"><span id="gcount"></span></div>
+    <div class="wbframe"><div class="wbcols" id="wbcols"></div></div>
+  </section>
+  <section id="tasksView" class="bview">
+    <div class="btool">
+      <input id="tq" type="search" placeholder="Search notes">
+      <select id="tgoal"></select><select id="towner"></select>
+      <div class="seg" id="tshow"><button data-v="open" class="on">Open</button><button data-v="stale">Stale</button><button data-v="all">All</button></div>
+      <button class="chip" id="ttidy" title="Collapse each agent's notes into a pile">Tidy</button><span id="tcount"></span><span class="sp"></span><button class="chip" data-addnote>+ Note</button>
+    </div>
+    <div class="cork"><div class="corkcols" id="corkcols"></div></div>
+  </section>
+  <section id="mergeView" class="bview">
+    <div class="btool"><span id="mcount"></span><span class="sp"></span><button class="chip" id="mrefresh">Refresh</button></div>
+    <div class="mq" id="mq"></div>
+  </section>
+  <div id="pop" class="pop"></div>
+
+</main>
+<div id="chats"></div>
+
+<div id="sheet" class="overlay"><div class="panel" id="sheetBody"></div></div>
+<div id="diffBox" class="overlay"><div class="panel diffp" id="diffBody"></div></div>
+<div id="newSq" class="overlay"><form class="panel" id="newForm"></form></div>
+<div id="join" class="overlay on">
+  <div class="joinbox">
+    <div id="joinCast"></div>
+    <h1>Your team is in the room</h1>
+    <p>Join to hear them. Sound, voices and radio start when you do.</p>
+    <p class="locked" id="lockNote"></p>
+    <div id="joinWho" hidden><p>Who are you?</p><div class="who"></div></div>
+    <button class="cta" id="joinBtn">Join the room</button>
+  </div>
+</div>
+
+<script src="/ui/cast.js"></script>
+<script src="/ui/room.js"></script>
+<script src="/ui/board.js"></script>
+</body>
+</html>

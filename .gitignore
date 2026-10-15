@@ -1,0 +1,12 @@
+# Your room's state: never commit it.
+squiggles/
+runs/
+inbox/
+calls/
+files/
+goals.json
+tasks.json
+humans.json
+meetings.json
+.DS_Store
+node_modules/

@@ -1,0 +1,477 @@
+:root {
+  --bg: #111218; --panel: #181a22; --panel2: #20232e; --line: #2a2d3a; --text: #ecedf2; --dim: #9a9fb3;
+  --accent: #8aa4ff; --gold: #f5c04a; --ok: #5ad69a; --warn: #ffb347; --red: #ff6b6b;
+  --ease: cubic-bezier(.2, .8, .2, 1); --r: 14px;
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, monospace;
+}
+* { box-sizing: border-box }
+html, body { height: 100%; margin: 0 }
+body { background: var(--bg); color: var(--text); font: 14px/1.5 var(--sans); display: flex; flex-direction: column; overflow: hidden; -webkit-font-smoothing: antialiased }
+button, select, input, textarea { font: inherit; color: inherit }
+button { background: none; border: 0; cursor: pointer; padding: 0 }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 8px }
+
+/* ---------- header ---------- */
+header { height: calc(52px + env(safe-area-inset-top)); flex: none; display: flex; align-items: center; gap: 10px; padding: env(safe-area-inset-top) max(14px, env(safe-area-inset-right)) 0 max(14px, env(safe-area-inset-left)); border-bottom: 1px solid var(--line) }
+header > *, #summary span, #summary button { flex: none; white-space: nowrap }
+#summary { min-width: 0; overflow: hidden }
+.more { position: relative }
+#moreBtn { display: flex; align-items: center; gap: 5px } #moreBtn svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.6 }
+#moreBtn[aria-expanded=true] svg { transform: rotate(180deg) }
+.morep { display: none; position: absolute; right: 0; top: calc(100% + 8px); z-index: 50; width: 240px; flex-direction: column; align-items: stretch; gap: 8px; padding: 12px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line); box-shadow: 0 12px 32px rgba(0,0,0,.45) }
+.morep.on { display: flex }
+.morep #moreCount { font-size: 12px; color: var(--dim) }
+.morep .ctl { display: flex; align-items: center; justify-content: space-between; gap: 8px } .morep #musicVol { width: 100% }
+#shareOn { width: 16px; height: 16px; accent-color: var(--accent) } #shareUrl { font-size: 12px; color: var(--accent); white-space: normal; overflow-wrap: anywhere; text-decoration: none }
+.morep .chip { width: 100%; justify-content: center } .morep #lockBtn { display: flex; align-items: center; gap: 6px }
+@media (max-width: 1100px) { #summary span:not(.working):not(.blocked):not(.rethink) { display: none } }
+@media (max-width: 760px) {
+  header { height: auto; flex-wrap: wrap; row-gap: 8px; padding: max(8px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 8px max(12px, env(safe-area-inset-left)) }
+  /* Bottom tab bar (t154): Room, Lead, Tasks, Merge, More; More holds Team, Calendar, Goals above the bar. */
+  :root { --tabh: calc(56px + env(safe-area-inset-bottom)) }
+  body { box-sizing: border-box; padding-bottom: var(--tabh) }
+  header .tabs { position: fixed; z-index: 30; left: 0; right: 0; bottom: 0; margin: 0; display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px; padding: 4px 6px env(safe-area-inset-bottom); border: 0; border-top: 1px solid var(--line); border-radius: 0; background: var(--panel) }
+  header .tabs button { height: 48px; padding: 0; font-size: 13px }
+  header .tabs .tmore { display: block }
+  header .tabs [data-view=team], header .tabs [data-view=calendar], header .tabs [data-view=goals] { display: none; position: absolute; right: 8px; width: 170px; height: 44px; padding: 0 14px; text-align: left; background: var(--panel2); border: 1px solid var(--line); box-shadow: 0 8px 24px rgba(0,0,0,.4) }
+  header .tabs.open [data-view=team], header .tabs.open [data-view=calendar], header .tabs.open [data-view=goals] { display: block }
+  header .tabs [data-view=team] { bottom: calc(100% + 104px) } header .tabs [data-view=calendar] { bottom: calc(100% + 56px) } header .tabs [data-view=goals] { bottom: calc(100% + 8px) }
+  #summary { margin-left: 0 }
+}
+.brand { display: flex; align-items: center; gap: 9px; cursor: pointer }
+.brand b { font-size: 15px; font-weight: 700; letter-spacing: -.01em }
+.logo { width: 28px; height: 28px; border-radius: 9px; background: linear-gradient(135deg, #e8845f, #d4566f); display: grid; place-items: center; font-size: 15px; color: #fff }
+.sp { flex: 1 }
+#summary { display: flex; gap: 6px; margin-left: 10px; font-size: 12px; color: var(--dim) }
+#summary span, #summary button { padding: 3px 10px; border-radius: 99px; background: var(--panel2); border: 0; font: inherit; color: inherit }
+#summary button { cursor: pointer } #summary button:hover { filter: brightness(1.15) }
+#summary .working { color: var(--gold) } #summary .blocked { color: #fff; background: #b8332b } #summary .rethink { color: #1b1d27; background: var(--warn) }
+.chip { height: 30px; padding: 0 12px; border-radius: 9px; background: var(--panel2); border: 1px solid var(--line); color: var(--dim); font-size: 12.5px }
+.chip:hover { color: var(--text) } .chip.on { color: var(--text) } .chip.primary { background: var(--accent); color: #0d1020; border-color: transparent; font-weight: 600 }
+.ctl { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--dim) }
+.ctl select { height: 30px; border-radius: 9px; background: var(--panel2); border: 1px solid var(--line); padding: 0 8px }
+#musicVol { width: 80px; accent-color: var(--accent) }
+
+/* ---------- layout ---------- */
+main { flex: 1; display: flex; min-height: 0 }
+.limitbar { display: none; flex: none; padding: 7px 16px; background: #b8332b; color: #fff; font-size: 13px; text-align: center } .limitbar.on { display: block }
+.meeton { background: var(--accent); color: #111 } .meeton.on { display: flex; align-items: center; justify-content: center; gap: 10px } .meeton .chip { padding: 3px 12px }
+#room { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; overflow: hidden }
+#stage { flex: 1; overflow: auto; padding: 16px; display: grid; gap: 14px; align-content: start; grid-auto-flow: dense;
+  grid-template-columns: repeat(var(--cols, 3), 1fr); grid-auto-rows: var(--rh, 170px) }
+
+/* ---------- tiles (from agent-standup) ---------- */
+.tile { position: relative; height: 100%; border-radius: var(--r); overflow: hidden; border: 1px solid rgba(255,255,255,.09); background: #222; box-shadow: 0 2px 14px rgba(0,0,0,.35); cursor: pointer; transition: border-color .2s, box-shadow .25s var(--ease), opacity .3s; animation: join .4s var(--ease) }
+@keyframes join { from { opacity: 0; transform: scale(.9) } }
+.tile svg { width: 100%; height: 100%; display: block }
+.tile.focus { grid-column: span var(--fcols, 2); grid-row: span var(--fr, 2) }
+.tile.speaking { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(138,164,255,.4), 0 12px 32px rgba(0,0,0,.5) }
+.tile.lead.speaking { border-color: var(--gold); box-shadow: 0 0 0 3px rgba(245,192,74,.4), 0 12px 32px rgba(0,0,0,.5) }
+.tile.working { border-color: rgba(245,192,74,.7) } .tile.blocked { border-color: var(--red); animation: alarm 1.3s ease-in-out infinite } .tile.rethink { border-color: var(--warn) }
+.tile.paused { opacity: .55 } .tile.paused svg { filter: grayscale(.7) }
+@keyframes alarm { 50% { box-shadow: 0 0 0 4px rgba(255,107,107,.35) } }
+.tile.pop { animation: pop .6s } @keyframes pop { 35% { transform: scale(1.05); box-shadow: 0 0 0 6px rgba(90,214,154,.45) } }
+.tag { position: absolute; left: 7px; bottom: 7px; right: 7px; display: flex; gap: 5px; pointer-events: none; min-width: 0 }
+.tag b, .tag span { background: rgba(12,13,20,.78); backdrop-filter: blur(8px); padding: 2px 10px; border-radius: 99px; font-size: 12px; white-space: nowrap }
+.tag span { color: #d6d9e6; font-size: 11px; overflow: hidden; text-overflow: ellipsis; min-width: 0 }
+.status { position: absolute; top: 7px; right: 7px; font-size: 11.5px; font-weight: 600; padding: 2px 10px; border-radius: 99px; background: rgba(12,13,20,.8); backdrop-filter: blur(8px) }
+.status:empty { display: none }
+.status.working { color: var(--gold) } .status.done { color: var(--ok) } .status.idle { color: var(--dim) }
+.status.blocked { background: #b8332b; color: #fff } .status.rethink { background: var(--warn); color: #1b1d27 } .status.error { color: var(--red) } .status.paused { color: var(--dim) }
+.bubble { display: none; position: absolute; top: 7px; left: 7px; right: 80px; background: #fff; color: #1b1d27; border-radius: 12px; padding: 7px 11px; font-size: 13px; line-height: 1.35; box-shadow: 0 6px 18px rgba(0,0,0,.35); max-height: 56%; overflow: hidden }
+.tile.speaking .bubble { display: block; animation: fadein .2s } .tile.focus .bubble { font-size: 15.5px; max-width: 72% }
+.ticker { display: none; position: absolute; left: 7px; right: 7px; bottom: 34px; font: 10.5px/1.35 var(--mono); color: #fff; background: rgba(14,18,32,.82); border-radius: 6px; padding: 2px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.ticker.on { display: block } .ticker i { font-style: normal; color: #ffd24a } .ticker em { font-style: normal; color: #9aa3bd } .ticker em.ok { color: var(--ok) } .ticker em.bad { color: var(--red) }
+.thought { position: absolute; top: 34%; right: 10%; font-size: 22px; z-index: 3; pointer-events: none; opacity: 0 } .thought.go { animation: thought 2.6s ease-out both }
+@keyframes thought { 0% { opacity: 0; transform: translateY(8px) scale(.6) } 15% { opacity: 1; transform: scale(1) } 70% { opacity: 1 } 100% { opacity: 0; transform: translateY(-26px) } }
+.tile.oops { animation: oops .5s } @keyframes oops { 20% { transform: translateX(-5px) rotate(-1.2deg) } 50% { transform: translateX(5px) rotate(1.2deg) } 80% { transform: translateX(-2px) } }
+.spin { display: inline-block; width: 9px; height: 9px; margin-right: 6px; border: 2px solid #ffd24a; border-top-color: transparent; border-radius: 50%; animation: spin .7s linear infinite; vertical-align: -1px } @keyframes spin { to { transform: rotate(360deg) } }
+
+/* character animation, driven by the tile's classes */
+.fig { transform-origin: 50px 76px; animation: bob 4.4s ease-in-out infinite; animation-delay: var(--d, 0s) } @keyframes bob { 50% { transform: translateY(-.9px) } }
+.tile.speaking .fig { animation: talk .46s ease-in-out infinite } @keyframes talk { 50% { transform: scale(1.025, .985) translateY(-.5px) } }
+.eye { transform-box: fill-box; transform-origin: center; animation: blink 4.6s infinite; animation-delay: var(--d, 0s) } @keyframes blink { 0%, 94%, 100% { transform: scaleY(1) } 97% { transform: scaleY(.08) } }
+.brow { transform-box: fill-box; transform-origin: center; transition: transform .25s } .tile.speaking .brow { animation: brow .7s ease-in-out infinite } @keyframes brow { 50% { transform: translateY(-1.1px) } }
+.tile.working .brow.l { transform: rotate(13deg) translateY(.5px) } .tile.working .brow.r { transform: rotate(-13deg) translateY(.5px) } .tile.working .pupil { transform: translateY(1.2px) }
+.arm.l { transform-origin: 27px 48px } .arm.r { transform-origin: 73px 48px } .tile.speaking .arm.r { animation: wave .7s ease-in-out infinite } @keyframes wave { 50% { transform: rotate(-34deg) } }
+.tile.working .arm { display: none } .tile .laptop, .tile .hands, .tile .sparks, .tile .grin, .tile .eyes-happy, .tile .mouth { display: none }
+.tile.working .laptop, .tile.working .hands, .tile.done .sparks, .tile.done .eyes-happy { display: inline } .tile.done .eyes-open { display: none }
+.tile.speaking .mouth { display: inline } .tile.speaking .smile, .tile.speaking .grin { display: none } .tile.done:not(.speaking) .smile { display: none } .tile.done:not(.speaking) .grin { display: inline }
+.hand { animation: type .34s ease-in-out infinite } .hand.r { animation-delay: -.17s } @keyframes type { 50% { transform: translateY(-1.3px) } }
+.tw { animation: tw 3.2s ease-in-out infinite } .pulse { animation: tw 1.7s ease-in-out infinite } @keyframes tw { 50% { opacity: .25 } }
+.drift { animation: drift 24s ease-in-out infinite alternate } @keyframes drift { to { transform: translateX(9px) } }
+.steam { animation: steam 2.6s ease-in-out infinite } @keyframes steam { 50% { transform: translateY(-1.4px); opacity: .25 } }
+.tile.done .sparks path { animation: tw 1.6s ease-in-out infinite }
+@keyframes fadein { from { opacity: 0 } }
+
+/* ---------- screen share ---------- */
+#present { display: none; flex: 0 1 auto; position: relative; height: clamp(200px, 46vh, 440px); background: radial-gradient(ellipse at 50% 0, #1b2033, #0b0d14); border-bottom: 1px solid var(--line); padding: 14px 18px; justify-content: center; gap: 12px }
+#present.on { display: flex; animation: fadein .3s } #present.pic { height: clamp(240px, 60vh, 640px) }
+.pwin { flex: 0 1 920px; display: flex; flex-direction: column; border-radius: 11px; overflow: hidden; background: #0d1117; box-shadow: 0 18px 50px rgba(0,0,0,.6), 0 0 0 2px rgba(245,192,74,.5) }
+.pbar { display: flex; align-items: center; gap: 10px; padding: 7px 12px; background: #1c1f2b; font-size: 12px; color: #9aa0b4 }
+#ptitle { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0 }
+#pbadge { margin-left: auto; flex: none; background: rgba(245,192,74,.94); color: #201400; font-weight: 600; font-size: 11px; padding: 1px 10px; border-radius: 99px }
+#pbody { flex: 1; overflow: hidden; padding: 10px 14px; font: 12.5px/1.55 var(--mono); color: #d6dae6 }
+.pwin.editor #pbody { background: #1a1b26; padding: 0 }
+.pwin.image #pbody { display: flex; gap: 8px; align-items: center; justify-content: center; background: #0b0c11; padding: 8px } .pwin.image #pbody img { min-width: 0; max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 4px }
+.ptab { display: flex; align-items: center; gap: 10px; background: #16161e; padding: 5px 12px; border-bottom: 1px solid #2a2b3d; font: 11.5px var(--sans) } .ptab span { background: #1a1b26; padding: 3px 10px; border-radius: 6px 6px 0 0 } .ptab em { color: #6b7089; font-style: normal }
+.ln { display: flex; gap: 10px; padding: 0 12px; white-space: pre-wrap; word-break: break-all } .ln b { width: 34px; flex: none; text-align: right; color: #4b5069; font-weight: 400 }
+.ln.add { background: rgba(63,185,80,.16); color: #9be9a8 } .ln.del { background: rgba(248,81,73,.16); color: #ffa198 } .ln.dim { color: #6b7089 } .ln.err { color: #ff7b72 }
+.tl { white-space: pre-wrap; word-break: break-word } .tl .ps { color: #7ee787 } .tl.cmd { color: #e6edf3; margin-top: 5px } .tl.tool { color: #8b95b0 } .tl.out { color: #aab2c5 } .tl.err { color: #ff7b72 } .tl.dim { color: #6b7089 } .tl.run { color: #ffd24a }
+.cursor { display: inline-block; width: 7px; height: 14px; background: #c9d1d9; vertical-align: -2px; animation: blinkc 1s steps(1) infinite } @keyframes blinkc { 50% { opacity: 0 } }
+#pstat { flex: none; padding: 4px 12px; background: #161925; color: #8b95b0; font: 11.5px var(--mono); border-top: 1px solid #232637; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+#ptodo { display: none; flex: 0 0 230px; align-self: flex-start; max-height: 100%; overflow-y: auto; background: rgba(20,22,32,.92); border: 1px solid #2a2d3d; border-radius: 10px; padding: 8px 10px; font-size: 12px }
+#ptodo h5 { margin: 0 0 6px; font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--dim) } .td { display: flex; gap: 7px; padding: 2px 0; color: #c3c6d4 } .td.completed { color: #6b7089; text-decoration: line-through } .td.in_progress { color: #fff }
+#present.has-todo #ptodo { display: block } #present.has-todo #pcam { right: 270px }
+#pcam { position: absolute; right: 30px; bottom: 24px; width: 160px; height: 120px; z-index: 2; cursor: default; box-shadow: 0 8px 24px rgba(0,0,0,.6) }
+#pcap { position: absolute; left: 26px; right: 210px; bottom: 22px; z-index: 2; background: rgba(10,11,16,.84); backdrop-filter: blur(6px); border-radius: 10px; padding: 6px 12px; font-size: 13px } #pcap:empty { display: none }
+
+/* ---------- chat windows, one per agent, floating over the room ---------- */
+.chatbtn { position: absolute; right: 7px; bottom: 7px; z-index: 4; padding: 3px 11px; border-radius: 99px; font-size: 12px; font-weight: 600; background: rgba(12,13,20,.82); backdrop-filter: blur(8px); color: #fff; opacity: 0; transform: translateY(3px); transition: opacity .15s, transform .15s var(--ease) }
+.tile:hover .chatbtn, .tile:focus-within .chatbtn, .chatbtn.unread { opacity: 1; transform: none }
+.chatbtn:hover { background: var(--accent); color: #0d1020 }
+.tile { cursor: pointer }
+.editbtn { position: absolute; top: 7px; right: 7px; z-index: 4; width: 26px; height: 26px; border-radius: 99px; background: rgba(12,13,20,.82); backdrop-filter: blur(8px); color: #fff; opacity: 0; transition: opacity .15s }
+.tile:hover .editbtn, .tile:focus-within .editbtn { opacity: 1 } .editbtn:hover { background: var(--accent); color: #0d1020 }
+.tile:hover .status, .tile:focus-within .status { right: 40px }
+.tile.mini .editbtn, #joinCast .editbtn { display: none }
+.editbtn { display: grid; place-items: center; padding: 0; border: 0; cursor: pointer } .editbtn svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; pointer-events: none } .chatbtn.unread { background: var(--accent); color: #0d1020 }
+/* Chats stack among themselves (front() raises z without bound) but all stay under sheets (20) and popups (30). */
+#chats { position: relative; z-index: 15 }
+.cw { position: fixed; z-index: 15; width: 380px; height: 520px; min-width: 300px; min-height: 260px; display: flex; flex-direction: column; background: rgba(24,26,34,.97); backdrop-filter: blur(16px); border: 1px solid var(--line); border-radius: 18px; box-shadow: 0 24px 60px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.03); resize: both; overflow: hidden; animation: cwin .22s var(--ease) }
+@keyframes cwin { from { opacity: 0; transform: translateY(14px) scale(.97) } }
+.cw.front { z-index: 16 } .cw.min { height: 58px !important; min-height: 0; resize: none } .cw.min .msgs, .cw.min .act, .cw.min form { display: none }
+.chead { display: flex; align-items: center; gap: 10px; padding: 9px 10px 9px 12px; border-bottom: 1px solid var(--line); cursor: grab; user-select: none }
+.cw.dragging .chead { cursor: grabbing }
+.chead .who { flex: 1; min-width: 0 } .chead b { display: block; font-size: 13.5px } .chead small { display: block; color: var(--dim); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.chead .ib { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 8px; color: var(--dim) } .chead .ib:hover { background: rgba(255,255,255,.08); color: var(--text) }
+.chead .ib svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; pointer-events: none }
+.chead .ib.arm { width: auto; padding: 0 9px; font-size: 12px; font-weight: 600; color: #fff; background: #b8332b }
+.chead .ib[data-a="close"]:hover { background: rgba(255,107,107,.18); color: #ff8a8a }
+.tile.mini { width: 52px; height: 39px; flex: none; border-radius: 9px; cursor: inherit; animation: none }
+.msgs { flex: 1; overflow-y: auto; padding: 16px 16px 6px; display: flex; flex-direction: column; gap: 12px }
+.act { padding: 0 16px 6px; font-size: 12px; color: var(--dim); min-height: 0 } .act:empty { display: none }
+.cw form { display: flex; align-items: flex-end; gap: 6px; margin: 6px 10px 10px; padding: 6px 6px 6px 12px; background: var(--panel2); border: 1px solid var(--line); border-radius: 14px }
+.cw form:focus-within { border-color: var(--accent) }
+.cw textarea { flex: 1; resize: none; border: 0; outline: 0; background: none; max-height: 140px; padding: 5px 0; line-height: 1.45 }
+.cw form button { height: 30px; padding: 0 10px; border-radius: 9px; font-size: 12px; color: var(--dim) } .cw form button:hover { color: var(--text); background: rgba(255,255,255,.05) }
+.cw form .send { background: var(--accent); color: #0d1020; font-weight: 600 } .cw form .mic.on { color: #fff; background: #b8332b }
+.empty { margin: auto; text-align: center; color: var(--dim); font-size: 12.5px; max-width: 240px }
+.m { max-width: 92%; animation: rise .28s var(--ease) } @keyframes rise { from { opacity: 0; transform: translateY(6px) } }
+.m.you.other { align-self: flex-start; background: linear-gradient(180deg, #3a3550, #312c45); border-radius: 16px 16px 16px 4px }
+.m.you { align-self: flex-end; background: linear-gradient(180deg, #33406b, #2b365c); padding: 9px 14px; border-radius: 16px 16px 4px 16px; white-space: pre-wrap }
+.m.lead { align-self: flex-start; color: #e6e8ef }
+.m.lead p { margin: 0 0 8px } .m.lead p:last-child { margin: 0 }
+.m.lead ul, .m.lead ol { margin: 4px 0 8px; padding-left: 20px } .m.lead li { margin: 2px 0 }
+.m.lead code { font: 12.5px var(--mono); background: rgba(255,255,255,.07); padding: 1px 5px; border-radius: 5px }
+.m.lead pre { background: #0d1017; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; overflow-x: auto; font: 12px/1.5 var(--mono) } .m.lead pre code { background: none; padding: 0 }
+.m.lead a { color: var(--accent) } .m.lead strong { color: #fff }
+.m.sys { align-self: center; font-size: 12px; color: var(--dim); background: var(--panel2); padding: 4px 12px; border-radius: 99px; max-width: 100% }
+.m .when { display: block; font-size: 11px; color: var(--dim); margin-top: 4px }
+
+/* ---------- overlays ---------- */
+.overlay { position: fixed; inset: 0; z-index: 20; display: none; align-items: center; justify-content: center; background: rgba(6,7,12,.66); backdrop-filter: blur(4px) }
+.overlay.on { display: flex; animation: fadein .2s }
+.panel { width: min(640px, 92vw); max-height: 86vh; overflow: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 18px; box-shadow: 0 24px 70px rgba(0,0,0,.6); padding: 20px 22px }
+.panel h2 { margin: 0; font-size: 18px } .panel h3 { margin: 18px 0 6px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--dim) }
+.panel label { display: block; margin: 12px 0 4px; font-size: 12px; color: var(--dim) }
+.panel input, .panel textarea, .panel select { width: 100%; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; outline: 0 }
+.panel input:focus, .panel textarea:focus { border-color: var(--accent) }
+.panel textarea { min-height: 110px; resize: vertical }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px }
+.actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px }
+.btn { height: 34px; padding: 0 14px; border-radius: 10px; background: var(--panel2); border: 1px solid var(--line) } .btn:hover { border-color: var(--accent) }
+.btn.go { background: var(--accent); color: #0d1020; font-weight: 600; border-color: transparent } .btn.danger { color: var(--red) }
+.shead { display: flex; gap: 14px; align-items: center } .shead .tile { width: 132px; height: 99px; flex: none; cursor: default; animation: none }
+.shead small { display: block; color: var(--dim) }
+.templates { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px } .templates button { padding: 5px 11px; border-radius: 99px; background: var(--panel2); border: 1px solid var(--line); font-size: 12.5px } .templates button:hover { border-color: var(--accent) }
+.feed { font-size: 12.5px; border: 1px solid var(--line); border-radius: 10px; max-height: 260px; overflow: auto } .feed div { padding: 6px 10px; border-bottom: 1px solid var(--line); white-space: pre-wrap; word-break: break-word } .feed code { font: 11.5px var(--mono); color: var(--dim) }
+.journal { white-space: pre-wrap; font-size: 12.5px; background: var(--bg); border-radius: 10px; padding: 10px 12px; max-height: 240px; overflow: auto }
+.joinbox { text-align: center; max-width: 560px }
+.joinbox h1 { font-size: 28px; margin: 18px 0 6px; letter-spacing: -.02em } .joinbox p { color: var(--dim); margin: 0 0 22px }
+#joinCast { display: flex; gap: 10px; justify-content: center } #joinCast .tile { width: 120px; height: 90px; cursor: default }
+.cta { background: var(--accent); color: #0d1020; font-weight: 700; padding: 12px 26px; border-radius: 99px; font-size: 15px } .cta:hover { filter: brightness(1.08) }
+#toasts { position: absolute; left: 14px; bottom: 14px; z-index: 6; display: flex; flex-direction: column; gap: 6px; pointer-events: none }
+.toast { background: rgba(27,29,39,.94); border: 1px solid var(--line); border-radius: 99px; padding: 5px 13px; font-size: 12.5px; animation: toast 3.4s ease forwards }
+@keyframes toast { 0% { opacity: 0; transform: translateY(6px) } 10%, 80% { opacity: 1; transform: none } 100% { opacity: 0 } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important } }
+
+/* ---------- tabs ---------- */
+.tabs { display: flex; gap: 2px; margin-left: 14px; padding: 3px; border-radius: 10px; background: var(--panel2); border: 1px solid var(--line) }
+.tabs button { height: 26px; padding: 0 14px; border-radius: 7px; color: var(--dim); font-size: 12.5px; font-weight: 600 }
+.tabs button.on { background: var(--bg); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.3) }
+.bview { display: none; flex: 1; min-width: 0; min-height: 0; flex-direction: column; gap: 14px; padding: 14px 18px 18px; background: radial-gradient(ellipse at 50% -20%, #232838, var(--bg) 60%) }
+body.v-goals #room, body.v-tasks #room, body.v-merge #room, body.v-team #room, body.v-cal #room { display: none } body.v-goals #goalsView, body.v-tasks #tasksView, body.v-merge #mergeView, body.v-team #teamView, body.v-cal #calView { display: flex }
+.btool { flex: none; display: flex; align-items: center; gap: 8px; flex-wrap: wrap }
+.btool input, .btool select { height: 32px; border-radius: 9px; background: var(--panel2); border: 1px solid var(--line); padding: 0 10px; color: var(--text); outline: 0 }
+.tabs .tmore { display: none }
+.btool input { width: 240px } .btool select { max-width: 220px } .btool input:focus { border-color: var(--accent) }
+.btool #gcount, .btool #tcount { color: var(--dim); font-size: 12.5px }
+.seg { display: flex; padding: 2px; border-radius: 9px; background: var(--panel2); border: 1px solid var(--line) }
+.seg button { height: 26px; padding: 0 12px; border-radius: 7px; color: var(--dim); font-size: 12.5px } .seg button.on { background: var(--bg); color: var(--text) }
+mark { background: rgba(245,192,74,.45); color: inherit; border-radius: 3px; padding: 0 1px }
+.pop { position: fixed !important }
+
+/* ---------- the whiteboard: goals ---------- */
+:root { --marker: "Marker Felt", "Chalkboard SE", "Comic Sans MS", cursive; --hand: "Noteworthy", "Chalkboard SE", "Marker Felt", "Comic Sans MS", cursive }
+.wbframe { flex: 1; min-height: 0; display: flex; flex-direction: column; position: relative; margin: 0 7px 7px; padding: 14px 18px 16px; border-radius: 10px; background: linear-gradient(160deg, #fdfdfb, #f1f2ee 60%, #e9ebe6);
+  box-shadow: 0 0 0 7px #c9ccd2, 0 0 0 9px #9ea3ab, 0 22px 50px rgba(0,0,0,.55); color: #1f2430 }
+.wbframe::before { content: ''; position: absolute; inset: 0; border-radius: 10px; pointer-events: none; background: linear-gradient(115deg, rgba(255,255,255,.7) 0, rgba(255,255,255,0) 30%, rgba(255,255,255,0) 70%, rgba(255,255,255,.35) 100%) }
+.wbtitle { margin: 0 0 6px; font: 30px var(--marker); color: #1d3f8f; transform: rotate(-1.2deg); display: inline-block }
+.wbcols { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: minmax(0, 1fr); gap: 22px }
+.wbcol { min-height: 0; display: flex; flex-direction: column; padding: 4px 4px 6px; border-radius: 8px; transition: background .15s }
+.wbcol .glist { flex: 1; min-height: 0; overflow-y: auto; padding-right: 4px; scrollbar-width: thin; scrollbar-color: rgba(29,63,143,.3) transparent }
+.wbcol.over { background: rgba(29,63,143,.06) }
+.wbcol h3 { margin: 4px 0 10px; font: 22px var(--marker); text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 5px }
+.wbcol h3 { flex: none } .wbcol h3 small { font: 13px var(--sans); color: #8a909e; text-decoration: none; margin-left: 6px }
+.wbcol.active h3 { color: #c23b2e } .wbcol.hold h3 { color: #1d3f8f } .wbcol.todo h3 { color: #22834f } .wbcol.done h3 { color: #6c7282 } .wbcol.done .gt { text-decoration: line-through; text-decoration-color: rgba(0,0,0,.4); color: #6c7282 }
+.g { position: relative; display: flex; align-items: flex-start; gap: 10px; padding: 7px 8px 7px 4px; border-radius: 8px; cursor: grab; font: 19px/1.25 var(--marker); color: #23283a }
+.g:hover { background: rgba(29,63,143,.06) } .g.dragging { opacity: .35 } .g.sel { background: rgba(245,192,74,.22) }
+.g::before { content: '—'; flex: none; color: #8a909e }
+.wbcol.active .g::before { content: '★'; color: #c23b2e }
+.g .gt { flex: 1; min-width: 0 }
+.g .gm { flex: none; display: flex; align-items: center; gap: 6px; font: 12px var(--sans); color: #6c7282 }
+.g .face { width: 30px; height: 23px; border-radius: 6px; overflow: hidden; flex: none; box-shadow: 0 1px 3px rgba(0,0,0,.25) } .face svg { width: 100%; height: 100%; display: block }
+.g.stale .gt { position: relative }
+.g.stale .gt::after { content: 'still on?'; margin-left: 8px; padding: 0 8px; border: 2px solid #c23b2e; border-radius: 50% / 60%; font-size: 15px; color: #c23b2e; white-space: nowrap; display: inline-block; transform: rotate(-3deg) }
+.g .gn { display: block; font: 12.5px var(--sans); color: #6c7282; margin-top: 2px }
+.g .gmerge { padding: 1px 7px; border-radius: 6px; font-size: 11px; font-weight: 600; border: 1.5px solid currentColor } .g .gmerge.gated { color: #1d3f8f } .g .gmerge.open { color: #22834f }
+.addg { display: block; margin: 8px 0 0 4px; font: 17px var(--marker); color: #8a909e } .addg:hover { color: #1d3f8f }
+.inline { width: 100%; font: 18px var(--marker); color: #23283a; background: rgba(29,63,143,.06); border: 0; border-bottom: 2px solid #1d3f8f; padding: 4px 6px; outline: 0; border-radius: 4px 4px 0 0 }
+.wbcol .addg { flex: none }
+
+/* ---------- the cork board: tasks ---------- */
+.cork { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 14px 16px 16px; border-radius: 12px;
+  background: radial-gradient(circle at 20% 30%, rgba(255,255,255,.07) 0 1px, transparent 2px) 0 0/9px 9px, radial-gradient(circle at 70% 60%, rgba(0,0,0,.12) 0 1px, transparent 2px) 0 0/7px 7px, linear-gradient(135deg, #b98a57, #a2743f 50%, #b4844f);
+  box-shadow: inset 0 0 0 8px #6b4a2a, inset 0 0 0 10px #4e341c, inset 0 0 40px rgba(0,0,0,.35), 0 22px 50px rgba(0,0,0,.5) }
+.corkhead { display: flex; align-items: center; gap: 12px; padding: 4px 10px 8px }
+.corkhead h2 { margin: 0; font: 26px var(--marker); color: #fff7e8; text-shadow: 0 2px 3px rgba(0,0,0,.4) }
+#filterNote button { font: 12.5px var(--sans); color: #2a1d0d; background: #fff3c4; padding: 3px 11px; border-radius: 99px; box-shadow: 0 2px 4px rgba(0,0,0,.3) }
+.corkcols { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); grid-template-rows: minmax(0, 1fr); gap: 14px }
+.ccol { min-height: 0; display: flex; flex-direction: column; padding: 10px 8px 6px; border-radius: 10px; transition: background .15s }
+.ccol .notes { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 4px 6px 14px; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.3) transparent }
+.ccol.over { background: rgba(255,255,255,.12) }
+.ccol h3 { display: flex; align-items: center; justify-content: space-between; margin: 0 4px 12px; font: 18px var(--marker); color: #fff7e8; text-shadow: 0 1px 2px rgba(0,0,0,.45) }
+.ccol h3 button { font: 13px var(--sans); color: #fff7e8; padding: 2px 10px; border-radius: 99px; background: rgba(0,0,0,.22) } .ccol h3 button:hover { background: rgba(0,0,0,.36) }
+.ccol h3 small { font: 12px var(--sans); opacity: .8; margin-left: 6px }
+.notes { display: flex; flex-direction: column; gap: 14px; align-items: center } .notes > * { flex: none }
+.ccol h3 { flex: none }
+.note { position: relative; width: 100%; max-width: 230px; min-height: 104px; padding: 18px 13px 10px; cursor: grab; transform: rotate(var(--r, 0deg)); transition: transform .18s var(--ease), box-shadow .18s, opacity .2s;
+  font: 16px/1.28 var(--hand); color: #2b2416; background: var(--c, #fff27a); box-shadow: 0 1px 1px rgba(0,0,0,.15), 0 8px 14px -6px rgba(0,0,0,.5); border-radius: 2px 2px 3px 18px / 2px 2px 3px 6px }
+.note::before { content: ''; position: absolute; top: 6px; left: 50%; width: 12px; height: 12px; margin-left: -6px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #ff8e8e, #c4231c 70%); box-shadow: 0 2px 2px rgba(0,0,0,.45) }
+.note::after { content: ''; position: absolute; right: 0; bottom: 0; width: 20px; height: 16px; background: linear-gradient(135deg, rgba(0,0,0,.08) 50%, rgba(255,255,255,.4) 50%); border-radius: 0 0 3px 0 }
+.note:hover { transform: rotate(0deg) scale(1.03); box-shadow: 0 1px 1px rgba(0,0,0,.15), 0 16px 24px -8px rgba(0,0,0,.55); z-index: 2 }
+.note.dragging { opacity: .3 }
+.note .nt { word-break: break-word } .note .nn, .note .nb, .note .np { overflow-wrap: anywhere }
+.note .nf { display: flex; align-items: center; gap: 6px; margin-top: 10px; font: 11.5px var(--sans); color: rgba(43,36,22,.72) }
+.note .nf .face { width: 26px; height: 20px; border-radius: 5px }
+.note .nf .ng { margin-left: auto; padding: 1px 7px; border-radius: 99px; background: rgba(0,0,0,.08); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 110px }
+.note .nn { margin-top: 6px; font: 12px/1.35 var(--sans); color: rgba(43,36,22,.75) }
+.note.stale { opacity: .62; filter: saturate(.55); border-radius: 2px 2px 3px 30px / 2px 2px 3px 14px }
+.note.stale .nf .age { color: #a3271d; font-weight: 600 }
+.note.done .nt { text-decoration: line-through; text-decoration-thickness: 2px; text-decoration-color: rgba(0,0,0,.45) }
+.note.dim { opacity: .18 } .g.dim { opacity: .3 }
+.note.new { animation: stick .35s var(--ease) } @keyframes stick { from { transform: rotate(var(--r)) translateY(-14px) scale(1.06); opacity: 0 } }
+.note textarea { width: 100%; min-height: 64px; resize: none; border: 0; outline: 0; background: transparent; font: inherit; color: inherit }
+.c0 { --c: #fff27a } .c1 { --c: #ffc4dc } .c2 { --c: #b9e4ff } .c3 { --c: #c8f2a9 } .c4 { --c: #ffd29c } .c5 { --c: #dccbff }
+
+/* ---------- popover editor ---------- */
+.pop { position: absolute; z-index: 30; display: none; width: 300px; padding: 14px; border-radius: 14px; background: var(--panel); border: 1px solid var(--line); box-shadow: 0 18px 50px rgba(0,0,0,.6); font: 13px var(--sans); color: var(--text) }
+.pop.on { display: block; animation: fadein .15s }
+.pop label { display: block; margin: 10px 0 4px; font-size: 11.5px; color: var(--dim) }
+.pop input, .pop textarea, .pop select { width: 100%; background: var(--bg); border: 1px solid var(--line); border-radius: 9px; padding: 7px 9px; outline: 0; color: var(--text) }
+.pop textarea { min-height: 70px; resize: vertical } .pop textarea.grow { min-height: calc(6 * 1.45em + 16px); max-height: 50vh; line-height: 1.45; resize: none; font: inherit } .pop input:focus, .pop textarea:focus { border-color: var(--accent) }
+.pop .row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px }
+.pop .row button { height: 30px; padding: 0 11px; border-radius: 9px; background: var(--panel2); border: 1px solid var(--line); font-size: 12.5px }
+.pop .row button:hover { border-color: var(--accent) } .pop .row .go { background: var(--accent); color: #0d1020; border-color: transparent; font-weight: 600 } .pop .row .bad { color: var(--red) }
+.pop .row button.cur { border-color: var(--accent); color: var(--accent) }
+/* each chat window lives on the page it was opened from */
+body:not(.v-goals):not(.v-tasks):not(.v-merge):not(.v-team):not(.v-cal) .cw:not([data-pages~=room]), body.v-cal .cw:not([data-pages~=calendar]), body.v-team .cw:not([data-pages~=team]), body.v-goals .cw:not([data-pages~=goals]), body.v-tasks .cw:not([data-pages~=tasks]), body.v-merge .cw:not([data-pages~=merge]) { display: none }
+.btn.danger.arm { background: #b8332b; color: #fff; border-color: transparent }
+.note .np { margin: -4px 0 4px; font: 11px var(--sans); color: rgba(43,36,22,.62); white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.note .nb { display: inline-block; margin-top: 6px; padding: 1px 8px; border-radius: 6px; background: rgba(29,63,143,.12); font: 11.5px var(--sans); color: #1d3f8f; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.note .nsplit { display: inline-block; margin-top: 6px; padding: 1px 8px; border: 1.5px dashed rgba(43,36,22,.55); border-radius: 6px; font: 11.5px var(--sans); color: rgba(43,36,22,.8) }
+.note .nsub { margin-top: 8px; font: 11.5px var(--sans); color: rgba(43,36,22,.75) }
+.note .nsub span { display: block; height: 4px; margin-bottom: 4px; border-radius: 2px; background: linear-gradient(90deg, rgba(43,36,22,.55) var(--p), rgba(43,36,22,.12) var(--p)) }
+.pop .subs { max-height: 140px; overflow-y: auto; border: 1px solid var(--line); border-radius: 9px } .pop .sub { padding: 6px 9px; border-bottom: 1px solid var(--line); cursor: pointer; font-size: 12.5px } .pop .sub:hover { background: var(--panel2) } .pop .sub em { float: right; font-style: normal; color: var(--dim); font-size: 11.5px }
+.pile { position: relative; width: 100%; max-width: 230px; padding: 12px 13px 11px; cursor: pointer; background: var(--c, #fff27a); color: #2b2416; border-radius: 3px;
+  box-shadow: 4px 4px 0 -1px color-mix(in srgb, var(--c, #fff27a) 82%, #000), 8px 8px 0 -2px color-mix(in srgb, var(--c, #fff27a) 70%, #000), 0 12px 18px -8px rgba(0,0,0,.55); transform: rotate(-.6deg); transition: transform .18s var(--ease) }
+.pile:hover { transform: rotate(0) translateY(-2px) }
+.pile .ph { display: flex; align-items: center; gap: 7px; margin-bottom: 6px; font: 12px var(--sans) } .pile .ph b { font-size: 13px } .pile .ph span { margin-left: auto; color: rgba(43,36,22,.7) }
+.pile .ph .face { width: 26px; height: 20px; border-radius: 5px }
+.pile .pt { font: 14px/1.25 var(--hand); padding: 3px 0; border-top: 1px dashed rgba(43,36,22,.22); white-space: nowrap; overflow: hidden; text-overflow: ellipsis } .pile .pt.more { font: 11.5px var(--sans); color: rgba(43,36,22,.7) }
+#ttidy.on { color: var(--text); border-color: var(--accent) }
+#lockBtn { display: flex; align-items: center; gap: 6px } #lockBtn svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round }
+.joinbox .locked { margin: -12px 0 18px; color: var(--dim); font-size: 13px } .joinbox .locked:empty { display: none }
+body.locked #chats { display: none }
+.m.lead .tbl { overflow-x: auto; margin: 4px 0 10px; border: 1px solid var(--line); border-radius: 10px }
+.m.lead table { border-collapse: collapse; width: 100%; font-size: 12.5px }
+.m.lead th, .m.lead td { padding: 6px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top }
+.m.lead th { background: var(--panel2); font-weight: 600; white-space: nowrap } .m.lead tr:last-child td { border-bottom: 0 }
+.m.lead tbody tr:nth-child(even) td { background: rgba(255,255,255,.02) }
+.m.lead h3, .m.lead h4 { margin: 10px 0 6px; font-size: 13.5px } .m.lead h3 { font-size: 14.5px }
+.m.lead blockquote { margin: 4px 0 8px; padding: 2px 0 2px 12px; border-left: 3px solid var(--line); color: var(--dim) }
+.m.lead hr { border: 0; border-top: 1px solid var(--line); margin: 10px 0 }
+
+/* ---------- Lead tab: the lead's office. The lead alone on the left, its chat filling the rest, everyone else quiet ---------- */
+body.v-one #stage { grid-template-columns: 1fr; grid-auto-rows: auto; width: min(36vw, 420px); padding: 24px }
+body.v-one #stage .tile { display: none }
+body.v-one #stage .tile.office { display: block; height: auto; aspect-ratio: 4 / 3; grid-column: span 1; grid-row: span 1 }
+body.v-one #present { display: none }
+body.v-one #chats .cw:not(.office) { display: none }
+body.v-one #chats .cw.office { display: flex; left: calc(min(36vw, 420px) + 24px) !important; top: 68px !important; right: 16px; bottom: 16px; width: auto !important; height: auto !important; min-width: 0; resize: none; animation: none }
+body.v-one .cw.office .ib[data-a=min], body.v-one .cw.office .ib[data-a=close] { display: none }
+#meetBar { display: none }
+body.v-meet #meetBar { display: flex; flex-direction: column; gap: 6px; position: fixed; left: calc(min(36vw, 420px) + 24px); right: 16px; top: 68px; z-index: 5; padding: 10px 14px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line) }
+#meetBar p { margin: 0; white-space: pre-wrap; max-height: 6em; overflow: auto; color: var(--dim, inherit) }
+#meetBar .row { display: flex; flex-wrap: wrap; gap: 8px }
+body.v-meet #stage { grid-template-columns: 1fr 1fr }
+/* Phone (t311): a chat is fullscreen over the visual viewport (--vvt, --vvh from room.js), so Close stays visible with the keyboard up; no minimize, no drag. */
+.cclose { display: none }
+/* Phone (t152): was a bottom sheet, lifted above the keyboard (--kb, --vvh from visualViewport in room.js). 16px inputs stop iOS zooming on focus. */
+@media (max-width: 760px) {
+  #chats .cw:not(.office) { z-index: 40 !important; left: 0 !important; right: 0; top: var(--vvt, 0px) !important; bottom: auto !important; width: auto !important; height: var(--vvh, 100dvh) !important; min-width: 0; min-height: 0; resize: none; border: 0; border-radius: 0; padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); animation: none }
+  #chats .cw:not(.office) .chead { cursor: default }
+  #chats:has(> .cw:not(.office)) { z-index: 35 }
+  #chats .cw:not(.office) .ib[data-a=min], #chats .cw:not(.office) .ib[data-a=close] { display: none }
+  #chats .cw:not(.office) .cclose { display: block; min-height: 44px; padding: 0 14px; border-radius: 10px; font-weight: 600; color: var(--accent) }
+  textarea, input, select { font-size: 16px }
+}
+body.v-meet #officeBack { display: none !important }
+/* Presenter turns: the presenter's chat is marked, and their shared screen widens the left column (layoutMeet matches these widths). */
+#meetTurn { align-self: center; font-weight: 600; margin-right: 4px }
+body.v-meet .cw.presenting { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(138,164,255,.35) }
+body.v-meet.sharing #present.on { display: flex; align-self: flex-start; width: min(52vw, 820px); margin: 16px 0 0 16px; border-radius: 12px; border: 1px solid var(--line) }
+body.v-meet.sharing #stage { display: none } /* the presenter's camera is on their screen */
+@media (min-width: 761px) { body.v-meet.sharing #meetBar { left: calc(min(52vw, 820px) + 24px) } }
+@media (max-width: 760px) { body.v-meet #stage, body.v-meet.sharing #present.on { display: none } body.v-meet #meetBar { left: 16px; top: 112px } }
+body.v-one.v-meet #chats .cw.office { left: var(--mx) !important; top: var(--my) !important; width: var(--mw) !important; height: var(--mh) !important; min-height: 0; right: auto; bottom: auto }
+#officeBack { display: none } body.v-one #officeBack { display: block; position: absolute; left: 24px; top: calc(24px + min(36vw, 420px) * .75 - 24px + 16px) }
+
+/* ---------- Merge tab: the queue of branches waiting for James ---------- */
+.btool #mcount { color: var(--dim); font-size: 12.5px }
+.mq { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 10px }
+.mq .empty { color: var(--dim); padding: 40px; text-align: center }
+.mtab { width: 100%; border-collapse: separate; border-spacing: 0; table-layout: fixed; font-size: 13px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; overflow: hidden }
+.mtab th { position: sticky; top: 0; z-index: 1; background: var(--panel2); text-align: left; font-size: 11.5px; font-weight: 600; color: var(--dim); padding: 8px 10px; border-bottom: 1px solid var(--line) }
+.mtab td { padding: 9px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: middle }
+.mtab tbody tr:last-child td { border-bottom: 0 }
+.mtab th:nth-child(1) { width: 100px } .mtab th:nth-child(3) { width: 108px } .mtab th:nth-child(4) { width: 132px }
+.mtab th:nth-child(5) { width: 24% } .mtab th:nth-child(6) { width: 56px } .mtab th:nth-child(7) { width: 228px }
+.mrow { cursor: pointer } .mrow:hover td { background: rgba(255,255,255,.025) } .mrow.open td { background: rgba(255,255,255,.04); border-bottom-color: transparent }
+.mrow .mid { color: var(--dim) } .mrow .mtt { font-weight: 600 } .mrow .mbr, .mrow .mrepo, .mrow .mab, .mrow .mage { color: var(--dim) }
+.mrow .mres { color: #c9cedd } .mrow .mres.none { color: #d9a24a } .mrow .mres.bad { color: #e07a72 }
+.mtag { margin-left: 4px; padding: 0 6px; border-radius: 6px; font-size: 11px; font-weight: 600; color: #d9a24a; border: 1.5px solid currentColor }
+.mrow .mown .face { display: inline-block; width: 30px; height: 24px; border-radius: 6px; vertical-align: middle }
+.mrow .macts { text-align: right; overflow: visible }
+.mdacts { display: none }
+.macts button { height: 28px; padding: 0 11px; margin-left: 4px; border-radius: 8px; background: var(--panel2); border: 1px solid var(--line); font-size: 12.5px; color: var(--text) }
+.macts button.go { background: var(--accent); color: #0d1020; border-color: transparent; font-weight: 600 } .macts button:disabled { opacity: .4; cursor: default }
+.mdet td { white-space: normal; background: rgba(255,255,255,.04); padding: 0 16px 14px 62px }
+.mdbox .mdt { margin: 0 0 8px; font-weight: 600; line-height: 1.45 }
+.mdbox dl { display: grid; grid-template-columns: 100px 1fr; gap: 4px 12px; margin: 0; font-size: 12.5px } .mdbox dt { color: var(--dim) } .mdbox dd { margin: 0; word-break: break-word }
+.mdbox .mlinks { display: flex; gap: 16px; margin: 10px 0 0; font-size: 12.5px } .mdbox .mlinks a { color: var(--accent) } .mdbox .mlinks span { color: var(--dim) }
+.mdbox code { font: 12px var(--mono) } .mdbox .mlog { white-space: pre-wrap; color: var(--dim) }
+@media (max-width: 1100px) { .mtab .mrepo, .mtab .mown { display: none } }
+@media (max-width: 760px) {
+  .mtab, .mtab tbody, .mtab tr, .mtab td { display: block } .mtab thead { display: none }
+  .mtab tr.mrow { display: flex; align-items: center; border-bottom: 1px solid var(--line) } .mtab tr.mrow.open { border-bottom-color: transparent }
+  .mtab td { border: 0 } .mrow .mtt { flex: 1; min-width: 0 }
+  .mrow.open .mtt { white-space: normal } .mdbox .mdt { display: none }
+  .mtab .mid, .mtab .mrepo, .mtab .mab, .mtab .mres, .mtab .mown, .mrow .macts { display: none }
+  .mdacts { display: flex; gap: 6px; margin-top: 12px } .mdacts button { margin: 0 } .mdacts button.go { margin-left: auto }
+  .mtab tr.mdet { border-bottom: 1px solid var(--line) } .mdet td { padding: 0 12px 12px } .mdbox dl { grid-template-columns: 82px 1fr }
+}
+.diffp { width: min(1100px, 94vw); max-height: 90vh; display: flex; flex-direction: column; gap: 10px }
+.diffp .dh { display: flex; align-items: baseline; gap: 12px } .diffp .dh .sp { flex: 1 } .diffp .dh button { height: 28px; padding: 0 10px; border-radius: 8px; background: var(--panel2); border: 1px solid var(--line); font-size: 12.5px }
+.diffp { height: 90vh }
+.diffp .dh h2 { min-width: 0; overflow-wrap: anywhere } .diffp .dh .go { flex: none; background: var(--accent); color: #0d1020; border-color: transparent; font-weight: 600 } .diffp .dh .go:disabled { opacity: .4 }
+@media (max-width: 760px) { #diffBox { padding: 10px 10px calc(var(--tabh) + 10px) } .diffp { width: 100%; height: 100%; max-height: none } .diffp .dh { flex-wrap: wrap; align-items: center } .diffp .dh h2 { flex: 1 1 100%; margin: 0 } .diffp .dh button { height: 44px; min-width: 44px } .diffp .dfold button { min-height: 44px } }
+.diffp .dmeta { flex: 0 1 auto; min-height: 0; max-height: 45%; overflow: auto; font-size: 12.5px; color: var(--dim) }
+.diffp .dmeta summary { cursor: pointer; color: var(--text) } .diffp .dfold { margin-top: 8px }
+.diffp pre.dl { margin: 0; padding: 0; background: none; border: 0; white-space: pre-wrap; overflow: visible; font: 12px/1.5 var(--mono); color: var(--dim) }
+.diffp .dfold .dall, .diffp .dfold.all .dl:first-child { display: none } .diffp .dfold.all .dall { display: block }
+.diffp .dfold button { margin-top: 2px; padding: 0; background: none; border: 0; color: var(--accent); font-size: 12.5px; min-height: 0 }
+.diffp pre.dpatch { flex: 1; min-height: 140px; overflow: auto; margin: 0; padding: 10px 12px; background: #0d1017; border: 1px solid var(--line); border-radius: 10px; font: 12px/1.5 var(--mono); white-space: pre; tab-size: 4 }
+.diffp pre .a { color: #7fd99a } .diffp pre .d { color: #f08a80 } .diffp pre .h { color: #8fb4ff } .diffp pre .f { color: var(--dim); background: rgba(255,255,255,.04); display: inline-block; width: 100% }
+
+/* ---------- Team: roster of squiggles ---------- */
+.btool #teamcount { color: var(--dim); font-size: 12.5px }
+.team { flex: 1; min-height: 0; overflow: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 12px; align-content: start }
+.tm { display: flex; flex-direction: column; gap: 8px; padding: 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; cursor: pointer; text-align: left }
+.tm:hover { border-color: var(--accent) }
+.tm.paused { opacity: .62 }
+.tmh { display: flex; gap: 10px; align-items: center }
+.tmh .face { width: 44px; height: 44px; flex: none } .tmh .face svg { width: 100%; height: 100% }
+.tmh b { display: block; font-size: 15px } .tmh small { display: block; color: var(--dim); font-size: 12.5px }
+.tmst { margin-left: auto; font-size: 11.5px; font-weight: 600; color: var(--dim); white-space: nowrap }
+.tmst.blocked, .tmst.error, .tmst.rethink { color: #f2a65a } .tmst.working { color: var(--accent) }
+.tm.stuck .tmnote { -webkit-line-clamp: 8; color: var(--text) }
+.tmnote { font-size: 12.5px; color: var(--dim); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden }
+.tm dl { display: grid; grid-template-columns: 84px 1fr; gap: 4px 10px; margin: 0; font-size: 12.5px }
+.tm dt { color: var(--dim) } .tm dd { margin: 0; min-width: 0 }
+.tm .acts { display: flex; gap: 6px; margin-top: auto; padding-top: 4px }
+.tm .acts button { height: 28px; padding: 0 12px; border-radius: 8px; background: var(--panel2); border: 1px solid var(--line); font-size: 12.5px }
+.tm .acts button:hover { border-color: var(--accent) }
+@media (max-width: 760px) { .team { grid-template-columns: 1fr } }
+.people { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px } .people h4 { margin: 0 6px 0 0; font-size: 13px; color: var(--dim); font-weight: 600 }
+.hm { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px 0 5px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line) } .hm:hover { border-color: var(--accent) }
+.who { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center } #pop .who { justify-content: flex-start; margin-top: 6px }
+.chip.me { display: inline-flex; align-items: center; gap: 6px; padding-left: 4px } .chip.me[hidden] { display: none } @media (max-width: 760px) { .chip.me .nm { display: none } .chip.me { padding-right: 4px } } .chip.me .hface { width: 22px; height: 22px; border-radius: 7px; font-size: 11px }
+.hface { width: 30px; height: 30px; flex: none; display: grid; place-items: center; border-radius: 9px; overflow: hidden; font-size: 14px; font-weight: 600; color: #fff } .hface img { width: 100%; height: 100%; object-fit: cover }
+
+/* ---------- Lead tab: join a Teams call ---------- */
+#callBar { display: none }
+body.v-lead #callBar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; box-sizing: border-box; width: calc(min(36vw, 420px) - 48px); position: absolute; left: 24px; top: calc(24px + min(36vw, 420px) * .75 - 24px + 64px); z-index: 5; padding: 6px 8px 6px 12px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line) }
+#callState { flex-basis: 100%; font-size: 12.5px; color: var(--dim); white-space: nowrap }
+#callUrl { flex: 1; min-width: 0; width: auto; height: 30px; border-radius: 8px; background: var(--panel2); border: 1px solid var(--line); padding: 0 10px; color: var(--text); outline: 0 }
+#callUrl:focus, #callUntil:focus { border-color: var(--accent) }
+#callUntil { flex: none; width: 96px; height: 30px; border-radius: 8px; background: var(--panel2); border: 1px solid var(--line); padding: 0 8px; color: var(--text); outline: 0; color-scheme: dark }
+#callBar [hidden] { display: none }
+@media (max-width: 760px) { .corkcols { grid-template-columns: repeat(5, 220px); overflow-x: auto; scroll-snap-type: x mandatory } .corkcols .ccol { scroll-snap-align: start } }
+/* Goals on phone (t115): same one-scroll 220px columns as Tasks. */
+@media (max-width: 760px) { .wbcols { grid-template-columns: repeat(4, 220px); overflow-x: auto; scroll-snap-type: x mandatory } .wbcol { scroll-snap-align: start } .wbcol h3 { white-space: nowrap }
+  .g { flex-wrap: wrap; row-gap: 4px } .g .gt { flex-basis: calc(100% - 30px); overflow-wrap: anywhere } .g .gm { margin-left: 28px } }
+
+/* Calendar: a week, one column per day; phone stacks the days */
+.cal { flex: 1; min-height: 0; overflow: auto; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; align-content: start }
+.calday { display: flex; flex-direction: column; gap: 8px; min-height: 180px; padding: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px }
+/* Phone office (t153): a slim row under the header (small tile, Back; the Lead's call bar under it), chat full width below, lifted above the keyboard. --hh is the header's height (room.js). */
+@media (max-width: 760px) {
+  body.v-one:not(.v-meet) #stage { flex: none; width: auto; padding: 8px 12px; overflow: hidden }
+  body.v-one:not(.v-meet) #stage .tile.office { width: 58px; border-radius: 10px }
+  body.v-one:not(.v-meet) #stage .tile.office > :not(svg) { display: none }
+  body.v-one:not(.v-meet) #officeBack { position: fixed; left: 80px; top: calc(var(--hh, 89px) + 15px) }
+  body.v-lead #callBar { position: fixed; left: 12px; right: 12px; top: calc(var(--hh, 89px) + 68px); width: auto; flex-wrap: nowrap; padding: 4px 4px 4px 10px }
+  body.v-lead #callBar #callState, body.v-lead #callBar #callUntil { display: none }
+  body.v-lead #callBar #callUrl { flex: 1; min-width: 0 }
+  body.v-one:not(.v-meet) #chats .cw.office { left: 0 !important; right: 0; top: calc(var(--hh, 89px) + 60px) !important; bottom: max(var(--kb, 0px), var(--tabh, 0px)); border-radius: 18px 18px 0 0; padding-bottom: env(safe-area-inset-bottom) }
+  body.v-one.v-lead:not(.v-meet) #chats .cw.office { top: calc(var(--hh, 89px) + 130px) !important }
+}
+.calday.today { border-color: var(--accent) } .calday.past { opacity: .6 }
+.calday h3 { display: flex; align-items: baseline; gap: 6px; margin: 0 0 2px; font-size: 13px } .calday h3 span { color: var(--dim); font-weight: 500 } .calday h3 em { margin-left: auto; font: 600 11px var(--sans); color: var(--accent) }
+.calm { display: flex; flex-direction: column; gap: 4px; padding: 9px 10px; text-align: left; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; color: var(--text) } .calm:hover { border-color: var(--accent) }
+.calm b { font-size: 13px; line-height: 1.3; overflow-wrap: anywhere } .calt { font-size: 11.5px; color: var(--dim) }
+/* Past meetings muted with Done or Missed; the one on now stays bright (t231). */
+.calm.done, .calm.missed { opacity: .55; background: transparent } .calm.on { border-color: var(--accent) } .calt em { font-style: normal; font-weight: 600; color: var(--text) } .calm.on .calt em { color: var(--accent) }
+.calnotes { max-height: 260px; overflow: auto; margin: 0; padding: 8px 10px; white-space: pre-wrap; font: 12px/1.45 var(--sans); background: var(--bg); border: 1px solid var(--line); border-radius: 8px }
+.calppl { display: flex; gap: 3px; flex-wrap: wrap } .calppl .face { width: 26px; height: 20px; border-radius: 5px; overflow: hidden }
+.calag { font-size: 12px; color: var(--dim); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-line }
+.caldue { padding: 5px 9px; border-radius: 8px; font-size: 12px; font-weight: 600; text-align: left; color: #2b2416; background: #f4e7a6 }
+.calempty { margin: 0; font-size: 12px; color: var(--dim) }
+#calRange { font-size: 13px; color: var(--dim) }
+.pop .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px }
+.calwho { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 13px } .calwho label { display: flex; align-items: center; gap: 5px; margin: 0; color: var(--text) } .calwho input { width: auto }
+@media (max-width: 1100px) { .cal { grid-template-columns: repeat(4, minmax(0, 1fr)) } }
+@media (max-width: 760px) { .cal { grid-template-columns: 1fr; grid-auto-rows: max-content } .calday { min-height: 0 } }
+/* Tap targets (t155): 44px on phone. Fields, toolbars and icon clusters grow; header and tile buttons keep their size with an invisible 44px hit area. */
+@media (max-width: 760px) {
+  main input:not([type=checkbox]):not([type=radio]):not([type=range]), main select, main .chip, #chats .chip, main .seg button, .tm .acts button, .cw form .send, .cw form .mic { min-height: 44px }
+  .chead .ib, #calPrev, #calNext, .tm .acts button, main .seg button { min-width: 44px }
+  .hm { height: 44px }
+  #summary { padding: 10px 0; margin-top: -10px; margin-bottom: -10px }
+  .chead .ib { height: 44px }
+  header .chip, #summary button { position: relative }
+  header .chip::after, #summary button::after, .chatbtn::after, .editbtn::after { content: ''; position: absolute; left: 50%; top: 50%; width: max(100%, 44px); height: max(100%, 44px); transform: translate(-50%, -50%) }
+}

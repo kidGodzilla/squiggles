@@ -1,0 +1,168 @@
+#!/usr/bin/env node
+// Harness CLI, used by the lead (and by James from a terminal).
+const base = `http://127.0.0.1:${process.env.PORT || 4317}/api`;
+const [cmd, ...a] = process.argv.slice(2);
+
+async function call(path, body) {
+  const res = await fetch(base + path, body === undefined ? {} : {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+  });
+  const v = await res.json();
+  if (v && v.error) throw new Error(v.error);
+  return v;
+}
+
+function brief(e) {
+  if (e.k === 'say') return e.text;
+  if (e.k === 'tool') return `[${e.name}] ${e.text || e.file || e.arg || ''}`.slice(0, 220);
+  if (e.k === 'out' && e.err) return `[error] ${e.text.slice(0, 200)}`;
+  if (e.k === 'user') return `[${e.from}] ${e.text}`;
+  if (e.k === 'end') return `[${e.status}] ${e.note || ''}`;
+  return '';
+}
+
+const cmds = {
+  list: async () => (await call('/squiggles')).map((s) =>
+    `${s.id}${s.lead ? ' (lead)' : ''}  ${s.paused ? 'paused' : s.status}  every ${s.every || 0}m  ${s.name}, ${s.role}${s.note ? `  — ${s.note}` : ''}`).join('\n'),
+  // team: the roster, with what each squiggle cares about and guards, its goals and how it runs (the Team tab)
+  team: async () => {
+    const [sq, b] = await Promise.all([call('/squiggles'), call('/board')]);
+    const goals = Object.entries(b.goals).filter(([t]) => t !== 'done').flatMap(([, g]) => g);
+    const line = (c, l) => (String(c || '').match(new RegExp(l + ':\\s*([^\\n]+)', 'i')) || [])[1];
+    const every = (m) => (!m ? 'only when asked' : m % 60 ? `every ${m}m` : `every ${m / 60}h`);
+    return sq.map((s) => [`${s.id}  ${s.name}, ${s.role}${s.lead ? ' (lead)' : ''}  ${s.paused ? 'paused' : s.status}${s.note ? `  — ${s.note}` : ''}`,
+      line(s.charter, 'What you care about') && `  cares about: ${line(s.charter, 'What you care about')}`,
+      line(s.charter, 'What you guard') && `  guards: ${line(s.charter, 'What you guard')}`,
+      `  goals: ${goals.filter((g) => g.owner === s.id).map((g) => g.title).join('; ') || 'none'}`,
+      `  runs ${every(s.every)}, ${({ sonnet: 'Sonnet 5.5', 'gpt-6.1-sol': 'Codex 6.1 Sol' })[s.model] || 'Opus 5.5'}, ${s.permissionMode || 'auto'}, in ${s.cwd}`].filter(Boolean).join('\n')).join('\n\n');
+  },
+  wake: () => call(`/squiggles/${a[0]}/wake`, { why: a[1] || 'lead' }),
+  tell: () => call(`/squiggles/${a[0]}/send`, { text: a[1], from: 'lead' }),
+  stop: () => call(`/squiggles/${a[0]}/stop`, {}),
+  clear: () => call(`/squiggles/${a[0]}/clear`, {}),
+  tail: async () => (await call(`/squiggles/${a[0]}/events?n=${a[1] || 60}`)).map(brief).filter(Boolean).join('\n'),
+  journal: () => call(`/squiggles/${a[0]}/journal`),
+  charter: async () => a[1] == null
+    ? (await call('/squiggles')).find((s) => s.id === a[0])?.charter ?? `no squiggle ${a[0]}`
+    : (await call(`/squiggles/${a[0]}/update`, { charter: a[1] }), `${a[0]}'s responsibility updated`),
+  goals: async () => {
+    const g = (await call('/board')).goals;
+    return ['active', 'hold', 'todo', 'done'].map((t) => `${t.toUpperCase()}\n` + (g[t] || []).map((x) =>
+      `  ${x.id}  ${x.title}${x.owner ? `  (owner ${x.owner})` : ''}${x.repos ? `  repos ${x.repos.join(' ')}` : ''}  merge ${x.merge}  confirmed ${x.last_confirmed}${x.note ? `  — ${x.note}` : ''}`).join('\n')).join('\n');
+  },
+  // goal add <title> [tier] [repos...] | goal repos <id> <repo...> | goal merge <id> gated|open | goal move <id> <active|hold|todo|done> | goal confirm <id> | goal owner <id> <squiggle> | goal edit <id> <title> | goal note <id> <text> | goal drop <id>
+  goal: () => {
+    const [op, x, y] = a;
+    if (op === 'add') return call('/goals', { op, title: x, tier: y, repos: a.slice(3) });
+    if (op === 'move') return call('/goals', { op, id: x, tier: y, ...(a[3] != null ? { index: Number(a[3]) } : {}) });
+    if (op === 'owner') return call('/goals', { op: 'edit', id: x, owner: y || '' });
+    if (op === 'note') return call('/goals', { op: 'edit', id: x, note: y || '' });
+    if (op === 'repos') return call('/goals', { op: 'edit', id: x, repos: a.slice(2) });
+    if (op === 'merge') return call('/goals', { op: 'edit', id: x, merge: y });
+    if (op === 'edit') return call('/goals', { op, id: x, title: y });
+    return call('/goals', { op, id: x });
+  },
+  tasks: async () => {
+    const t = (await call('/board')).tasks.filter((x) => !a[0] || x.goal === a[0] || x.owner === a[0]);
+    return t.filter((x) => x.status !== 'done' || a[0]).map((x) =>
+      `${x.id}  ${x.status}  ${x.split ? '(needs splitting) ' : ''}${x.title}${x.parent ? `  (part of ${x.parent})` : ''}${x.goal ? `  [${x.goal}]` : ''}${x.owner ? `  @${x.owner}` : ''}${x.branch ? `  branch ${x.repo ? x.repo + ':' : ''}${x.branch}` : ''}  confirmed ${x.confirmed}${x.note ? `  — ${x.note}` : ''}`).join('\n') || 'no tasks';
+  },
+  // task add <title> [goal] [owner] | task split <id> <subtask>... | task claim <id> [owner] | task release <id> | task edit <id> split true|false | task edit <id> parent <id> | task move <id> <todo|doing|blocked|done> [note] | task move <id> review [repo:]<branch> [note] | task edit <id> branch [repo:]<branch> | task confirm <id> | task edit <id> <field> <value> | task drop <id>
+  task: () => {
+    const [op, x, y, z] = a;
+    if (op === 'add') return call('/tasks', { op, title: x, goal: y, owner: z, by: process.env.AGENTS_ID });
+    if (op === 'move' && y === 'review') return call('/tasks', { op, id: x, status: y, branch: z, note: a[4] });
+    if (op === 'move') return call('/tasks', { op, id: x, status: y, note: z });
+    if (op === 'claim') return call('/tasks', { op: 'edit', id: x, owner: y || process.env.AGENTS_ID || '' });
+    if (op === 'release') return call('/tasks', { op: 'edit', id: x, owner: '' });
+    if (op === 'split') return call('/tasks', { op, id: x, titles: a.slice(2), by: process.env.AGENTS_ID });
+    if (op === 'edit') return call('/tasks', { op, id: x, [y]: z ?? '' });
+    return call('/tasks', { op, id: x });
+  },
+  // merges | merge <task> | merge diff <task> | merge back <task> <note>. James merges from the Merge tab; the lead runs `merge` only when James says so for that item.
+  merges: async () => a[0] === 'refresh'
+    ? ((r) => r.closed.length ? r.closed.map((c) => `${c.id} done: ${c.why}`).join('\n') : `nothing merged outside; ${r.merges.length} in review`)(await call('/merges', { op: 'refresh' }))
+    : (await call('/merges')).map((m) => m.error
+    ? `${m.id}  ${m.title}  ${m.repo}:${m.branch}  — ${m.error}`
+    : `${m.id}  ${m.title}  ${m.repo}:${m.branch}  ${m.ahead} ahead${m.behind ? `, ${m.behind} behind` : ''} of ${m.base}  ${m.age}d${m.stale ? ' STALE' : ''}${m.owner ? `  @${m.owner}` : ''}${m.result ? `  — ${m.result}` : '  — no test result'}${m.desktop ? `\n    desktop: ${m.desktop}` : ''}${m.compare ? `\n    github: ${m.compare}` : ''}`).join('\n') || 'nothing in review',
+  // meetings [days] [from YYYY-MM-DD] (past ones say Done or Missed) | meeting add "<title>" "<when>" <id,id> [once|daily|weekdays|weekly] ["<agenda>"] | meeting edit <id> <field> <value> (presenters <id,id> sets the turn order) | meeting cancel <id> [date] | meeting start <id> | meeting next | meeting end | meeting now
+  meetings: async () => {
+    const { upcoming } = await call(`/meetings?days=${Number(a[0]) || 7}${a[1] ? `&from=${a[1]}T00:00` : ''}`);
+    const day = (s) => new Date(s).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+    return upcoming.map((m) => `${m.past ? (m.past === 'done' ? 'Done: ' : 'Missed: ') : ''}${day(m.start)} ${m.start.slice(11)}-${m.end.slice(11)}  ${m.id}  ${m.title}  with ${m.attendees.join(', ')}${m.repeat !== 'once' ? `  (${m.repeat})` : ''}${m.agenda ? `\n    ${m.agenda.replace(/\n/g, '\n    ')}` : ''}`).join('\n') || `no meetings in the next ${Number(a[0]) || 7} days`;
+  },
+  meeting: async () => {
+    const [op, ...r] = a, fmt = (m) => `${m.id} ${m.title}: ${m.at.replace('T', ' ')}, ${m.minutes} min, ${m.repeat}, with ${m.attendees.join(', ')}`;
+    if (op === 'add') return fmt(await call('/meetings', { op, title: r[0], when: r[1], attendees: r[2], repeat: ['once', 'daily', 'weekdays', 'weekly'].includes(r[3]) ? r[3] : undefined, agenda: ['once', 'daily', 'weekdays', 'weekly'].includes(r[3]) ? r[4] : r[3], by: process.env.AGENTS_ID || 'james' }));
+    if (op === 'edit') { if (!['title', 'agenda', 'attendees', 'presenters', 'when', 'minutes', 'repeat'].includes(r[1])) throw new Error('meeting edit <id> title|agenda|attendees|presenters|when|minutes|repeat <value>'); return fmt(await call('/meetings', { op, id: r[0], [r[1]]: r.slice(2).join(' ') })); }
+    if (op === 'cancel') { const m = await call('/meetings', { op, id: r[0], date: r[1] }); return m.cancelled ? `${m.id} cancelled` : `${m.id} skips ${m.skip.at(-1)}`; }
+    if (op === 'start') { const m = await call('/meetings', { op, id: r[0] }); return `meeting on: ${m.title}, ${m.start.slice(11)} to ${m.end.slice(11)}, attendees woken`; }
+    if (op === 'end') { await call('/meetings', { op }); return 'meeting ended'; }
+    if (op === 'next') { const m = await call('/meetings', { op }); return m.turn < m.presenters.length ? `now presenting: ${m.presenters[m.turn]} (${m.turn + 1} of ${m.presenters.length})` : 'all presented: open questions'; }
+    if (op === 'now') { const { current: m } = await call('/meetings?days=1'); return m ? `${m.title}, ${m.start.slice(11)} to ${m.end.slice(11)} with ${m.attendees.join(', ')}${m.presenters ? `; ${m.turn < m.presenters.length ? `presenting: ${m.presenters[m.turn]} (${m.turn + 1} of ${m.presenters.length})` : 'open questions'}` : ''}` : 'no meeting on'; }
+    if (op === 'list' || !op) return cmds.meetings();
+    throw new Error('meeting add|edit|cancel|start|next|end|now|list');
+  },
+  // meet now <id,id> ["topic"]: a 30-minute meeting that starts at once
+  meet: async () => {
+    if (a[0] !== 'now' || !a[1]) throw new Error('meet now <id,id> ["topic"]');
+    const m = await call('/meetings', { op: 'now', attendees: a[1], topic: a.slice(2).join(' '), by: process.env.AGENTS_ID || 'james' });
+    return `meeting on: ${m.title}, ${m.start.slice(11)} to ${m.end.slice(11)} with ${m.attendees.join(', ')}, attendees woken`;
+  },
+  merge: async () => {
+    if (a[0] === 'back') return call('/merges', { op: 'back', id: a[1], note: a[2] });
+    if (a[0] === 'diff') { const d = await call(`/merges/${a[1]}/diff`); return `${d.log.join('\n')}\n\n${d.stat}\n\n${d.diff}`; }
+    const r = await call('/merges', { op: 'merge', id: a[0] }); return `${r.id} merged into ${r.base} at ${r.sha}, branch ${r.branch} deleted, task done`;
+  },
+  // call <teams-url> [until <time>] | call status | call leave: the lead joins a Teams call through ~/claude-in-call
+  call: async () => {
+    if (a[0] === 'leave') return call('/call', { op: 'leave' });
+    if (!a[0] || a[0] === 'status') { const c = await call('/call'); return c.live ? `in a call as ${c.name} since ${new Date(c.started).toLocaleTimeString()}${c.ends ? `, until ${c.ends.slice(11)}` : ''} (pid ${c.pid})\n${c.url}\n\n${(c.log || []).join('\n')}` : `not in a call${c.pid ? `\nlast call log:\n${(c.log || []).join('\n')}` : ''}`; }
+    const until = a[1] === 'until' ? a.slice(2).join(' ') : a.slice(1).join(' ');
+    const r = await call('/call', { op: 'join', url: a[0], ...(until ? { until } : {}) });
+    return `joining as ${r.name} (pid ${r.pid})${r.ends ? `; leaves at ${r.ends.slice(11)} + 5 min` : ''}; call status to follow it, call leave to hang up`;
+  },
+  restart: () => call('/restart', {}),
+  // humans | human add "<name>" [avatar] | human edit <id> name|avatar <value> | human remove <id>
+  humans: async () => (await call('/humans')).humans.map((h) => `${h.id}  ${h.name}${h.avatar ? `  ${h.avatar.length > 40 ? 'image' : h.avatar}` : ''}`).join('\n'),
+  human: async () => {
+    const [op, ...r] = a, show = (h) => `${h.id}  ${h.name}${h.avatar ? `  ${h.avatar.length > 40 ? 'image' : h.avatar}` : ''}`;
+    if (op === 'add') return show(await call('/humans', { op, name: r[0], avatar: r[1] }));
+    if (op === 'edit') { if (!['name', 'avatar'].includes(r[1])) throw new Error('human edit <id> name|avatar <value>'); return show(await call('/humans', { op, id: r[0], [r[1]]: r.slice(2).join(' ') })); }
+    if (op === 'remove') { const h = await call('/humans', { op, id: r[0] }); return `${h.name} removed`; }
+    throw new Error('human add|edit|remove');
+  },
+  // share on|off|status: the room on the tailnet (tailscale serve)
+  share: async () => {
+    const op = a[0] || 'status'; if (!['on', 'off', 'status'].includes(op)) throw new Error('share on|off|status');
+    const st = op === 'status' ? await call('/share') : await call('/share', { on: op === 'on' });
+    return st.on ? `shared on the tailnet: ${st.url}` : 'not shared on the tailnet';
+  },
+  // inbox: James's dropped notes, unread (waiting for the lead) and read
+  inbox: async () => {
+    const { unread, read } = await call('/inbox'), t = (f) => new Date(f.mtime).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    return [`unread: ${unread.length ? '' : 'none'}`, ...unread.map((f) => `  ${f.name}  ${t(f)}`), `read: ${read.length ? '' : 'none'}`, ...read.slice(0, 20).map((f) => `  ${f.name}  ${t(f)}`)].join('\n');
+  },
+  limit: async () => { const l = await call('/limit'); return l.until ? `session limit: scheduled wakes paused until ${new Date(l.until).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : 'no session limit in effect'; },
+  remove: () => call(`/squiggles/${a[0]}/remove`, {}),
+  // room radio <fip|fipjazz|...|off> | room volume <0-1> | room voices on|off | room chatter quiet|normal|lively | room view room|lead|meeting|team|calendar|goals|tasks|merge | room view blocked|rethink | room view 1on1 <id> | room chat <id> | room lock
+  room: () => call('/room', { action: a[0], value: a[1], ...(a[2] ? { id: a[2] } : {}) }),
+  rename: () => call(`/squiggles/${a[0]}/update`, { name: a[1], ...(a[2] ? { role: a[2] } : {}) }),
+  create: () => call('/squiggles', { id: a[0], name: a[1], role: a[2], cwd: a[3], every: a[4], charter: a[5] }),
+  set: () => {
+    const v = a[2] === 'true' ? true : a[2] === 'false' ? false : /^\d+$/.test(a[2]) ? Number(a[2]) : a[2];
+    return call(`/squiggles/${a[0]}/update`, { [a[1]]: v });
+  },
+};
+
+if (!cmds[cmd]) {
+  console.log('usage: agents.mjs list | team | wake <id> [why] | tell <id> <text> | stop <id> | clear <id> | remove <id> | room radio|volume|voices|chatter|view|chat <value> | room view 1on1 <id> | room view blocked|rethink | room lock | room reload | call <teams-url> [until <time>] | call status | call leave | restart | limit | inbox | share on|off|status | humans | human add "<name>" [avatar] | human edit <id> name|avatar <value> | human remove <id> | tail <id> [n] | journal <id> | charter <id> [new text] | rename <id> <name> [role] | create <id> <name> <role> <cwd> <every> <charter> | set <id> <field> <value> | goals | goal add|move|confirm|owner|note|repos|merge|edit|drop ... | tasks [goal|owner] | task add|move|confirm|edit|drop ... | task move <id> review [repo:]<branch> ["<test result>"] | meetings [days] [from YYYY-MM-DD] | meeting add "<title>" "<when>" <id,id> [once|daily|weekdays|weekly] ["<agenda>"] | meeting edit <id> <field> <value> | meeting cancel <id> [date] | meeting start <id> | meeting next | meeting end | meeting now | meet now <id,id> ["topic"] | merges [refresh] | merge <task> | merge diff <task> | merge back <task> "<note>"');
+  process.exit(1);
+}
+try {
+  const r = await cmds[cmd]();
+  console.log(typeof r === 'string' ? r : JSON.stringify(r, null, 1));
+} catch (e) {
+  console.error(String(e.message || e));
+  process.exit(1);
+}
