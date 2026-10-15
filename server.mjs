@@ -143,6 +143,11 @@ const TEAM = () => listSquiggles().map((s) => `- ${s.id}: ${s.name}, ${s.role}`)
 const fillPrompt = (t) => t.replace(/\{\{(user|User|cli|data)\}\}/g, (_, k) => ({
   user: CONFIG.userName || 'the user', User: CONFIG.userName || 'The user', cli: `node ${ROOT}/bin/agents.mjs`, data: DATA,
 })[k]);
+// First run: the room starts with only the lead, whose charter onboards the user.
+if (!listSquiggles().length) {
+  createSquiggle({ id: 'lead', name: 'Lead', role: 'Runs the team', cwd: '~', every: 0, charter: fillPrompt(readText(path.join(ROOT, 'prompts', 'lead-charter.md'))) });
+  saveSquiggle({ ...loadSquiggle('lead'), lead: true });
+}
 function systemPrompt(s) {
   const dir = sqDir(s.id);
   const base = fillPrompt(readText(path.join(ROOT, 'prompts', s.lead ? 'lead.md' : 'squiggle.md')));
@@ -163,7 +168,7 @@ function launch(s) {
   args.push('--autocompact', String(s.autocompact ?? (s.lead ? 300000 : 200000)), '--max-turns', String(s.maxTurns ?? 40));
   const effort = s.effort ?? (s.lead ? '' : 'medium'); if (effort) args.push('--effort', effort);
   const cli = `node ${ROOT}/bin/agents.mjs`;
-  if (s.lead) args.push('--allowedTools', `Bash(${cli} *)`, 'Read', 'Grep', 'Glob', `Edit(${SQ}/**)`, `Write(${SQ}/**)`, `Edit(${DATA}/goals.json)`);
+  if (s.lead) args.push('--allowedTools', `Bash(${cli} *)`, 'Read', 'Grep', 'Glob', `Edit(${SQ}/**)`, `Write(${SQ}/**)`, `Edit(${DATA}/goals.json)`, `Edit(${DATA}/config.json)`);
   // A squiggle may see the team and rewrite its own responsibility and journal, nobody else's.
   else args.push('--allowedTools', `Bash(${cli} list)`, `Bash(${cli} charter ${s.id} *)`, `Bash(${cli} charter ${s.id})`, `Edit(${sqDir(s.id)}/journal.md)`,
     `Bash(${cli} tasks*)`, `Bash(${cli} task *)`, `Bash(${cli} goals)`, `Bash(${cli} restart)`, `Bash(${cli} room reload)`);
