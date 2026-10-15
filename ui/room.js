@@ -648,7 +648,7 @@ const paintVoice = () => { $('#voiceBtn').textContent = prefs.voice ? 'Voices on
 paintVoice(); $('#voiceBtn').onclick = () => { prefs.voice = !prefs.voice; savePrefs(); paintVoice(); AUD.apply(); };
 $('#chatter').value = prefs.chatter; $('#chatter').onchange = (e) => { prefs.chatter = e.target.value; savePrefs(); };
 // Share on tailnet (tailscale serve): the toggle and its link in More. CLI: share on|off|status.
-function paintShare(st) { $('#shareOn').checked = !!st?.on; $('#shareUrl').hidden = $('#shareCopy').hidden = !st?.on; $('#shareUrl').href = $('#shareUrl').textContent = st?.url || ''; }
+function paintShare(st) { $('#shareOn').closest('label').hidden = !!st?.off; $('#shareOn').checked = !!st?.on; $('#shareUrl').hidden = $('#shareCopy').hidden = !st?.on; $('#shareUrl').href = $('#shareUrl').textContent = st?.url || ''; }
 async function loadShare() { const r = await fetch('/api/share').then((x) => x.json()).catch(() => null); if (r && !r.error) paintShare(r); }
 // Copy the tailnet link (t149). The clipboard API needs a secure page (localhost or https); otherwise copy through a selection.
 $('#shareCopy').onclick = async (e) => {

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Harness CLI, used by the lead (and by James from a terminal).
-const base = `http://127.0.0.1:${process.env.PORT || 4317}/api`;
+import { loadConfig } from '../config.mjs';
+const base = `http://127.0.0.1:${loadConfig().port}/api`;
 const [cmd, ...a] = process.argv.slice(2);
 
 async function call(path, body) {

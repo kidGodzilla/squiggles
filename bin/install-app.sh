@@ -5,7 +5,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 NODE="$(command -v node)"
 CLAUDE_DIR="$(dirname "$(command -v claude)")"
-PORT=4317
+PORT="$(cd "$ROOT" && "$NODE" --input-type=module -e "import { loadConfig } from './config.mjs'; console.log(loadConfig().port)")"
 APP="$HOME/Applications/Agents.app"
 PLIST="$HOME/Library/LaunchAgents/local.agents.server.plist"
 LOG="$HOME/Library/Logs/agents.log"

@@ -12,12 +12,14 @@ import { createBoard } from './board.mjs';
 import { createMeetings, local, markPast, meetingNotes, parseWhen } from './meetings.mjs';
 import { createInbox } from './inbox.mjs';
 import { createHumans } from './humans.mjs';
+import { dataDir, loadConfig } from './config.mjs';
 
 const home = (p) => String(p || '').replace(/^~(?=\/|$)/, os.homedir());
 // Code (ROOT) is written by git only; the room lives in DATA. See docs/upgrading.md.
 const ROOT = path.dirname(new URL(import.meta.url).pathname);
-const DATA = path.resolve(home(process.env.SQUIGGLES_HOME || '~/.squiggles'));
-const PORT = Number(process.env.PORT || 4317);
+const DATA = dataDir();
+const CONFIG = loadConfig(DATA);
+const PORT = CONFIG.port;
 const SQ = path.join(DATA, 'squiggles');
 const RUNS = path.join(DATA, 'runs');
 const MEDIA = path.join(RUNS, 'media');
@@ -141,9 +143,9 @@ function systemPrompt(s) {
   const base = readText(path.join(ROOT, 'prompts', s.lead ? 'lead.md' : 'squiggle.md'));
   return `${base}\n\nYou are ${s.name} (id: ${s.id}). Your role: ${s.role}.\nCharter: ${dir}/charter.md\nJournal: ${dir}/journal.md\nHarness CLI: node ${ROOT}/bin/agents.mjs\n\nThe team:\n${TEAM()}`;
 }
-// Always pass a model: unset would inherit James's CLI default (Fable), which the team must not use.
-// Sonnet is the floor (Haiku has no auto mode); Opus is the default and the ceiling.
-const modelFor = (s) => (/haiku|sonnet/i.test(s.model || '') ? 'claude-sonnet-5-5' : 'claude-opus-5-5');
+// Always pass a model: unset would inherit the CLI default, which may be Fable; squiggles never run on Fable.
+// Sonnet is the floor (Haiku has no auto mode); Opus is the default and the ceiling. config.model sets the default.
+const modelFor = (s) => (/haiku|sonnet/i.test(s.model || CONFIG.model || '') ? 'claude-sonnet-5-5' : 'claude-opus-5-5');
 function launch(s) {
   const r = R(s.id);
   const args = ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose',
@@ -209,7 +211,7 @@ function launch(s) {
 // ---------- other providers (t165) ----------
 // Whitelist in code, not in squiggle.json: the model picks the provider, anything unlisted runs on Claude (modelFor).
 const PROVIDERS = { codex: ['gpt-6.1-sol'] };
-const providerOf = (s) => Object.keys(PROVIDERS).find((p) => PROVIDERS[p].includes(s.model)) || '';
+const providerOf = (s) => (CONFIG.codex && Object.keys(PROVIDERS).find((p) => PROVIDERS[p].includes(s.model))) || '';
 // Each provider has its own usage limit; hitting one pauses only its squiggles' wakes.
 const plimit = persisted['*plimit'] ||= {};
 function providerLimit(p, msg) {
@@ -570,8 +572,9 @@ function shareFrom(status, port = PORT) {
       if (new RegExp(`^https?://(127\\.0\\.0\\.1|localhost):${port}/?$`).test(h.Proxy || '')) return { on: true, url: `https://${host.replace(/:443$/, '')}${p}` };
   return { on: false, url: '' };
 }
-const shareStatus = async () => shareFrom(JSON.parse((await tsRun(['serve', 'status', '--json'])) || '{}'));
+const shareStatus = async () => !CONFIG.tailnet ? { on: false, url: '', off: true } : shareFrom(JSON.parse((await tsRun(['serve', 'status', '--json'])) || '{}'));
 async function share(on) {
+  if (!CONFIG.tailnet) throw new Error('tailnet sharing is off: set "tailnet": true in config.json');
   if (on) await tsRun(['serve', '--bg', String(PORT)]); else if ((await shareStatus()).on) await tsRun(['serve', '--https=443', 'off']);
   const st = await shareStatus(); broadcast('*room', { k: 'room', action: 'share', value: st }); return st;
 }
@@ -716,6 +719,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/call' && req.method === 'POST') { const b = await body(req); return json(res, b.op === 'leave' ? await callLeave() : callJoin(b.url, b.until)); }
     if (url.pathname === '/api/health') return json(res, 'ok');
     if (url.pathname === '/api/humans') return json(res, req.method === 'POST' ? humans.op(await body(req)) : { humans: humans.all() });
+    if (url.pathname === '/api/config') { const { userName, model, codex, tailnet } = CONFIG; return json(res, { userName, model, codex, tailnet }); }
     if (url.pathname === '/api/share') return json(res, req.method === 'POST' ? await share(!!(await body(req)).on) : await shareStatus());
     if (url.pathname === '/api/inbox') return json(res, drop.list());
     if (url.pathname === '/api/limit') return json(res, { until: limit.until > Date.now() ? limit.until : 0 });
