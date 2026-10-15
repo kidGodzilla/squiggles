@@ -1,4 +1,4 @@
-// James's drop box: plain text files in ~/Agents/inbox go to the lead, then move to inbox/read/.
+// The user's drop box: plain text files in <data>/inbox go to the lead, then move to inbox/read/.
 // Files stay put until the lead can take them (idle, no session limit), so a restart or a limit loses nothing.
 import fs from 'node:fs';
 import path from 'node:path';

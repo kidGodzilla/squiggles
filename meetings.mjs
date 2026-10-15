@@ -1,4 +1,4 @@
-// Meetings James schedules with squiggles (the Calendar). One JSON file; times are local wall-clock "YYYY-MM-DDTHH:MM".
+// Meetings the user schedules with squiggles (the Calendar). One JSON file; times are local wall-clock "YYYY-MM-DDTHH:MM".
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -103,27 +103,28 @@ export function createMeetings(root, onChange, { isSquiggle = () => true } = {})
   return { all, upcoming, op };
 }
 
-// Notes for a meeting that just ended, from the attendees' event logs: what James said to each and what they said back.
+// Notes for a meeting that just ended, from the attendees' event logs: what the user said to each and what they said back.
 // cur: the meeting; logs: {id: [events]}; names: {id: name}. Returns the runs/meetings.log block and a journal entry per attendee.
-export function meetingNotes(cur, logs, names, endTs = Date.now()) {
+export function meetingNotes(cur, logs, names, endTs = Date.now(), user = 'the user') {
+  const User = user[0].toUpperCase() + user.slice(1);
   const from = cur.at || new Date(cur.start).getTime(), hm = (ts) => local(new Date(ts)).slice(11);
   const clip = (s) => { s = String(s).replace(/\s+/g, ' ').trim(); return s.length > 400 ? s.slice(0, 399) + '…' : s; };
   const said = {}, all = [];
   for (const id of cur.attendees) {
-    said[id] = (logs[id] || []).filter((e) => e.ts >= from && e.ts <= endTs && ((e.k === 'user' && e.from === 'james') || e.k === 'say'))
-      .map((e) => ({ ts: e.ts, id, james: e.k === 'user', text: clip(e.text) }));
+    said[id] = (logs[id] || []).filter((e) => e.ts >= from && e.ts <= endTs && ((e.k === 'user' && e.from === 'owner') || e.k === 'say'))
+      .map((e) => ({ ts: e.ts, id, owner: e.k === 'user', text: clip(e.text) }));
     all.push(...said[id]);
   }
   all.sort((a, b) => a.ts - b.ts);
   const who = cur.attendees.map((id) => names[id] || id).join(', '), when = `${cur.start.slice(0, 10)} ${cur.start.slice(11)} to ${hm(endTs)}`;
-  const head = `${cur.title}, ${when}, with James and ${who}`;
+  const head = `${cur.title}, ${when}, with ${user} and ${who}`;
   const log = `== ${head}\n${cur.agenda ? `Agenda: ${cur.agenda.replace(/\n/g, '; ')}\n` : ''}`
-    + (all.map((x) => `${hm(x.ts)} ${x.james ? `James to ${names[x.id] || x.id}` : names[x.id] || x.id}: ${x.text}`).join('\n') || '(nothing said)') + '\n\n';
+    + (all.map((x) => `${hm(x.ts)} ${x.owner ? `${User} to ${names[x.id] || x.id}` : names[x.id] || x.id}: ${x.text}`).join('\n') || '(nothing said)') + '\n\n';
   const journal = {};
   for (const id of cur.attendees) {
-    const asked = said[id].filter((x) => x.james).map((x) => `- James: ${x.text}`);
-    journal[id] = `\n## ${cur.start.slice(0, 10)} Meeting: ${cur.title}\n- ${when}, with James and ${who}.${cur.agenda ? ` Agenda: ${cur.agenda.replace(/\n/g, '; ')}.` : ''}\n`
-      + (asked.length ? asked.join('\n') + '\n' : '- James said nothing to me directly.\n') + `- Full notes: runs/meetings.log\n`;
+    const asked = said[id].filter((x) => x.owner).map((x) => `- ${User}: ${x.text}`);
+    journal[id] = `\n## ${cur.start.slice(0, 10)} Meeting: ${cur.title}\n- ${when}, with ${user} and ${who}.${cur.agenda ? ` Agenda: ${cur.agenda.replace(/\n/g, '; ')}.` : ''}\n`
+      + (asked.length ? asked.join('\n') + '\n' : `- ${User} said nothing to me directly.\n`) + `- Full notes: runs/meetings.log\n`;
   }
   return { log, journal };
 }

@@ -1,5 +1,5 @@
 // Agents: a room of squiggles. Each squiggle is a standing role with a charter and a journal,
-// run as a long-lived `claude -p` stream-json process. The lead is the only one James talks to.
+// run as a long-lived `claude -p` stream-json process. The lead is the only one the user talks to.
 import http from 'node:http';
 import { spawn, execFile, execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
@@ -20,6 +20,7 @@ const ROOT = path.dirname(new URL(import.meta.url).pathname);
 const DATA = dataDir();
 const CONFIG = loadConfig(DATA);
 const PORT = CONFIG.port;
+const USER = CONFIG.userName || 'the user', User = CONFIG.userName || 'The user';
 const SQ = path.join(DATA, 'squiggles');
 const RUNS = path.join(DATA, 'runs');
 const MEDIA = path.join(RUNS, 'media');
@@ -91,7 +92,7 @@ const meetings = createMeetings(DATA, () => {
 const humans = createHumans(DATA, () => {
   const line = `data: ${JSON.stringify({ id: '*board', ev: { k: 'humans' } })}\n\n`;
   for (const res of clients) res.write(line);
-});
+}, { ownerName: CONFIG.userName || 'You' });
 // Awake squiggles (t294): while one with awake: true is working, caffeinate keeps the display on and the Mac from idle sleep or locking.
 // -w ties it to this server, so a crash can't leave the Mac awake for good.
 function keepAwake(id, on) {
@@ -293,8 +294,8 @@ function codexTurn(s, prompt) {
   });
 }
 
-// from 'james' means a person on the page; human says which one (humans.json), and the squiggle reads 'From <name>: '.
-function send(id, text, from = 'james', { replay = false, human } = {}) {
+// from 'owner' means a person on the page; human says which one (humans.json), and the squiggle reads 'From <name>: '.
+function send(id, text, from = 'owner', { replay = false, human } = {}) {
   const s = loadSquiggle(id);
   if (!s) throw new Error(`no squiggle ${id}`);
   const r = R(id);
@@ -305,7 +306,7 @@ function send(id, text, from = 'james', { replay = false, human } = {}) {
     emit(id, { k: 'user', text, from, ...(human && { human }) }); emit(id, { k: 'log', text: 'held until the restart' });
     setTimeout(maybeRestart, 500); return;
   }
-  const who = from === 'james' && (humans.all().find((h) => h.id === (human || 'james')) || { id: human, name: human });
+  const who = from === 'owner' && (humans.all().find((h) => h.id === (human || 'owner')) || { id: human, name: human });
   const content = who ? `From ${who.name}: ${text}` : text;
   if (providerOf(s)) {
     if (!replay) emit(id, { k: 'user', text, from, ...(who && { human: who.id }) });
@@ -366,7 +367,7 @@ function turnEnded(s, text, isError, subtype) {
 function flushInbox() {
   const lead = listSquiggles().find((x) => x.lead);
   if (!lead || !inbox.length || R(lead.id).status === 'working' || limit.until > Date.now()) return;
-  send(lead.id, `Team reports:\n${inbox.splice(0).join('\n')}\n\nHandle what you can. Tell James only what needs him, in one short message.`, 'harness');
+  send(lead.id, `Team reports:\n${inbox.splice(0).join('\n')}\n\nHandle what you can. Tell ${USER} only what needs them, in one short message.`, 'harness');
 }
 
 // Session limit: one hit pauses every scheduled wake (and the lead's inbox) until the reset time plus 5 minutes,
@@ -464,20 +465,20 @@ function startMeeting(m, by = 'calendar') {
   broadcast('*room', { k: 'room', action: 'meeting', value: cur });
   if (by === 'calendar') macAlert(`Meeting now: ${m.title}`, `${m.title} has started with ${names.join(', ')}. Join it in the room?`, true);
   if (paused) { inbox.push(`[Harness · MEETING] ${m.title} started but nobody was woken: session limit until ${hhmm(limit.until)}.`); return cur; }
-  const head = `Meeting now: ${m.title}, ${m.start.slice(11)} to ${m.end.slice(11)}, with James and ${names.join(', ')}.${m.agenda ? `\nAgenda:\n${m.agenda}` : ''}\n`;
+  const head = `Meeting now: ${m.title}, ${m.start.slice(11)} to ${m.end.slice(11)}, with ${USER} and ${names.join(', ')}.${m.agenda ? `\nAgenda:\n${m.agenda}` : ''}\n`;
   const order = pres.map((id) => loadSquiggle(id)?.name || id).join(', then ');
   for (const id of m.attendees) {
     if (!loadSquiggle(id)) continue;
     if (pres[0] === id) send(id, head + presentPrompt(cur, id), 'harness');
-    else if (pres.length) send(id, head + `Presenters take turns: ${order}, then James's questions. It isn't your turn yet: post nothing now. `
-      + `Read what bears on the agenda so you're ready. You'll get a message when it's your turn; until then answer only what James asks you in your chat, briefly.`, 'harness');
-    else send(id, head + `James runs it from the meeting view, where your chat is open next to the others'. Check your board and journal for what bears on the agenda, `
-      + `then post a short brief: what you did, what you need from James. Answer questions in your chat until the meeting ends. Keep it brief; journal any decisions.`, 'harness');
+    else if (pres.length) send(id, head + `Presenters take turns: ${order}, then ${USER}'s questions. It isn't your turn yet: post nothing now. `
+      + `Read what bears on the agenda so you're ready. You'll get a message when it's your turn; until then answer only what ${USER} asks you in your chat, briefly.`, 'harness');
+    else send(id, head + `${User} runs it from the meeting view, where your chat is open next to the others'. Check your board and journal for what bears on the agenda, `
+      + `then post a short brief: what you did, what you need from ${USER}. Answer questions in your chat until the meeting ends. Keep it brief; journal any decisions.`, 'harness');
   }
   return cur;
 }
 // Meet now (t146): an unscheduled meeting that starts at once, 30 minutes unless said otherwise.
-function meetNow({ attendees, topic = '', minutes = 30, by = 'james' } = {}) {
+function meetNow({ attendees, topic = '', minutes = 30, by = 'owner' } = {}) {
   const ids = (Array.isArray(attendees) ? attendees : String(attendees || '').split(',')).map((x) => String(x).trim()).filter(Boolean);
   if (!ids.length) throw new Error('pick at least one attendee');
   const bad = ids.filter((id) => !loadSquiggle(id)); if (bad.length) throw new Error(`no squiggle ${bad.join(', ')}`);
@@ -487,11 +488,11 @@ function meetNow({ attendees, topic = '', minutes = 30, by = 'james' } = {}) {
 // A presenter's turn: one spoken summary (the room reads it aloud), visuals through tools (shown on the shared screen), then questions.
 function presentPrompt(cur, id) {
   const n = cur.presenters.length, i = cur.presenters.indexOf(id);
-  return `Your turn to present (${i + 1} of ${n}). Present your part of the agenda now in one chat message James can hear in about 60 seconds: `
+  return `Your turn to present (${i + 1} of ${n}). Present your part of the agenda now in one chat message ${USER} can hear in about 60 seconds: `
     + `about 150 words, plain words, no tables or code. If a diagram, file or page helps, open it with a tool (Read an image or file, run a command): the room shows your tool output on the shared screen while you present. `
-    + `Then stop and answer James's questions in your chat, briefly, until he moves on to the next presenter. Journal any decisions.`;
+    + `Then stop and answer ${USER}'s questions in your chat, briefly, until they move on to the next presenter. Journal any decisions.`;
 }
-// James moves the floor on: the next presenter gets their turn; after the last, open questions.
+// The user moves the floor on: the next presenter gets their turn; after the last, open questions.
 function nextTurn() {
   const cur = meetingNow(); if (!cur) throw new Error('no meeting is on');
   if (!cur.presenters?.length) throw new Error(`${cur.title} has no presenters`);
@@ -506,14 +507,14 @@ function endMeeting() {
   const cur = meetingNow(); if (!cur) throw new Error('no meeting is on');
   delete persisted['*meeting']; saveState();
   broadcast('*room', { k: 'room', action: 'meeting', value: null });
-  // Notes: the whole conversation to runs/meetings.log, what James asked each attendee to their journal.
+  // Notes: the whole conversation to runs/meetings.log, what the user asked each attendee to their journal.
   try {
     const logs = {}, names = {};
     for (const id of cur.attendees) {
       names[id] = loadSquiggle(id)?.name || id;
       logs[id] = readText(path.join(RUNS, `${id}.jsonl`)).split('\n').filter(Boolean).map((l) => { try { return JSON.parse(l); } catch { return {}; } });
     }
-    const n = meetingNotes(cur, logs, names);
+    const n = meetingNotes(cur, logs, names, Date.now(), USER);
     fs.appendFileSync(path.join(RUNS, 'meetings.log'), n.log);
     for (const id of cur.attendees) if (loadSquiggle(id)) fs.appendFileSync(path.join(sqDir(id), 'journal.md'), n.journal[id]);
   } catch (e) { console.error('meeting notes:', e.message); }
@@ -555,14 +556,14 @@ function meetingTick() {
 }
 setInterval(() => { try { meetingTick(); } catch (e) { console.error('meetings:', e.message); } }, 20000);
 
-// ---------- inbox: text files James drops in ~/Agents/inbox wake the lead, then move to inbox/read/ ----------
+// ---------- inbox: text files the user drops in <data>/inbox wake the lead, then move to inbox/read/ ----------
 const drop = createInbox(path.join(DATA, 'inbox'));
 setInterval(() => {
   try {
     const lead = listSquiggles().find((x) => x.lead);
     if (!lead || R(lead.id).status === 'working' || limit.until > Date.now()) return; // files wait in inbox/ until the lead can take them
     const notes = drop.take(); if (!notes.length) return;
-    send(lead.id, `James dropped ${notes.length > 1 ? `${notes.length} notes` : 'a note'} in the inbox:\n\n${notes.map((n) => `--- ${n.name} ---\n${n.text.trim()}`).join('\n\n')}\n\nTreat ${notes.length > 1 ? 'these' : 'it'} as a message from James. Moved to inbox/read/.`, 'inbox');
+    send(lead.id, `${User} dropped ${notes.length > 1 ? `${notes.length} notes` : 'a note'} in the inbox:\n\n${notes.map((n) => `--- ${n.name} ---\n${n.text.trim()}`).join('\n\n')}\n\nTreat ${notes.length > 1 ? 'these' : 'it'} as a message from ${USER}. Moved to inbox/read/.`, 'inbox');
   } catch (e) { console.error('inbox:', e.message); }
 }, 5000);
 
@@ -620,7 +621,7 @@ function callPrompt() {
   const lead = listSquiggles().find((s) => s.lead) || {};
   const g = board.goals(), line = (x) => `- ${x.title}${x.owner ? ` (owner ${x.owner})` : ''}${x.due ? `, due ${x.due}` : ''}${x.note ? `: ${x.note}` : ''}`;
   const open = board.tasks().filter((t) => t.status === 'doing' || t.status === 'blocked' || t.status === 'review');
-  return `You are ${lead.name || 'Lead'}, the lead of James's agent team, joining this call on his behalf. James is in the call. Answer as the lead, with the team's context below. Your workspace is ~/Agents; \`node bin/agents.mjs\` there shows the live team and board (list, goals, tasks, tail <id>). Do not wake, tell or change squiggles from the call unless James asks.
+  return `You are ${lead.name || 'Lead'}, the lead of ${USER}'s agent team, joining this call on their behalf. ${User} is in the call. Answer as the lead, with the team's context below. Your workspace is ${ROOT}; \`node bin/agents.mjs\` there shows the live team and board (list, goals, tasks, tail <id>). Do not wake, tell or change squiggles from the call unless ${USER} asks.
 
 Your responsibility:
 ${readText(path.join(sqDir(lead.id || 'lead'), 'charter.md')).trim()}
@@ -652,6 +653,7 @@ function callEnds(until) {
   return near ? near.end : '';
 }
 function callJoin(url, until) {
+  if (!fs.existsSync(CALL_DIR)) throw new Error('calls need ~/claude-in-call, which is not installed');
   if (!/^https:\/\/([\w-]+\.)*(teams\.microsoft\.com|teams\.live\.com)\//.test(String(url || ''))) throw new Error('give a Teams meeting link (https://teams.microsoft.com/... or teams.live.com/...)');
   const c = callStatus(); if (c.live) throw new Error(`already in a call (pid ${c.pid}): call leave first`);
   const lead = listSquiggles().find((s) => s.lead) || { id: 'lead', name: 'Lead', lead: true }, face = callFace(lead), ends = callEnds(until);
@@ -723,13 +725,13 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/call' && req.method === 'POST') { const b = await body(req); return json(res, b.op === 'leave' ? await callLeave() : callJoin(b.url, b.until)); }
     if (url.pathname === '/api/health') return json(res, 'ok');
     if (url.pathname === '/api/humans') return json(res, req.method === 'POST' ? humans.op(await body(req)) : { humans: humans.all() });
-    if (url.pathname === '/api/config') { const { userName, model, codex, tailnet } = CONFIG; return json(res, { userName, model, codex, tailnet }); }
+    if (url.pathname === '/api/config') { const { userName, model, codex, tailnet } = CONFIG; return json(res, { userName, model, codex, tailnet, call: fs.existsSync(CALL_DIR) }); }
     if (url.pathname === '/api/share') return json(res, req.method === 'POST' ? await share(!!(await body(req)).on) : await shareStatus());
     if (url.pathname === '/api/inbox') return json(res, drop.list());
     if (url.pathname === '/api/limit') return json(res, { until: limit.until > Date.now() ? limit.until : 0 });
     if (url.pathname === '/api/restart' && req.method === 'POST') { restartPending = true; setTimeout(maybeRestart, 500); return json(res, 'restarting as soon as nobody is mid-turn'); }
     if (url.pathname === '/api/voice') return json(res, kokoro.status());
-    // Room controls (radio, voices, chatter, tabs, chat windows) so the lead can do whatever James can.
+    // Room controls (radio, voices, chatter, tabs, chat windows) so the lead can do whatever the user can.
     if (url.pathname === '/api/room' && req.method === 'POST') { const b = await body(req); broadcast('*room', { k: 'room', ...b }); return json(res, 'ok'); }
     if (url.pathname === '/api/board') return json(res, { goals: board.goals(), tasks: board.tasks() });
     if (url.pathname === '/api/goals' && req.method === 'POST') return json(res, board.goalOp(await body(req)));
@@ -748,7 +750,7 @@ const server = http.createServer(async (req, res) => {
         const m = meetings.all().find((x) => x.id === b.id); if (!m) throw new Error(`no meeting ${b.id}`);
         const next = meetings.upcoming(new Date(Date.now() - 864e5), new Date(Date.now() + 366 * 864e5)).find((o) => o.id === m.id && new Date(o.end) > new Date());
         const s = new Date(), e = new Date(s.getTime() + (m.minutes || 30) * 60000);
-        const cur = startMeeting({ id: m.id, title: m.title, agenda: m.agenda, attendees: m.attendees, presenters: m.presenters, start: local(s), end: local(e) }, 'james');
+        const cur = startMeeting({ id: m.id, title: m.title, agenda: m.agenda, attendees: m.attendees, presenters: m.presenters, start: local(s), end: local(e) }, 'owner');
         if (next && new Date(next.start).toDateString() === s.toDateString()) { persisted['*started'].push(`${m.id}@${next.start}`); saveState(); }
         return json(res, cur);
       }
@@ -770,7 +772,7 @@ const server = http.createServer(async (req, res) => {
       switch (p[3]) {
         case 'events': return json(res, tailEvents(id, Number(url.searchParams.get('n') || 400)));
         case 'journal': return json(res, readText(path.join(sqDir(id), 'journal.md')));
-        case 'send': send(id, b.text, b.from || 'james', { human: b.human }); return json(res, 'ok');
+        case 'send': send(id, b.text, b.from || 'owner', { human: b.human }); return json(res, 'ok');
         case 'wake': return json(res, wake(id, b.why || 'asked'));
         case 'stop': stop(id); return json(res, 'ok');
         case 'clear': return json(res, clearChat(id));

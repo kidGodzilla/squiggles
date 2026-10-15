@@ -298,9 +298,9 @@ const when = (ts) => new Date(ts).toLocaleTimeString([], { hour: 'numeric', minu
 // One floating window per agent. History is kept per agent so a window opens with its conversation.
 const chatLine = (id, ev) => {
   const s = S.sq[id];
-  if (ev.k === 'user' && ev.from === 'james') {
-    const h = ev.human || 'james';
-    return h === (S.me || 'james') ? { cls: 'm you', text: ev.text } : { cls: 'm you other', text: `${B.humans.find((x) => x.id === h)?.name || h}: ${ev.text}` };
+  if (ev.k === 'user' && ev.from === 'owner') {
+    const h = ev.human || 'owner';
+    return h === (S.me || 'owner') ? { cls: 'm you', text: ev.text } : { cls: 'm you other', text: `${B.humans.find((x) => x.id === h)?.name || h}: ${ev.text}` };
   }
   if (ev.k === 'user') {
     const from = ev.from === 'lead' ? 'From the lead' : ev.from === 'harness' ? (/^Team reports/.test(ev.text) ? 'Team reports' : 'Woke up') : ev.from;
@@ -323,12 +323,12 @@ function appendLine(cw, line, keepPlace) {
   box.querySelector('.empty')?.remove();
   box.appendChild(d); if (box.pinned !== false || !keepPlace) pinBottom(box);
 }
-// A chat stays pinned to its newest message unless James scrolls up. Hidden windows (lock screen, another tab,
+// A chat stays pinned to its newest message unless the user scrolls up. Hidden windows (lock screen, another tab,
 // minimized) can't scroll, so the pin is re-applied whenever the list becomes visible or changes size.
 const pinBottom = (box) => { box.pinned = true; box.scrollTop = box.scrollHeight; };
 const pinObserver = new ResizeObserver((es) => { for (const e of es) if (e.target.pinned !== false && e.target.clientHeight) e.target.scrollTop = e.target.scrollHeight; });
 function pinChat(box) {
-  // Only James's scrolling moves the pin; a resize also fires scroll, and the observer re-pins after it.
+  // Only the user's scrolling moves the pin; a resize also fires scroll, and the observer re-pins after it.
   box.onscroll = () => { const h = box.clientHeight; if (h && h === box.lastH) box.pinned = box.scrollHeight - box.scrollTop - h < 80; box.lastH = h; };
   pinObserver.observe(box);
 }
@@ -374,7 +374,7 @@ const PHONE = matchMedia('(max-width: 760px)');
 function wireChat(cw, id) {
   const ta = cw.querySelector('textarea'), head = cw.querySelector('.chead');
   const autosize = () => { ta.style.height = 'auto'; ta.style.height = Math.min(140, ta.scrollHeight) + 'px'; };
-  const send = async () => { const t = ta.value.trim(); if (!t) return; ta.value = ''; autosize(); await api(`/squiggles/${id}/send`, { text: t, from: 'james', human: me().id }); };
+  const send = async () => { const t = ta.value.trim(); if (!t) return; ta.value = ''; autosize(); await api(`/squiggles/${id}/send`, { text: t, from: 'owner', human: me().id }); };
   ta.addEventListener('input', autosize);
   ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); } if (e.key === 'Escape') cw.classList.add('min'); });
   cw.querySelector('form').onsubmit = (e) => { e.preventDefault(); send(); };
@@ -469,7 +469,7 @@ async function refreshMeta(id) {
   const cw = document.getElementById('cw-' + id); if (cw) cw.querySelector('.chead b').textContent = fresh.name;
   paintTile(id);
 }
-// Everything James can do from the header, the lead can do too (agents.mjs room ...).
+// Everything the user can do from the header, the lead can do too (agents.mjs room ...).
 async function roomCommand(ev) {
   if (ev.k === 'removed') { document.getElementById('cw-' + ev.id)?.remove(); await load(); return; }
   const v = String(ev.value ?? '').toLowerCase();
@@ -588,7 +588,7 @@ async function openSheet(id) {
   $('#sheetBody').onclick = async (e) => {
     const a = e.target.dataset.a; if (!a) return;
     if (a === 'meet') return meetNowPop(e.target, id);
-    if (a === 'wake') await api(`/squiggles/${id}/wake`, { why: 'James asked' });
+    if (a === 'wake') await api(`/squiggles/${id}/wake`, { why: 'Asked from the room' });
     if (a === 'stop') await api(`/squiggles/${id}/stop`, {});
     if (a === 'pause') Object.assign(S.sq[id], await api(`/squiggles/${id}/update`, { paused: !s.paused }));
     if (a === 'remove') {
@@ -671,7 +671,7 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMore(
 // The office (setView('lead'|'one') in board.js): one squiggle alone on the stage, its chat docked beside it, nobody else speaks or shares.
 // The Lead tab is the lead's office; clicking any other tile opens that squiggle's.
 const oneOnOne = (id) => setView(S.sq[id]?.lead ? 'lead' : 'one', id);
-// The office: one squiggle (or a meeting's attendees) alone with James, everyone else quiet. who: an id or a list of ids.
+// The office: one squiggle (or a meeting's attendees) alone with the user, everyone else quiet. who: an id or a list of ids.
 function setOffice(who) {
   const prev = S.officeIds || [], ids = [].concat(who || []).filter((id) => S.sq[id]);
   S.officeIds = ids; S.office = ids.join(',');
@@ -686,7 +686,7 @@ function setOffice(who) {
   }
   layout(); layoutMeet();
 }
-// A meeting James scheduled (Calendar) is on: chime, then the meeting view. null = it ended.
+// A meeting the user scheduled (Calendar) is on: chime, then the meeting view. null = it ended.
 function meetingNow(m, live) {
   const same = m && S.meeting && S.meeting.key === m.key;
   S.meeting = m || null; paintMeet(); paintMeetOn();
@@ -783,4 +783,4 @@ $('#joinBtn').onclick = () => {
 };
 document.addEventListener('keydown', (e) => { if (e.key === '/' && S.joined && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) { e.preventDefault(); const l = leadId(); if (l) openChat(l); } });
 
-load().then(() => { listen(); loadMeeting(); loadShare(); if (B.view === 'lead') setOffice(leadId()); else if (S.office) setOffice(S.officeIds); });
+load().then(() => { listen(); loadMeeting(); loadShare(); fetch('/api/config').then((x) => x.json()).then((c) => { $('#callBar').hidden = !c.call; }).catch(() => {}); if (B.view === 'lead') setOffice(leadId()); else if (S.office) setOffice(S.officeIds); });

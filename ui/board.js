@@ -155,7 +155,7 @@ function addNote() {
   n.className = `note c${colorOf(B.tgoal)} new`; n.style.setProperty('--r', '-1deg');
   n.innerHTML = '<textarea placeholder="What needs doing?"></textarea>'; notes.prepend(n); notes.scrollTop = 0;
   const ta = n.querySelector('textarea'); ta.focus();
-  const done = async (save) => { const title = ta.value.trim(); ta.onblur = null; if (save && title) await api('/tasks', { op: 'add', title, goal: B.tgoal || undefined, owner: B.towner && B.towner !== '-' ? B.towner : undefined, by: 'james' }); else renderTasks(); };
+  const done = async (save) => { const title = ta.value.trim(); ta.onblur = null; if (save && title) await api('/tasks', { op: 'add', title, goal: B.tgoal || undefined, owner: B.towner && B.towner !== '-' ? B.towner : undefined, by: 'owner' }); else renderTasks(); };
   ta.onkeydown = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); done(true); } if (e.key === 'Escape') done(false); };
   ta.onblur = () => done(true);
 }
@@ -217,7 +217,7 @@ function editTask(el) {
       if (a === 'save') { const r = await api('/tasks', { op: 'edit', id: t.id, title: pop.querySelector('#ptT').value.trim() || t.title, goal: pop.querySelector('#ptG').value, owner: pop.querySelector('#ptO').value, ...(branch !== branchOf(t) ? { branch } : {}) }); if (r?.error) { toast(r.error); return; } }
       if (a === 'confirm') await api('/tasks', { op: 'confirm', id: t.id });
       if (a === 'release') await api('/tasks', { op: 'edit', id: t.id, owner: '' });
-      if (a === 'split') { const titles = pop.querySelector('#ptS').value.split('\n').map((x) => x.trim()).filter(Boolean); if (!titles.length) { pop.querySelector('#ptS').focus(); return; } await api('/tasks', { op: 'split', id: t.id, titles, by: 'james' }); }
+      if (a === 'split') { const titles = pop.querySelector('#ptS').value.split('\n').map((x) => x.trim()).filter(Boolean); if (!titles.length) { pop.querySelector('#ptS').focus(); return; } await api('/tasks', { op: 'split', id: t.id, titles, by: 'owner' }); }
       if (a === 'mark') await api('/tasks', { op: 'edit', id: t.id, split: !t.split });
       if (a === 'drop') await api('/tasks', { op: 'drop', id: t.id });
       if (a === 'chat') openChat(t.owner);
@@ -332,7 +332,7 @@ function renderTeam() {
     </div>`;
   }).join('') || '<div class="empty">Nobody matches.</div>';
 }
-// People: the humans who use the room (humans.json). James first; click one to edit. CLI: humans, human add|edit|remove.
+// People: the humans who use the room (humans.json). The owner first; click one to edit. CLI: humans, human add|edit|remove.
 B.humans = [];
 async function loadHumans() { const r = await api('/humans'); if (r?.humans) { B.humans = r.humans; renderPeople(); paintMe(); } }
 function humanFace(h) {
@@ -347,7 +347,7 @@ function editHuman(anchor, id) {
   const h = id && B.humans.find((x) => x.id === id);
   showPop(anchor, `<label>Name</label><input id="hmN" value="${esc(h?.name || '')}" placeholder="Their name">
     <label>Avatar (emoji, up to 4 letters, or an image link)</label><input id="hmA" value="${esc(h?.avatar || '')}" placeholder="Empty: their initial">
-    <div class="row"><button class="go" data-a="save">${h ? 'Save' : 'Add'}</button>${h && h.id !== 'james' ? '<button class="bad" data-a="remove">Remove</button>' : ''}</div>`, (pop) => {
+    <div class="row"><button class="go" data-a="save">${h ? 'Save' : 'Add'}</button>${h && h.id !== 'owner' ? '<button class="bad" data-a="remove">Remove</button>' : ''}</div>`, (pop) => {
     pop.onclick = async (e) => {
       const a = e.target.dataset.a; if (!a) return;
       let r;
@@ -360,7 +360,7 @@ function editHuman(anchor, id) {
 }
 // Who's at this browser (t141): asked on joining when there's more than one human, switched from the top bar. Messages carry it.
 S.me = localStorage.getItem('agents.me') || '';
-const me = () => B.humans.find((h) => h.id === S.me) || B.humans[0] || { id: 'james', name: 'James', avatar: '' };
+const me = () => B.humans.find((h) => h.id === S.me) || B.humans[0] || { id: 'owner', name: 'You', avatar: '' };
 const whoButtons = () => B.humans.map((h) => `<button class="hm" data-me="${esc(h.id)}">${humanFace(h)}<b>${esc(h.name)}</b></button>`).join('');
 function paintMe() {
   const several = B.humans.length > 1, m = me(), ask = several && !B.humans.some((h) => h.id === S.me);
@@ -384,7 +384,7 @@ $('#teamList').onclick = async (e) => {
   if (a === 'chat') return openChat(id);
   if (a === 'edit') return openSheet(id);
   if (a === 'meet') return meetNowPop(e.target, id);
-  if (a === 'wake') { const r = await api(`/squiggles/${id}/wake`, { why: 'James asked' }); return toast(r?.error || `Woke ${S.sq[id].name}`); }
+  if (a === 'wake') { const r = await api(`/squiggles/${id}/wake`, { why: 'Asked from the room' }); return toast(r?.error || `Woke ${S.sq[id].name}`); }
   oneOnOne(id);
 };
 $('#teamList').onkeydown = (e) => { const c = e.target.closest?.('[data-sq]'); if (e.key === 'Enter' && c === e.target) oneOnOne(c.dataset.sq); };
@@ -443,7 +443,7 @@ function editMeeting(anchor, id, date, start) {
         const byName = (x) => S.order.find((id) => id === x || S.sq[id].name.toLowerCase() === x.toLowerCase()) || x;
         const presenters = v('#cmP').split(',').map((x) => x.trim()).filter(Boolean).map(byName);
         const f = { title: v('#cmT').trim(), at: v('#cmW'), minutes: Number(v('#cmM')) || 30, repeat: v('#cmR'), agenda: v('#cmA').trim(), attendees, presenters };
-        r = await api('/meetings', m ? { op: 'edit', id: m.id, ...f } : { op: 'add', by: 'james', ...f });
+        r = await api('/meetings', m ? { op: 'edit', id: m.id, ...f } : { op: 'add', by: 'owner', ...f });
         if (!r?.error) toast(m ? `Saved ${r.title}` : `Scheduled ${r.title}`);
       }
       // Join a meeting that's on; Meet now starts this event at once (CLI: meeting start <id>, room view meeting).
@@ -485,7 +485,7 @@ $('#calWeek').onclick = (e) => {
 
 // ---------- tabs: Room | Lead | Team | Calendar | Goals | Tasks | Merge ----------
 function setView(v, who) {
-  // lead and one are the office: one squiggle alone with James (lead = the lead's office, one = anyone else's).
+  // lead and one are the office: one squiggle alone with the user (lead = the lead's office, one = anyone else's).
   // meeting is the office for a meeting's attendees together.
   if (v === 'meeting' && !S.meeting) v = 'room';
   const office = v === 'lead' || v === 'one' || v === 'meeting';

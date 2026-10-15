@@ -1,4 +1,4 @@
-// Goals (the whiteboard) and tasks (the sticky notes). Plain JSON files that James, the lead and squiggles all edit.
+// Goals (the whiteboard) and tasks (the sticky notes). Plain JSON files that the user, the lead and squiggles all edit.
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -211,7 +211,7 @@ export function createBoard(root, onChange) {
     if (r.error) throw new Error(r.error);
     return { ...r, stat: git(r.repo, ['diff', '--stat', `${r.base}...${r.branch}`]), diff: git(r.repo, ['diff', `${r.base}...${r.branch}`]) };
   }
-  // Merge into the base branch in the repo as it stands (James's checkout). Fast-forward when possible, a merge commit otherwise.
+  // Merge into the base branch in the repo as it stands (the user's checkout). Fast-forward when possible, a merge commit otherwise.
   // Refuses rather than switching branches or touching uncommitted work; a conflict is aborted and reported.
   function merge(id) {
     const task = mergeTask(id), r = mergeInfo(task);

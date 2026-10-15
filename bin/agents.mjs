@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Harness CLI, used by the lead (and by James from a terminal).
+// Harness CLI, used by the lead (and by you from a terminal).
 import { loadConfig } from '../config.mjs';
 const base = `http://127.0.0.1:${loadConfig().port}/api`;
 const [cmd, ...a] = process.argv.slice(2);
@@ -80,7 +80,7 @@ const cmds = {
     if (op === 'edit') return call('/tasks', { op, id: x, [y]: z ?? '' });
     return call('/tasks', { op, id: x });
   },
-  // merges | merge <task> | merge diff <task> | merge back <task> <note>. James merges from the Merge tab; the lead runs `merge` only when James says so for that item.
+  // merges | merge <task> | merge diff <task> | merge back <task> <note>. The user merges from the Merge tab; the lead runs `merge` only when they say so for that item.
   merges: async () => a[0] === 'refresh'
     ? ((r) => r.closed.length ? r.closed.map((c) => `${c.id} done: ${c.why}`).join('\n') : `nothing merged outside; ${r.merges.length} in review`)(await call('/merges', { op: 'refresh' }))
     : (await call('/merges')).map((m) => m.error
@@ -94,7 +94,7 @@ const cmds = {
   },
   meeting: async () => {
     const [op, ...r] = a, fmt = (m) => `${m.id} ${m.title}: ${m.at.replace('T', ' ')}, ${m.minutes} min, ${m.repeat}, with ${m.attendees.join(', ')}`;
-    if (op === 'add') return fmt(await call('/meetings', { op, title: r[0], when: r[1], attendees: r[2], repeat: ['once', 'daily', 'weekdays', 'weekly'].includes(r[3]) ? r[3] : undefined, agenda: ['once', 'daily', 'weekdays', 'weekly'].includes(r[3]) ? r[4] : r[3], by: process.env.AGENTS_ID || 'james' }));
+    if (op === 'add') return fmt(await call('/meetings', { op, title: r[0], when: r[1], attendees: r[2], repeat: ['once', 'daily', 'weekdays', 'weekly'].includes(r[3]) ? r[3] : undefined, agenda: ['once', 'daily', 'weekdays', 'weekly'].includes(r[3]) ? r[4] : r[3], by: process.env.AGENTS_ID || 'owner' }));
     if (op === 'edit') { if (!['title', 'agenda', 'attendees', 'presenters', 'when', 'minutes', 'repeat'].includes(r[1])) throw new Error('meeting edit <id> title|agenda|attendees|presenters|when|minutes|repeat <value>'); return fmt(await call('/meetings', { op, id: r[0], [r[1]]: r.slice(2).join(' ') })); }
     if (op === 'cancel') { const m = await call('/meetings', { op, id: r[0], date: r[1] }); return m.cancelled ? `${m.id} cancelled` : `${m.id} skips ${m.skip.at(-1)}`; }
     if (op === 'start') { const m = await call('/meetings', { op, id: r[0] }); return `meeting on: ${m.title}, ${m.start.slice(11)} to ${m.end.slice(11)}, attendees woken`; }
@@ -107,7 +107,7 @@ const cmds = {
   // meet now <id,id> ["topic"]: a 30-minute meeting that starts at once
   meet: async () => {
     if (a[0] !== 'now' || !a[1]) throw new Error('meet now <id,id> ["topic"]');
-    const m = await call('/meetings', { op: 'now', attendees: a[1], topic: a.slice(2).join(' '), by: process.env.AGENTS_ID || 'james' });
+    const m = await call('/meetings', { op: 'now', attendees: a[1], topic: a.slice(2).join(' '), by: process.env.AGENTS_ID || 'owner' });
     return `meeting on: ${m.title}, ${m.start.slice(11)} to ${m.end.slice(11)} with ${m.attendees.join(', ')}, attendees woken`;
   },
   merge: async () => {
@@ -139,7 +139,7 @@ const cmds = {
     const st = op === 'status' ? await call('/share') : await call('/share', { on: op === 'on' });
     return st.on ? `shared on the tailnet: ${st.url}` : 'not shared on the tailnet';
   },
-  // inbox: James's dropped notes, unread (waiting for the lead) and read
+  // inbox: the user's dropped notes, unread (waiting for the lead) and read
   inbox: async () => {
     const { unread, read } = await call('/inbox'), t = (f) => new Date(f.mtime).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
     return [`unread: ${unread.length ? '' : 'none'}`, ...unread.map((f) => `  ${f.name}  ${t(f)}`), `read: ${read.length ? '' : 'none'}`, ...read.slice(0, 20).map((f) => `  ${f.name}  ${t(f)}`)].join('\n');
