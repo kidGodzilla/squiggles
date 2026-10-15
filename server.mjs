@@ -1,4 +1,4 @@
-// Agents: a room of squiggles. Each squiggle is a standing role with a charter and a journal,
+// Squiggles: a room of squiggles. Each squiggle is a standing role with a charter and a journal,
 // run as a long-lived `claude -p` stream-json process. The lead is the only one the user talks to.
 import http from 'node:http';
 import { spawn, execFile, execFileSync } from 'node:child_process';
@@ -797,5 +797,5 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, '127.0.0.1', () => console.log(`Agents on http://127.0.0.1:${PORT}`));
+server.listen(PORT, '127.0.0.1', () => console.log(`Squiggles on http://127.0.0.1:${PORT}`));
 for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => shutdown(0));
