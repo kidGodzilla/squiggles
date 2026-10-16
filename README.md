@@ -36,7 +36,7 @@ Later, open the room from Spotlight ("Squiggles"). Server log: `~/Library/Logs/s
 
 | | |
 |---|---|
-| `~/squiggles` | the code; `git pull` upgrades it |
+| `~/squiggles` | the code; `upgrade` updates it (below) |
 | `~/.squiggles` | your room: `config.json`, squiggles, charters, journals, board (override with `SQUIGGLES_HOME`) |
 
 `config.json` settings: `port`, `userName`, `tailnet` (show "Share on tailnet"), `model` (`opus` or `sonnet`), `codex` (allow Codex models). Restart after editing: `node ~/squiggles/bin/agents.mjs restart`.
