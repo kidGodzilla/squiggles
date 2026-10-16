@@ -429,10 +429,13 @@ function broadcast(id, ev) {
 }
 
 // Restart without killing anyone mid-turn: wait until nobody is working, then exit; the login item starts the server again.
+// Started by hand (no login item), start the replacement ourselves; it waits for this one to free the port.
 let restartPending = false;
+const supervised = process.env.XPC_SERVICE_NAME === 'local.squiggles.server';
 function maybeRestart() {
   if (!restartPending || [...rt.values()].some((r) => r.status === 'working' && r.proc)) return;
   broadcast('*room', { k: 'room', action: 'restarting' });
+  if (!supervised) spawn(process.execPath, process.argv.slice(1), { detached: true, stdio: 'inherit', env: { ...process.env, SQUIGGLES_RESPAWN: '1' } }).unref();
   shutdown(0);
 }
 // Turns held by a pending restart go out once the new server is up.
@@ -807,5 +810,7 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
+let portTries = process.env.SQUIGGLES_RESPAWN ? 40 : 0; // a respawn waits up to 10s for the old server to exit
+server.on('error', (e) => { if (e.code === 'EADDRINUSE' && portTries-- > 0) setTimeout(() => server.listen(PORT, '127.0.0.1'), 250); else throw e; });
 server.listen(PORT, '127.0.0.1', () => console.log(`Squiggles ${VERSION} on http://127.0.0.1:${PORT}`));
 for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => shutdown(0));
