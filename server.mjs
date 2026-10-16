@@ -14,6 +14,7 @@ import { createInbox } from './inbox.mjs';
 import { createHumans } from './humans.mjs';
 import { dataDir, loadConfig } from './config.mjs';
 import { migrate } from './migrate.mjs';
+import { createSchedule } from './schedule.mjs';
 
 const home = (p) => String(p || '').replace(/^~(?=\/|$)/, os.homedir());
 // Code (ROOT) is written by git only; the room lives in DATA. See docs/upgrading.md.
@@ -452,7 +453,8 @@ function stop(id) {
 }
 
 // ---------- scheduler: squiggles wake themselves on their cadence ----------
-// Paused while the session limit is hit. Staggered: no two squiggles start within 10 minutes of each other.
+// Paused while the session limit is hit. Staggered: no two squiggles start within 10 minutes of each other. Jittered: schedule.mjs.
+const dueAt = createSchedule();
 setInterval(() => {
   if (limit.until > Date.now()) return;
   const newest = Math.max(0, ...[...rt.values()].map((r) => Date.parse(r.lastWake || 0) || 0));
@@ -461,7 +463,7 @@ setInterval(() => {
     if (s.lead || s.paused || !(s.every > 0)) continue;
     const r = R(s.id);
     const last = Date.parse(r.lastWake || 0) || 0;
-    if (r.status !== 'working' && Date.now() - last >= s.every * 60000 && wake(s.id)) break;
+    if (r.status !== 'working' && Date.now() >= dueAt(s.id, s.every, last) && wake(s.id)) break;
   }
 }, 30000);
 

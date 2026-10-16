@@ -14,4 +14,5 @@ First public release. Data schema 1.
 - Seams: `prompts/*.md` and `*.append.md`, `local.css` in the data directory.
 - Migrations on start, with backups and refusal of newer data.
 - `upgrade` command: pull, show what changed, restart, migrate.
+- Wake jitter: each wake lands at its cadence ± 10%, and first wakes after a start spread over 10-15 minutes, so installs don't wake in step.
 - `bin/install-app.sh`: Squiggles.app and a login item.
