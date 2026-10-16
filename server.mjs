@@ -22,6 +22,7 @@ const DATA = dataDir();
 try { const m = await migrate(DATA); if (m) console.log(`Migrated data schema ${m.from} to ${m.to}; backup in ${m.backup}`); } catch (e) { console.error(e.message); process.exit(1); }
 const CONFIG = loadConfig(DATA);
 const PORT = CONFIG.port;
+const VERSION = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version;
 const USER = CONFIG.userName || 'the user', User = CONFIG.userName || 'The user';
 const SQ = path.join(DATA, 'squiggles');
 const RUNS = path.join(DATA, 'runs');
@@ -737,7 +738,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/call' && req.method === 'POST') { const b = await body(req); return json(res, b.op === 'leave' ? await callLeave() : callJoin(b.url, b.until)); }
     if (url.pathname === '/api/health') return json(res, 'ok');
     if (url.pathname === '/api/humans') return json(res, req.method === 'POST' ? humans.op(await body(req)) : { humans: humans.all() });
-    if (url.pathname === '/api/config') { const { userName, model, codex, tailnet } = CONFIG; return json(res, { userName, model, codex, tailnet, call: fs.existsSync(CALL_DIR) }); }
+    if (url.pathname === '/api/config') { const { userName, model, codex, tailnet } = CONFIG; return json(res, { userName, model, codex, tailnet, call: fs.existsSync(CALL_DIR), version: VERSION, schema: CONFIG.schema }); }
     if (url.pathname === '/api/share') return json(res, req.method === 'POST' ? await share(!!(await body(req)).on) : await shareStatus());
     if (url.pathname === '/api/inbox') return json(res, drop.list());
     if (url.pathname === '/api/limit') return json(res, { until: limit.until > Date.now() ? limit.until : 0 });
@@ -804,5 +805,5 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, '127.0.0.1', () => console.log(`Squiggles on http://127.0.0.1:${PORT}`));
+server.listen(PORT, '127.0.0.1', () => console.log(`Squiggles ${VERSION} on http://127.0.0.1:${PORT}`));
 for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => shutdown(0));
