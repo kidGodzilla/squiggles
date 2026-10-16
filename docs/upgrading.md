@@ -32,7 +32,7 @@ Squiggles get `--add-dir ~/.squiggles`; the lead's edit rights point there, not 
 Change behaviour here, never by editing the clone. A dirty clone blocks `upgrade`.
 
 1. `config.json`: port, your name, tailnet share on/off, default model (Opus; Fable refused), Codex on/off.
-2. `prompts/lead.append.md`, `prompts/squiggle.append.md`: appended to the shipped prompt, so upstream prompt fixes still reach you. A full `prompts/lead.md` replaces the shipped one and freezes it; `upgrade` warns when the shipped version changed underneath it.
+2. `prompts/lead.append.md`, `prompts/squiggle.append.md`: appended to the shipped prompt, so upstream prompt fixes still reach you. A full `prompts/lead.md` replaces the shipped one and freezes it; `upgrade` warns when the shipped version changed underneath it. `prompts/lead-charter.md` replaces the charter a new room's lead starts with.
 3. `local.css`: loaded after `room.css`.
 
 Need a seam that doesn't exist? Open an issue; don't fork the file.

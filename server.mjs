@@ -145,14 +145,17 @@ const TEAM = () => listSquiggles().map((s) => `- ${s.id}: ${s.name}, ${s.role}`)
 const fillPrompt = (t) => t.replace(/\{\{(user|User|cli|data)\}\}/g, (_, k) => ({
   user: CONFIG.userName || 'the user', User: CONFIG.userName || 'The user', cli: `node ${ROOT}/bin/agents.mjs`, data: DATA,
 })[k]);
+// Prompt seams: <data>/prompts/<name>.md replaces the shipped one (frozen; upgrade warns), <name>.append.md is added after it.
+const prompt = (name) => fillPrompt([readText(path.join(DATA, 'prompts', name)) || readText(path.join(ROOT, 'prompts', name)),
+  readText(path.join(DATA, 'prompts', name.replace(/\.md$/, '.append.md')))].filter((t) => t.trim()).join('\n\n'));
 // First run: the room starts with only the lead, whose charter onboards the user.
 if (!listSquiggles().length) {
-  createSquiggle({ id: 'lead', name: 'Lead', role: 'Runs the team', cwd: '~', every: 0, charter: fillPrompt(readText(path.join(ROOT, 'prompts', 'lead-charter.md'))) });
+  createSquiggle({ id: 'lead', name: 'Lead', role: 'Runs the team', cwd: '~', every: 0, charter: prompt('lead-charter.md') });
   saveSquiggle({ ...loadSquiggle('lead'), lead: true });
 }
 function systemPrompt(s) {
   const dir = sqDir(s.id);
-  const base = fillPrompt(readText(path.join(ROOT, 'prompts', s.lead ? 'lead.md' : 'squiggle.md')));
+  const base = prompt(s.lead ? 'lead.md' : 'squiggle.md');
   return `${base}\n\nYou are ${s.name} (id: ${s.id}). Your role: ${s.role}.\nCharter: ${dir}/charter.md\nJournal: ${dir}/journal.md\nHarness CLI: node ${ROOT}/bin/agents.mjs\n\nThe team:\n${TEAM()}`;
 }
 // Always pass a model: unset would inherit the CLI default, which may be Fable; squiggles never run on Fable.
@@ -711,6 +714,8 @@ const server = http.createServer(async (req, res) => {
   const p = url.pathname.split('/').filter(Boolean);
   try {
     if (url.pathname === '/') return serveFile(res, path.join(ROOT, 'ui', 'index.html'));
+    // UI seam: <data>/local.css loads after room.css; empty when absent.
+    if (url.pathname === '/local.css') { res.writeHead(200, { 'content-type': 'text/css' }); return res.end(readText(path.join(DATA, 'local.css'))); }
     if (p[0] === 'ui') return serveFile(res, path.join(ROOT, 'ui', path.basename(p[1] || '')));
     if (p[0] === 'media') return serveFile(res, path.join(MEDIA, path.basename(p[1] || '')));
     if (url.pathname === '/api/stream') {
