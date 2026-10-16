@@ -13,11 +13,13 @@ import { createMeetings, local, markPast, meetingNotes, parseWhen } from './meet
 import { createInbox } from './inbox.mjs';
 import { createHumans } from './humans.mjs';
 import { dataDir, loadConfig } from './config.mjs';
+import { migrate } from './migrate.mjs';
 
 const home = (p) => String(p || '').replace(/^~(?=\/|$)/, os.homedir());
 // Code (ROOT) is written by git only; the room lives in DATA. See docs/upgrading.md.
 const ROOT = path.dirname(new URL(import.meta.url).pathname);
 const DATA = dataDir();
+try { const m = await migrate(DATA); if (m) console.log(`Migrated data schema ${m.from} to ${m.to}; backup in ${m.backup}`); } catch (e) { console.error(e.message); process.exit(1); }
 const CONFIG = loadConfig(DATA);
 const PORT = CONFIG.port;
 const USER = CONFIG.userName || 'the user', User = CONFIG.userName || 'The user';

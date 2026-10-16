@@ -2,9 +2,10 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { codeSchema } from './migrate.mjs';
 
 export const DEFAULTS = {
-  schema: 1,
+  schema: 1,        // data schema; a fresh room starts at the latest
   port: 4317,
   userName: '',     // what squiggles call you; empty: "the user"
   tailnet: false,   // offer "Share on tailnet" (needs Tailscale)
@@ -20,7 +21,7 @@ export function loadConfig(dir = dataDir()) {
   try { saved = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (e) {
     if (e.code !== 'ENOENT') throw new Error(`${file}: ${e.message}`);
   }
-  const cfg = { ...DEFAULTS, ...saved };
+  const cfg = { ...DEFAULTS, schema: codeSchema(), ...saved };
   if (!saved) { fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(file, JSON.stringify(cfg, null, 2) + '\n'); }
   if (process.env.PORT) cfg.port = Number(process.env.PORT);
   return cfg;
