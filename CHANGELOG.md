@@ -13,4 +13,5 @@ First public release. Data schema 1.
 - `config.json`: port, name, tailnet share, default model, Codex.
 - Seams: `prompts/*.md` and `*.append.md`, `local.css` in the data directory.
 - Migrations on start, with backups and refusal of newer data.
+- `upgrade` command: pull, show what changed, restart, migrate.
 - `bin/install-app.sh`: Squiggles.app and a login item.

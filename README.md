@@ -43,7 +43,13 @@ Later, open the room from Spotlight ("Squiggles"). Server log: `~/Library/Logs/s
 
 The lead and you share one CLI: `node ~/squiggles/bin/agents.mjs` (run it with no arguments for usage).
 
-Upgrading and customising without conflicts: [docs/upgrading.md](docs/upgrading.md).
+## Upgrade
+
+Paste this into Claude Code:
+
+> Upgrade Squiggles: run `node ~/squiggles/bin/agents.mjs upgrade`. If it refuses because of local changes, move each change into a seam from ~/squiggles/docs/upgrading.md, then run it again. Summarise the changes it printed for me.
+
+It pulls the new code, restarts the login item and migrates your room, backing it up first. Customise through the seams in [docs/upgrading.md](docs/upgrading.md) so upgrades never conflict.
 
 ## Uninstall
 
