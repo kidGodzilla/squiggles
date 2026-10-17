@@ -15,6 +15,7 @@ import { createHumans } from './humans.mjs';
 import { dataDir, loadConfig } from './config.mjs';
 import { migrate } from './migrate.mjs';
 import { createSchedule } from './schedule.mjs';
+import { makeGuard, tailnetName } from './guard.mjs';
 
 const home = (p) => String(p || '').replace(/^~(?=\/|$)/, os.homedir());
 // Code (ROOT) is written by git only; the room lives in DATA. See docs/upgrading.md.
@@ -736,9 +737,14 @@ function tailEvents(id, n = 400) {
   return lines.slice(-n).map((l) => JSON.parse(l));
 }
 
+const tailnet = tailnetName(TS);
+const refuse = makeGuard(PORT, tailnet.get);
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   const p = url.pathname.split('/').filter(Boolean);
+  tailnet.seen(req.headers.host);
+  const why = refuse(req);
+  if (why) { res.writeHead(403, { 'content-type': 'text/plain' }); return res.end(`refused: ${why}`); }
   try {
     if (url.pathname === '/') return serveFile(res, path.join(ROOT, 'ui', 'index.html'));
     // UI seam: <data>/local.css loads after room.css; empty when absent.
@@ -807,6 +813,7 @@ const server = http.createServer(async (req, res) => {
     if (p[0] === 'api' && p[1] === 'squiggles' && p[2]) {
       const id = p[2], s = loadSquiggle(id);
       if (!s) return json(res, { error: 'no such squiggle' }, 404);
+      if (!['events', 'journal'].includes(p[3]) && req.method !== 'POST') return json(res, { error: 'POST only' }, 405);
       const b = req.method === 'POST' ? await body(req) : {};
       switch (p[3]) {
         case 'events': return json(res, tailEvents(id, Number(url.searchParams.get('n') || 400)));
