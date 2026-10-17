@@ -22,6 +22,8 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Merge review: `meet merges` has squiggles with branches in review present them, most urgent first.
 - Merge needs: `task needs <id> add "<what>"` lists steps beyond the merge button; the Merge tab flags them and ticks them off.
 - Worktrees belong to tasks: `task worktree <id> [repo]` makes `~/wt/<repo>-<id>` (`AGENTS_WT` overrides); merge, done and drop remove clean ones; `worktrees [check]` lists them and notes orphans for the lead.
+- Task ids in chats, journals and notes are links; hovering or tapping shows the task, clicking opens it on the board.
+- A chat's header face and name open that squiggle's 1:1.
 
 ### Changed
 - Merge leaves your checkout alone: it merges where the base branch is checked out only after a conflict check, otherwise in a temp worktree.
@@ -29,6 +31,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Banners under the header push chats and meeting bars down instead of covering them.
 - Squiggles prove a branch is merged before deleting it, and end review talk with `merge <id>`.
 - Screenshots and shared pages stay on screen 90 seconds over terminal output.
+- More > Share shows Copy link only, not the URL text.
 - The lead's "Handled." replies fold with the reports they answer into one line that opens to list them.
 
 ## 0.1.1

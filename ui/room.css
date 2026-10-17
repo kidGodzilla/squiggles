@@ -23,7 +23,7 @@ header > *, #summary span, #summary button { flex: none; white-space: nowrap }
 .morep.on { display: flex }
 .morep #moreCount { font-size: 12px; color: var(--dim) }
 .morep .ctl { display: flex; align-items: center; justify-content: space-between; gap: 8px } .morep #musicVol { width: 100% }
-#shareOn { width: 16px; height: 16px; accent-color: var(--accent) } #shareUrl { font-size: 12px; color: var(--accent); white-space: normal; overflow-wrap: anywhere; text-decoration: none }
+#shareOn { width: 16px; height: 16px; accent-color: var(--accent) }
 .morep .chip { width: 100%; justify-content: center } .morep #lockBtn { display: flex; align-items: center; gap: 6px }
 @media (max-width: 1100px) { #summary span:not(.working):not(.blocked):not(.rethink) { display: none } }
 @media (max-width: 760px) {
@@ -149,6 +149,7 @@ main { flex: 1; display: flex; min-height: 0 }
 .cw.front { z-index: 16 } .cw.min { height: 58px !important; min-height: 0; resize: none } .cw.min .msgs, .cw.min .act, .cw.min form { display: none }
 .chead { display: flex; align-items: center; gap: 10px; padding: 9px 10px 9px 12px; border-bottom: 1px solid var(--line); cursor: grab; user-select: none }
 .cw.dragging .chead { cursor: grabbing }
+.cw:not(.office) .chead :is(.tile.mini, .who b) { cursor: pointer } .cw:not(.office) .chead .who b { width: fit-content; max-width: 100% } .cw:not(.office) .chead .who b:hover { text-decoration: underline } .cw:not(.office) .chead .tile.mini:hover { filter: brightness(1.15) }
 .chead .who { flex: 1; min-width: 0 } .chead b { display: block; font-size: 13.5px } .chead small { display: block; color: var(--dim); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
 .chead .ib { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 8px; color: var(--dim) } .chead .ib:hover { background: rgba(255,255,255,.08); color: var(--text) }
 .chead .ib svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; pointer-events: none }
@@ -286,6 +287,9 @@ mark { background: rgba(245,192,74,.45); color: inherit; border-radius: 3px; pad
 
 /* ---------- popover editor ---------- */
 .pop { position: absolute; z-index: 30; display: none; width: 300px; padding: 14px; border-radius: 14px; background: var(--panel); border: 1px solid var(--line); box-shadow: 0 18px 50px rgba(0,0,0,.6); font: 13px var(--sans); color: var(--text) }
+a.tlink { color: inherit; text-decoration: underline dotted; text-underline-offset: 3px; cursor: pointer } a.tlink:hover { color: var(--accent) }
+.pop.tpop-on { z-index: 60 } .tpop .tph { display: flex; justify-content: space-between; align-items: baseline; color: var(--dim); font-size: 12px } .tpop .tph b { color: var(--text) }
+.tpop .tpt { margin: 6px 0 8px; line-height: 1.4 } .tpop dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; margin: 0 0 4px; font-size: 12px } .tpop dt { color: var(--dim) } .tpop dd { margin: 0; overflow-wrap: anywhere }
 .pop.on { display: block; animation: fadein .15s }
 .pop label { display: block; margin: 10px 0 4px; font-size: 11.5px; color: var(--dim) }
 .pop input, .pop textarea, .pop select { width: 100%; background: var(--bg); border: 1px solid var(--line); border-radius: 9px; padding: 7px 9px; outline: 0; color: var(--text) }

@@ -112,7 +112,7 @@ function startTalk(id, text, label) {
   if (S.present && S.present !== id && presenter() !== S.present) hidePresent();
   S.speakers.add(id); AUD.duck(true); setFocus(id); showSpeaker(id, t, text);
   for (const el of [t, ...camsOf(id)]) el.classList.add('speaking');
-  t.querySelector('.bubble').innerHTML = (label ? `<small>${esc(label)}</small> ` : '') + esc(text);
+  t.querySelector('.bubble').innerHTML = (label ? `<small>${esc(label)}</small> ` : '') + esc(text); linkTasks(t.querySelector('.bubble'));
   if (S.present === id) $('#pcap').textContent = text;
   let open = false; clearInterval(mouths.get(id));
   mouths.set(id, setInterval(() => {
@@ -426,7 +426,7 @@ function appendLine(cw, line, keepPlace) {
   d.className = line.cls; if (line.html) d.innerHTML = line.html; else d.textContent = line.text; line.el = d;
   if (line.fold) d.onclick = (e) => { if (e.target.closest('.fhead')) d.classList.toggle('open'); };
   box.querySelector('.empty')?.remove();
-  box.appendChild(d); if (box.pinned !== false || !keepPlace) pinBottom(box);
+  box.appendChild(d); if (typeof linkTasks === 'function') linkTasks(d); if (box.pinned !== false || !keepPlace) pinBottom(box);
 }
 // A chat stays pinned to its newest message unless the user scrolls up. Hidden windows (lock screen, another tab,
 // minimized) can't scroll, so the pin is re-applied whenever the list becomes visible or changes size.
@@ -562,14 +562,16 @@ function wireChat(cw, id) {
     }
     if (a === 'close') { saveWin(cw); cw.remove(); syncUrl(); }
     else if (a === 'min') cw.classList.toggle('min');
+    else if ((head.downOn || e.target).closest('.tile.mini, .who b') && !cw.dragged && !cw.classList.contains('office')) oneOnOne(id); // t821
     else if (cw.classList.contains('min') && !cw.dragged) { cw.classList.remove('min'); clearUnread(id); }
   });
   head.addEventListener('pointerdown', (e) => {
     if (e.target.closest('button') || PHONE.matches) return;
-    const sx = e.clientX, sy = e.clientY, ox = cw.offsetLeft, oy = cw.offsetTop; cw.dragged = false; head.setPointerCapture(e.pointerId);
+    // Pointer capture retargets the click to the header, so remember what was pressed (t821).
+    head.downOn = e.target; const sx = e.clientX, sy = e.clientY, ox = cw.offsetLeft, oy = cw.offsetTop; cw.dragged = false; head.setPointerCapture(e.pointerId);
     const move = (m) => { const dx = m.clientX - sx, dy = m.clientY - sy; if (Math.abs(dx) + Math.abs(dy) > 3) { cw.dragged = true; cw.classList.add('dragging'); }
       cw.style.left = Math.max(0, Math.min(innerWidth - 120, ox + dx)) + 'px'; cw.style.top = Math.max(52, Math.min(innerHeight - 50, oy + dy)) + 'px'; };
-    const up = () => { head.removeEventListener('pointermove', move); head.removeEventListener('pointerup', up); cw.classList.remove('dragging'); saveWin(cw); setTimeout(() => (cw.dragged = false), 0); };
+    const up = () => { head.removeEventListener('pointermove', move); head.removeEventListener('pointerup', up); cw.classList.remove('dragging'); saveWin(cw); setTimeout(() => { cw.dragged = false; head.downOn = null; }, 0); };
     head.addEventListener('pointermove', move); head.addEventListener('pointerup', up);
   });
   const mic = cw.querySelector('.mic'), SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -834,11 +836,12 @@ const paintVoice = () => { $('#voiceBtn').textContent = prefs.voice ? 'Voices on
 paintVoice(); $('#voiceBtn').onclick = () => { prefs.voice = !prefs.voice; savePrefs(); paintVoice(); AUD.apply(); };
 $('#chatter').value = prefs.chatter; $('#chatter').onchange = (e) => { prefs.chatter = e.target.value; savePrefs(); };
 // Share on tailnet (tailscale serve): the toggle and its link in More. CLI: share on|off|status.
-function paintShare(st) { $('#shareOn').closest('label').hidden = !!st?.off; $('#shareOn').checked = !!st?.on; $('#shareUrl').hidden = $('#shareCopy').hidden = !st?.on; $('#shareUrl').href = $('#shareUrl').textContent = st?.url || ''; }
+// Only Copy link shows (t837); the URL rides on the button. Hidden when tailnet sharing is off in config.
+function paintShare(st) { $('#shareOn').closest('label').hidden = !!st?.off; $('#shareOn').checked = !!st?.on; $('#shareCopy').hidden = !st?.on; $('#shareCopy').dataset.url = st?.url || ''; }
 async function loadShare() { const r = await fetch('/api/share').then((x) => x.json()).catch(() => null); if (r && !r.error) paintShare(r); }
 // Copy the tailnet link (t149). The clipboard API needs a secure page (localhost or https); otherwise copy through a selection.
 $('#shareCopy').onclick = async (e) => {
-  const url = $('#shareUrl').href, b = e.currentTarget;
+  const b = e.currentTarget, url = b.dataset.url;
   try { await navigator.clipboard.writeText(url); } catch { const t = document.createElement('textarea'); t.value = url; document.body.append(t); t.select(); document.execCommand('copy'); t.remove(); }
   b.textContent = 'Copied'; clearTimeout(b.t); b.t = setTimeout(() => (b.textContent = 'Copy link'), 1500);
 };
@@ -974,7 +977,7 @@ function paintThread() {
     else { d.textContent = l.text; const t = document.createElement('span'); t.className = 'to'; t.textContent = `To ${to.map(mname).join(', ')}`; d.prepend(t); }
     box.appendChild(d);
   }
-  if (box.pinned !== false) pinBottom(box);
+  linkTasks(box); if (box.pinned !== false) pinBottom(box);
   $('#meetThread textarea').placeholder = on ? `Message ${mname(on)}, or @name` : 'Message everyone, or @name';
 }
 // Who hears the user: anyone @named, else the presenter, else (no presenters, or open questions) every attendee.

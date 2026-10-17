@@ -24,7 +24,7 @@ async function loadBoard() {
   B.goals = { active: [], hold: [], todo: [], done: [], ...b.goals }; B.tasks = b.tasks;
   if (B.seen) for (const t of B.tasks) if (!before.has(t.id)) B.fresh.add(t.id);
   B.seen = true;
-  renderGoals(); renderTasks(); B.fresh.clear();
+  renderGoals(); renderTasks(); B.fresh.clear(); linkAll();
   if (B.view === 'team') { renderTeam(); loadHumans(); }
   if (B.view === 'calendar') loadCal();
   if (B.view === 'merge') loadMerges();
@@ -76,6 +76,7 @@ function renderTasks() {
     } else body = list.map(noteHtml).join('');
     return `<div class="ccol" data-status="${st}"><h3><span>${name}<small>${list.length || ''}</small></span></h3><div class="notes">${body}</div></div>`;
   }).join('');
+  linkTasks($('#corkcols'));
   $('#tcount').textContent = `${vis.length} of ${B.tasks.length} notes`;
   $('#ttidy').classList.toggle('on', B.tidy); $('#ttidy').textContent = B.tidy ? 'Tidy: piles' : 'Tidy: off';
 }
@@ -141,7 +142,7 @@ for (const v of ['#goalsView', '#tasksView']) {
   });
 }
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePop(); });
-document.addEventListener('mousedown', (e) => { if (!e.target.closest('#pop,[data-task],.g')) closePop(); });
+document.addEventListener('mousedown', (e) => { if (!e.target.closest('#pop,[data-task],.g,.tlink')) closePop(); });
 
 function addGoal(btn) {
   const tier = btn.dataset.addgoal, input = document.createElement('input');
@@ -174,7 +175,7 @@ function showPop(anchor, html, wire) {
   pop.style.left = Math.max(8, x) + 'px'; pop.style.top = Math.max(60, Math.min(innerHeight - pop.offsetHeight - 10, y)) + 'px';
   wire(pop); pop.querySelector('input,textarea')?.focus();
 }
-function closePop() { $('#pop').classList.remove('on'); }
+function closePop() { $('#pop').classList.remove('on', 'tpop-on'); }
 function editGoal(el) {
   const g = goalById(el.dataset.goal); if (!g) return;
   const open = B.tasks.filter((t) => t.goal === g.id && t.status !== 'done').length;
@@ -589,3 +590,41 @@ $('#callBar').onsubmit = async (e) => {
 };
 $('#callLeave').onclick = async () => { const r = await api('/call', { op: 'leave' }); toast(r?.error || r); loadCall(); };
 window.onCall = loadCall;
+
+// ---------- task ids as links (t822) ----------
+// Any rendered text naming a task that exists (t227) gets a link: a popover with its title, status, owner and branch,
+// and a button that opens it on the board. Skips code, links and form fields. Idempotent, so re-run after the board loads.
+const TID = /\bt\d{1,5}\b/g;
+function linkTasks(root) {
+  if (!root || !B.tasks.length) return;
+  const ids = new Set(B.tasks.map((t) => t.id)), walk = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode: (n) => n.parentElement.closest('code,pre,a,.tlink,textarea,input,select,script,style,.mmirror') || !/\bt\d/.test(n.data) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT,
+  }), hits = [];
+  while (walk.nextNode()) hits.push(walk.currentNode);
+  for (const n of hits) {
+    const parts = n.data.split(/(\bt\d{1,5}\b)/); if (!parts.some((p, i) => i % 2 && ids.has(p))) continue;
+    const f = document.createDocumentFragment();
+    parts.forEach((p, i) => { if (i % 2 && ids.has(p)) { const a = document.createElement('a'); a.className = 'tlink'; a.dataset.tid = p; a.href = '#'; a.textContent = p; f.append(a); } else if (p) f.append(p); });
+    n.replaceWith(f);
+  }
+}
+const linkAll = () => ['#chats', '#meetThread', '#corkcols', '#stage'].forEach((s) => linkTasks(document.querySelector(s)));
+function taskPop(a) {
+  const t = B.tasks.find((x) => x.id === a.dataset.tid); if (!t) return;
+  const st = COLS.find(([s]) => s === t.status)?.[1] || t.status;
+  showPop(a, `<div class="tpop"><div class="tph"><b>${esc(t.id)}</b><span>${esc(st)}</span></div><div class="tpt">${esc(t.title)}</div>
+    <dl>${t.owner ? `<dt>Owner</dt><dd>${esc(ownerName(t.owner))}</dd>` : ''}${t.goal ? `<dt>Goal</dt><dd>${esc(goalById(t.goal)?.title || t.goal)}</dd>` : ''}${t.branch ? `<dt>Branch</dt><dd><code>${esc(t.branch)}</code></dd>` : ''}</dl>
+    <div class="row"><button class="go" data-a="open">Open on the board</button></div></div>`, (pop) => {
+    pop.classList.add('tpop-on');
+    pop.onclick = (e) => { if (e.target.dataset.a === 'open') { closePop(); openTaskNote(t.id); } };
+  });
+}
+// Shows one note on the Tasks board with filters cleared enough to include it, then opens it.
+function openTaskNote(id) {
+  const t = B.tasks.find((x) => x.id === id); if (!t) return;
+  B.tgoal = ''; B.tq = ''; B.towner = t.owner && S.sq[t.owner] ? t.owner : ''; if (!taskVisible(t)) B.tshow = 'all';
+  $('#tq').value = ''; setView('tasks'); renderTasks();
+  const n = document.querySelector(`#corkcols [data-task="${id}"]`); if (!n) return;
+  n.scrollIntoView({ block: 'center' }); n.classList.add('new'); editTask(n);
+}
+document.addEventListener('click', (e) => { const a = e.target.closest('a.tlink'); if (!a) return; e.preventDefault(); e.stopPropagation(); taskPop(a); }, true);
