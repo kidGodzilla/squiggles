@@ -2,7 +2,7 @@
 
 Each version lists Added, Changed and Fixed, plus Migrations and Breaking when present. Breaking entries say how to adapt local changes. Data schema is in `config.json`; see docs/upgrading.md.
 
-## 0.1.1 (unreleased)
+## 0.1.1
 
 ### Security
 - Upgrade now: before 0.1.1, a web page open in your browser could send commands to your room. The server now refuses requests from other sites and hosts, and squiggle actions accept POST only.

@@ -1,6 +1,6 @@
 {
   "name": "squiggles",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A room for a small team of Claude Code agents.",
   "private": true,
   "license": "Apache-2.0",
