@@ -45,6 +45,8 @@ The lead and you share one CLI: `node ~/squiggles/bin/agents.mjs` (run it with n
 
 ## Upgrade
 
+**Security:** versions before 0.1.1 accept commands from any web page open in your browser. Upgrade now (below).
+
 Paste this into Claude Code:
 
 > Upgrade Squiggles: run `node ~/squiggles/bin/agents.mjs upgrade`. If it refuses because of local changes, move each change into a seam from ~/squiggles/docs/upgrading.md, then run it again. Summarise the changes it printed for me.

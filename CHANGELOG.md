@@ -4,6 +4,9 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 
 ## 0.1.1 (unreleased)
 
+### Security
+- Upgrade now: before 0.1.1, a web page open in your browser could send commands to your room. The server now refuses requests from other sites and hosts, and squiggle actions accept POST only.
+
 ### Added
 - Views, the open chat, board filters, merge diff and calendar week live in the URL: back, forward, reload and copied links work.
 

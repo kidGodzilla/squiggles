@@ -737,7 +737,8 @@ function tailEvents(id, n = 400) {
   return lines.slice(-n).map((l) => JSON.parse(l));
 }
 
-const tailnet = tailnetName(TS);
+// Tailnet sharing off: only the local names are allowed, and tailscale is never asked.
+const tailnet = CONFIG.tailnet ? tailnetName(TS) : { get: () => '', seen: () => {} };
 const refuse = makeGuard(PORT, tailnet.get);
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
