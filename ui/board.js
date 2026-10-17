@@ -96,12 +96,12 @@ function noteHtml(t) {
     ${t.branch ? `<div class="nb" title="Branch">${esc(branchOf(t))}</div>` : ''}${t.split ? '<div class="nsplit">Needs splitting</div>' : ''}${subLine(t)}
     <div class="nf">${face(t.owner, 'nf' + t.id + '_')}<span class="age" title="Last confirmed ${esc(t.confirmed)}">${stale ? `${ago(t.confirmed)} old` : ago(t.created)}</span>${g ? `<span class="ng">${esc(g.title)}</span>` : ''}</div></div>`;
 }
-$('#gq').oninput = (e) => { B.gq = e.target.value; renderGoals(); };
-$('#tq').oninput = (e) => { B.tq = e.target.value; renderTasks(); };
-$('#tgoal').onchange = (e) => { B.tgoal = e.target.value; renderTasks(); };
-$('#towner').onchange = (e) => { B.towner = e.target.value; renderTasks(); };
+$('#gq').oninput = (e) => { B.gq = e.target.value; renderGoals(); syncUrl(); };
+$('#tq').oninput = (e) => { B.tq = e.target.value; renderTasks(); syncUrl(); };
+$('#tgoal').onchange = (e) => { B.tgoal = e.target.value; renderTasks(); syncUrl(); };
+$('#towner').onchange = (e) => { B.towner = e.target.value; renderTasks(); syncUrl(); };
 $('#ttidy').onclick = () => { B.tidy = !B.tidy; try { localStorage.agentsTidy = B.tidy ? '1' : '0'; } catch {} renderTasks(); };
-$('#tshow').onclick = (e) => { const v = e.target.dataset.v; if (v) { B.tshow = v; renderTasks(); } };
+$('#tshow').onclick = (e) => { const v = e.target.dataset.v; if (v) { B.tshow = v; renderTasks(); syncUrl(); } };
 
 // ---------- drag and drop ----------
 let drag = null;
@@ -276,19 +276,21 @@ async function openDiff(id) {
       ${d.log.length ? fold(d.log, 'dcommits') : ''}${stat.length ? fold(stat, 'dstat') : ''}</details><pre class="dpatch">${diffHtml(d.diff) || '(no changes)'}</pre>`;
   box.onclick = (e) => {
     const a = e.target.dataset.a;
-    if (a === 'close') $('#diffBox').classList.remove('on');
+    if (a === 'close') closeDiff();
     if (a === 'more') { const f = e.target.closest('.dfold'), on = f.classList.toggle('all'); e.target.textContent = on ? 'Show less' : `Show all ${e.target.dataset.n}`; }
-    if (a === 'dmerge' && m) mergeBranch(m, e.target).then((ok) => ok && $('#diffBox').classList.remove('on'));
+    if (a === 'dmerge' && m) mergeBranch(m, e.target).then((ok) => ok && closeDiff());
   };
-  $('#diffBox').classList.add('on');
+  $('#diffBox').classList.add('on'); B.diff = id; syncUrl();
 }
+// The open diff is in the URL (?view=merge&diff=<task>, t351).
+function closeDiff(sync = true) { $('#diffBox').classList.remove('on'); B.diff = ''; if (sync) syncUrl(); }
 async function mergeBranch(m, btn) {
   if (!confirm(`Merge ${repoName(m.repo)}:${m.branch} into ${m.base}? The branch is deleted and the task marked done.`)) return false;
   btn.disabled = true; btn.textContent = 'Merging';
   const r = await api('/merges', { op: 'merge', id: m.id }).catch(() => ({ error: 'Merge request failed' })); if (r?.error) { toast(r.error); btn.disabled = false; btn.textContent = 'Merge'; loadMerges(); return false; }
   AUD.ding(); toast(`Merged ${m.branch} at ${r.sha}`); loadMerges(); return true;
 }
-$('#diffBox').onclick = (e) => { if (e.target.id === 'diffBox') e.target.classList.remove('on'); };
+$('#diffBox').onclick = (e) => { if (e.target.id === 'diffBox') closeDiff(); };
 $('#mrefresh').onclick = async () => {
   const r = await api('/merges', { op: 'refresh' });
   if (r?.closed?.length) toast(`Closed ${r.closed.map((c) => `${c.id} (${c.why})`).join(', ')}`);
@@ -456,9 +458,9 @@ function editMeeting(anchor, id, date, start) {
     };
   });
 }
-$('#calPrev').onclick = () => { B.week.setDate(B.week.getDate() - 7); loadCal(); };
-$('#calNext').onclick = () => { B.week.setDate(B.week.getDate() + 7); loadCal(); };
-$('#calToday').onclick = () => { B.week = mondayOf(new Date()); loadCal(); };
+$('#calPrev').onclick = () => { B.week.setDate(B.week.getDate() - 7); loadCal(); syncUrl(); };
+$('#calNext').onclick = () => { B.week.setDate(B.week.getDate() + 7); loadCal(); syncUrl(); };
+$('#calToday').onclick = () => { B.week = mondayOf(new Date()); loadCal(); syncUrl(); };
 $('#calAdd').onclick = (e) => editMeeting(e.currentTarget);
 // New meeting (t146, was Meet now): pick who and an optional topic; a 30-minute meeting starts at once. CLI: meet now <id,id> ["topic"].
 function meetNowPop(anchor, id) {
@@ -484,18 +486,21 @@ $('#calWeek').onclick = (e) => {
 };
 
 // ---------- tabs: Room | Lead | Team | Calendar | Goals | Tasks | Merge ----------
-function setView(v, who) {
+function setView(v, who, nav) {
   // lead and one are the office: one squiggle alone with the user (lead = the lead's office, one = anyone else's).
   // meeting is the office for a meeting's attendees together.
   if (v === 'meeting' && !S.meeting) v = 'room';
   const office = v === 'lead' || v === 'one' || v === 'meeting';
   if (v === 'lead') who = leadId() || who; if (v === 'one' && !who) v = 'room'; if (v === 'meeting') who = meetOrder();
-  B.view = v; closePop(); paintMeetOn();
+  B.view = v; B.who = who; closePop(); paintMeetOn(); if (v !== 'merge' && B.diff) closeDiff(false);
   document.body.classList.toggle('v-goals', v === 'goals'); document.body.classList.toggle('v-tasks', v === 'tasks'); document.body.classList.toggle('v-merge', v === 'merge'); document.body.classList.toggle('v-team', v === 'team'); document.body.classList.toggle('v-cal', v === 'calendar');
   document.body.classList.toggle('v-one', office); document.body.classList.toggle('v-meet', v === 'meeting'); if (v !== 'meeting') document.body.classList.remove('sharing'); document.body.classList.toggle('v-lead', v === 'lead'); if (v === 'lead') loadCall(); setOffice(office ? who : '');
   document.querySelectorAll('.tabs button').forEach((b) => b.classList.toggle('on', b.dataset.view === v));
   $('.tabs .tmore').classList.toggle('on', ['team', 'calendar', 'goals'].includes(v)); moreTabs(false);
   try { localStorage.agentsView = v === 'one' ? 'one:' + who : v; } catch {}
+  // The view lives in the URL (?view=tasks, ?view=one&with=<id>): back, forward, new tabs and copied links (t348).
+  const q = viewUrl(v, who);
+  if (nav !== 'none' && location.search !== q) history[nav === 'replace' ? 'replaceState' : 'pushState'](null, '', location.pathname + q);
   if (v === 'room' || office) layout(); else loadBoard();
   if (v === 'merge') loadMerges();
   if (v === 'team') { renderTeam(); loadHumans(); }
@@ -507,7 +512,39 @@ function setView(v, who) {
 const moreTabs = (on) => { $('.tabs').classList.toggle('open', on); $('.tabs .tmore').setAttribute('aria-expanded', String(on)); };
 document.querySelector('.tabs').onclick = (e) => { if (e.target.closest('.tmore')) { e.stopPropagation(); return moreTabs(!$('.tabs').classList.contains('open')); } const v = e.target.dataset.view; if (v) setView(v); };
 document.addEventListener('click', (e) => { if (!e.target.closest('.tabs')) moreTabs(false); });
-try { const v = localStorage.agentsView || ''; if (['goals', 'tasks', 'lead', 'merge', 'team', 'calendar'].includes(v)) setTimeout(() => setView(v), 0); else if (v.startsWith('one:')) setTimeout(() => setView('one', v.slice(4)), 0); } catch {}
+function viewUrl(v = B.view, who = B.who) {
+  const p = new URLSearchParams(); if (v && v !== 'room') p.set('view', v); if (v === 'one') p.set('with', who);
+  // Board filters: goals search; tasks search, goal, owner and show (open is the default).
+  if (v === 'goals' && B.gq) p.set('q', B.gq);
+  if (v === 'tasks') { if (B.tq) p.set('q', B.tq); if (B.tgoal) p.set('goal', B.tgoal); if (B.towner) p.set('owner', B.towner); if (B.tshow !== 'open') p.set('show', B.tshow); }
+  // Merge diff and calendar week: week only when it isn't this week.
+  if (v === 'merge' && B.diff) p.set('diff', B.diff);
+  if (v === 'calendar' && ymd(B.week) !== ymd(mondayOf(new Date()))) p.set('week', ymd(B.week));
+  const c = chatParam(v || 'room'); if (c) p.set('chat', c);
+  const s = p.toString(); return s ? '?' + s : '';
+}
+// Opening, raising or closing a floating chat updates the URL in place, without a history step.
+function syncUrl() { const q = viewUrl(); if (location.search !== q) history.replaceState(null, '', location.pathname + q); }
+const VIEWS = ['room', 'lead', 'meeting', 'one', 'team', 'calendar', 'goals', 'tasks', 'merge'];
+function viewFromUrl(search, nav) {
+  const q = new URLSearchParams(search), v = q.get('view');
+  if (!VIEWS.includes(v)) return false;
+  if (v === 'goals') $('#gq').value = B.gq = q.get('q') || '';
+  if (v === 'tasks') { $('#tq').value = B.tq = q.get('q') || ''; B.tgoal = q.get('goal') || ''; B.towner = q.get('owner') || ''; B.tshow = ['open', 'all', 'stale'].includes(q.get('show')) ? q.get('show') : 'open'; }
+  if (v === 'calendar') { const w = /^(\d{4})-(\d\d)-(\d\d)$/.exec(q.get('week') || ''); B.week = mondayOf(w ? new Date(+w[1], w[2] - 1, +w[3]) : new Date()); }
+  const d = v === 'merge' && q.get('diff'); if (!d) closeDiff(false);
+  setView(v, q.get('with') || '', nav); if (d) openDiff(d); return true;
+}
+window.addEventListener('popstate', () => {
+  if (!viewFromUrl(location.search, 'none')) setView('room', '', 'none');
+  const c = new URLSearchParams(location.search).get('chat'); if (S.joined && S.sq[c]) openChat(c);
+});
+// The URL wins; without one, the last view.
+setTimeout(() => {
+  if (viewFromUrl(URL0, 'replace')) return;
+  let v = ''; try { v = localStorage.agentsView || ''; } catch {}
+  if (['goals', 'tasks', 'lead', 'merge', 'team', 'calendar'].includes(v)) setView(v, '', 'replace'); else if (v.startsWith('one:')) setView('one', v.slice(4), 'replace');
+}, 0);
 loadBoard();
 document.querySelector('.brand').onclick = () => setView('room');
 

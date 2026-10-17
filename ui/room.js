@@ -4,6 +4,8 @@ const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
 const base = (f) => String(f || '').split('/').pop();
+// The URL the page opened with: views restore from it after the room has loaded (t348).
+const URL0 = location.search;
 const fmtDur = (ms) => (ms < 1000 ? `${Math.round(ms)}ms` : ms < 60000 ? `${(ms / 1000).toFixed(1)}s` : `${Math.floor(ms / 60000)}m${Math.round((ms % 60000) / 1000)}s`);
 const api = (p, body) => fetch('/api' + p, body === undefined ? {} : { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then((r) => r.json());
 
@@ -334,7 +336,13 @@ function pinChat(box) {
 }
 function setAct(id, text) { const el = document.querySelector(`#cw-${id} .act`); if (el) el.textContent = text || ''; }
 let zTop = 20;
-function front(cw) { document.querySelectorAll('.cw.front').forEach((x) => x.classList.remove('front')); cw.classList.add('front'); cw.style.zIndex = ++zTop; }
+function front(cw) { document.querySelectorAll('.cw.front').forEach((x) => x.classList.remove('front')); cw.classList.add('front'); cw.style.zIndex = ++zTop; setTimeout(syncUrl); }
+// The frontmost floating chat on this page goes in the URL (?chat=<id>, t349). Not the lead's: it opens on every join anyway.
+function chatParam(v) {
+  const page = v === 'lead' || v === 'one' ? 'room' : v;
+  const open = [...document.querySelectorAll('#chats .cw:not(.office):not(.lead)')].filter((cw) => cw.dataset.pages.split(' ').includes(page));
+  return open.sort((a, b) => (+b.style.zIndex || 0) - (+a.style.zIndex || 0))[0]?.dataset.id || '';
+}
 const winPos = () => { try { return JSON.parse(localStorage.agentsWins || '{}'); } catch { return {}; } };
 function saveWin(cw) {
   // A hidden window (locked, other tab) measures 0 and a minimized one is short: neither may overwrite the real size.
@@ -388,7 +396,7 @@ function wireChat(cw, id) {
       clearTimeout(b._t); b.classList.remove('arm'); b.innerHTML = b.dataset.label; b.title = 'Clear chat';
       api(`/squiggles/${id}/clear`, {}); return;
     }
-    if (a === 'close') { saveWin(cw); cw.remove(); }
+    if (a === 'close') { saveWin(cw); cw.remove(); syncUrl(); }
     else if (a === 'min') cw.classList.toggle('min');
     else if (cw.classList.contains('min') && !cw.dragged) { cw.classList.remove('min'); clearUnread(id); }
   });
@@ -717,8 +725,8 @@ async function loadMeeting() {
   const r = await fetch('/api/meetings?days=1').then((x) => x.json()).catch(() => ({}));
   let was = ''; try { was = localStorage.agentsView; } catch {}
   // ?view=meeting: the Mac's Join alert (t147) opens the room straight on the meeting.
-  const want = new URLSearchParams(location.search).get('view'); if (want) history.replaceState(null, '', location.pathname);
-  meetingNow(r.current, false); if (r.current && (was === 'meeting' || want === 'meeting')) setView('meeting');
+  const want = new URLSearchParams(URL0).get('view');
+  meetingNow(r.current, false); if (r.current && (was === 'meeting' || want === 'meeting')) setView('meeting', '', 'replace');
 }
 function paintMeet() {
   const m = S.meeting; if (!m) return;
@@ -779,8 +787,12 @@ $('#joinBtn').onclick = () => {
   const rejoin = !!AUD.ctx; lastActive = Date.now();
   AUD.init(); S.joined = true; $('#join').classList.remove('on'); document.body.classList.remove('locked'); AUD.join();
   if (rejoin) { S.spokeAt = performance.now(); AUD.apply(); return; }
-  const lead = leadId(); if (lead) { openChat(lead); say(lead, pick(['Hey. Everyone’s here.', `${(h => h < 5 ? 'Late one' : h < 12 ? 'Morning' : h < 18 ? 'Afternoon' : 'Evening')(new Date().getHours())}. The team is in.`, 'Hi. We’re all set up.']), { priority: true }); }
+  const lead = leadId(), chat = new URLSearchParams(URL0).get('chat');
+  if (lead) { openChat(lead); say(lead, pick(['Hey. Everyone’s here.', `${(h => h < 5 ? 'Late one' : h < 12 ? 'Morning' : h < 18 ? 'Afternoon' : 'Evening')(new Date().getHours())}. The team is in.`, 'Hi. We’re all set up.']), { priority: true }); }
+  if (S.sq[chat]) openChat(chat);
 };
 document.addEventListener('keydown', (e) => { if (e.key === '/' && S.joined && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) { e.preventDefault(); const l = leadId(); if (l) openChat(l); } });
 
-load().then(() => { listen(); loadMeeting(); loadShare(); fetch('/api/config').then((x) => x.json()).then((c) => { $('#callBar').hidden = !c.call; }).catch(() => {}); if (B.view === 'lead') setOffice(leadId()); else if (S.office) setOffice(S.officeIds); });
+load().then(() => { listen(); loadMeeting(); loadShare(); fetch('/api/config').then((x) => x.json()).then((c) => { $('#callBar').hidden = !c.call; }).catch(() => {});
+  // A view restored before the room loaded (URL or last view) gets its office now.
+  if (B.view === 'lead') setOffice(leadId()); else if (B.view === 'one') { if (S.sq[B.who]) setOffice(B.who); else setView('room', '', 'replace'); } else if (S.office) setOffice(S.officeIds); });

@@ -2,6 +2,14 @@
 
 Each version lists Added, Changed and Fixed, plus Migrations and Breaking when present. Breaking entries say how to adapt local changes. Data schema is in `config.json`; see docs/upgrading.md.
 
+## 0.1.1 (unreleased)
+
+### Added
+- Views, the open chat, board filters, merge diff and calendar week live in the URL: back, forward, reload and copied links work.
+
+### Fixed
+- A server started with `node server.mjs` comes back after `restart`.
+
 ## 0.1.0
 
 First public release. Data schema 1.
