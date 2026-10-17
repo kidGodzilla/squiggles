@@ -6,7 +6,7 @@ import { codeSchema } from './migrate.mjs';
 
 export const DEFAULTS = {
   schema: 1,        // data schema; a fresh room starts at the latest
-  port: 4317,
+  port: 4327,
   userName: '',     // what squiggles call you; empty: "the user"
   tailnet: false,   // offer "Share on tailnet" (needs Tailscale)
   model: 'opus',    // default for new squiggles: opus or sonnet. Anything else runs on Opus.

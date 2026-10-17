@@ -27,6 +27,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Suggestions: squiggles file things outside their tasks with `suggest "<one line>"`; the lead accepts one as a task or declines it with a reason (`suggestions`, `suggestion accept|decline`), on the board too, and the author hears back at its next wake.
 
 ### Changed
+- New installs default to port 4327 (was 4317). Existing rooms keep the port in their config.json.
 - Merge leaves your checkout alone: it merges where the base branch is checked out only after a conflict check, otherwise in a temp worktree.
 - Merges, send-backs, task adds and meeting adds record who did them.
 - Banners under the header push chats and meeting bars down instead of covering them.

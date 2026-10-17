@@ -17,7 +17,7 @@ Every wake is a Claude Code session and counts against your plan's usage.
 
 Paste this into Claude Code:
 
-> Set up Squiggles for me. Clone https://github.com/kidGodzilla/squiggles.git to ~/squiggles (pull if it already exists). Check that `node --version` is 20 or newer and `claude` is on my PATH; stop and tell me if not. Run `bash ~/squiggles/bin/install-app.sh`, which adds Squiggles.app and a login item that keeps the server running. Wait until http://127.0.0.1:4317 answers (port is in ~/.squiggles/config.json), then open it. Tell me to say hello to the lead.
+> Set up Squiggles for me. Clone https://github.com/kidGodzilla/squiggles.git to ~/squiggles (pull if it already exists). Check that `node --version` is 20 or newer and `claude` is on my PATH; stop and tell me if not. Run `bash ~/squiggles/bin/install-app.sh`, which adds Squiggles.app and a login item that keeps the server running. Wait until http://127.0.0.1:4327 answers (port is in ~/.squiggles/config.json), then open it. Tell me to say hello to the lead.
 
 ## Set up by hand
 
@@ -25,7 +25,7 @@ Paste this into Claude Code:
 git clone https://github.com/kidGodzilla/squiggles.git ~/squiggles
 cd ~/squiggles
 bash bin/install-app.sh            # Squiggles.app + login item
-open http://127.0.0.1:4317
+open http://127.0.0.1:4327
 ```
 
 To try it without a login item: `node server.mjs`, then open the URL it prints.
