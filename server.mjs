@@ -77,7 +77,7 @@ const R = (id) => {
 };
 function saveState() {
   const out = {};
-  for (const [id, { proc, caff, cx, cxThread, cxLast, sig, ...r }] of rt) out[id] = r;
+  for (const [id, { proc, caff, cx, cxThread, cxLast, sig, subs, ...r }] of rt) out[id] = r;
   if (persisted['*limit']) { const { timer, ...l } = persisted['*limit']; out['*limit'] = l; }
   for (const k of ['*meeting', '*started', '*held', '*warned', '*plimit']) if (persisted[k]) out[k] = persisted[k];
   fs.writeFileSync(STATE, JSON.stringify(out, null, 2));
@@ -117,6 +117,18 @@ function setStatus(id, status, note) {
   if (note !== undefined) r.note = note;
   saveState();
   emit(id, { k: 'state', status, note: r.note || '' });
+}
+
+// Subagents (t4): live while a squiggle's Agent call runs; the page shows each as a temporary tile.
+function subStart(id, ev) {
+  const r = R(id), sub = (r.subs ||= {})[ev.task_id] = { desc: ev.description || '', type: ev.subagent_type || '', at: Date.now() };
+  emit(id, { k: 'sub', task: ev.task_id, ...sub });
+}
+function subEnd(id, task, status) {
+  const r = R(id);
+  if (!r.subs?.[task]) return;
+  delete r.subs[task];
+  emit(id, { k: 'sub', task, end: status || 'completed' });
 }
 
 const kindOf = (name) => ({ Bash: 'cmd', Read: 'read', Edit: 'edit', MultiEdit: 'edit', Write: 'write', Grep: 'search', Glob: 'search', TodoWrite: 'todo', WebFetch: 'web', WebSearch: 'web' })[name] || 'tool';
@@ -205,6 +217,8 @@ function launch(s) {
       let ev;
       try { ev = JSON.parse(line); } catch { continue; }
       if (ev.type === 'system' && ev.subtype === 'init') { r.sessionId = ev.session_id; saveState(); }
+      else if (ev.type === 'system' && ev.subtype === 'task_started' && ev.task_type === 'local_agent') subStart(s.id, ev);
+      else if (ev.type === 'system' && (ev.subtype === 'task_notification' || (ev.subtype === 'task_updated' && /^(completed|failed|killed|stopped)$/.test(ev.patch?.status || '')))) subEnd(s.id, ev.task_id, ev.status || ev.patch?.status);
       else if (ev.type === 'assistant') {
         // Turn budget: count assistant messages this wake; four before the cap, tell the squiggle to wrap up.
         if (ev.message.id !== r.msgId) {
@@ -230,6 +244,7 @@ function launch(s) {
   proc.on('exit', (code) => {
     if (r.proc !== proc) return; // replaced by a relaunch
     r.proc = null;
+    for (const t of Object.keys(r.subs || {})) subEnd(s.id, t, 'stopped');
     if (r.status === 'working') setStatus(s.id, code ? 'error' : 'idle', code ? `exited ${code}` : '');
   });
   return proc;
@@ -836,7 +851,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/humans') return json(res, req.method === 'POST' ? humans.op(await body(req)) : { humans: humans.all() });
     if (url.pathname === '/api/config') { const { userName, model, codex, tailnet } = CONFIG; return json(res, { userName, model, codex, tailnet, call: fs.existsSync(CALL_DIR), version: VERSION, schema: CONFIG.schema }); }
     if (url.pathname === '/api/share') return json(res, req.method === 'POST' ? await share(!!(await body(req)).on) : await shareStatus());
-    if (url.pathname === '/api/inbox') return json(res, drop.list());
+    if (url.pathname === '/api/inbox') return json(res, { ...drop.list(), dir: path.join(DATA, 'inbox').replace(os.homedir(), '~') });
     if (url.pathname === '/api/limit') return json(res, { until: limit.until > Date.now() ? limit.until : 0 });
     if (url.pathname === '/api/restart' && req.method === 'POST') { restartPending = true; setTimeout(maybeRestart, 500); return json(res, 'restarting as soon as nobody is mid-turn'); }
     if (url.pathname === '/api/voice') return json(res, kokoro.status());

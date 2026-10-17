@@ -13,6 +13,9 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Show and tell meetings (`meeting edit <id> showtell on`) build each presenter's agenda from their work since the last one.
 - Shared screen beside a 1:1: `screen diff <task>|url <url>|file <path>|off` pins a diff, page or file next to the chat; diffs show a file list, line numbers and coloured hunks.
 - The sharer's camera opens their 1:1.
+- More > Inbox lists notes waiting for the lead and ones it has read.
+- Browser setting (Off or Claude in Chrome) in the squiggle sheet.
+- Subagents show as temporary helper tiles on their squiggle's tile; `list` names them.
 - Merge review: `meet merges` has squiggles with branches in review present them, most urgent first.
 
 ### Changed

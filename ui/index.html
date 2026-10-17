@@ -37,6 +37,7 @@
       <label class="ctl share" title="Anyone on the tailnet can open the room"><span>Share on tailnet</span><input type="checkbox" id="shareOn"></label>
       <a id="shareUrl" target="_blank" rel="noopener" hidden></a>
       <button class="chip" id="shareCopy" hidden>Copy link</button>
+      <button class="chip" id="inboxBtn" title="Notes dropped in ~/Agents/inbox for the lead">Inbox</button>
       <button class="chip primary" id="newBtn">New squiggle</button>
     </div>
   </div>
@@ -95,6 +96,7 @@
 <div id="chats"></div>
 
 <div id="sheet" class="overlay"><div class="panel" id="sheetBody"></div></div>
+<div id="inboxBox" class="overlay"><div class="panel" id="inboxBody"></div></div>
 <div id="diffBox" class="overlay"><div class="panel diffp" id="diffBody"></div></div>
 <div id="newSq" class="overlay"><form class="panel" id="newForm"></form></div>
 <div id="join" class="overlay on">

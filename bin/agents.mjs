@@ -24,7 +24,7 @@ function brief(e) {
 
 const cmds = {
   list: async () => (await call('/squiggles')).map((s) =>
-    `${s.id}${s.lead ? ' (lead)' : ''}  ${s.paused ? 'paused' : s.status}  every ${s.every || 0}m  ${s.name}, ${s.role}${s.note ? `  — ${s.note}` : ''}`).join('\n'),
+    `${s.id}${s.lead ? ' (lead)' : ''}  ${s.paused ? 'paused' : s.status}  every ${s.every || 0}m  ${s.name}, ${s.role}${s.note ? `  — ${s.note}` : ''}${Object.keys(s.subs || {}).length ? `  · subagents: ${Object.values(s.subs).map((x) => x.desc || x.type).join(', ')}` : ''}`).join('\n'),
   // team: the roster, with what each squiggle cares about and guards, its goals and how it runs (the Team tab)
   team: async () => {
     const [sq, b] = await Promise.all([call('/squiggles'), call('/board')]);

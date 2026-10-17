@@ -159,7 +159,7 @@ function renderStage() {
     if (!t) {
       const p = P(id);
       t = document.createElement('div'); t.id = 't-' + id; t.className = 'tile' + (p.lead ? ' lead' : ''); t.tabIndex = 0;
-      t.innerHTML = `${avatarSVG(p, undefined, 't' + p.gid + '_')}<div class="bubble"></div><div class="status"></div><div class="thought"></div><div class="ticker"></div><div class="tag"><b>${esc(p.name)}</b><span>${esc(p.role)}</span></div><button class="chatbtn" title="Chat with ${esc(p.name)}">Chat</button><button class="ib editbtn" title="Edit ${esc(p.name)}" aria-label="Edit ${esc(p.name)}"><svg viewBox="0 0 16 16"><path d="M10.5 2.5l3 3L6 13H3v-3z"/></svg></button>`;
+      t.innerHTML = `${avatarSVG(p, undefined, 't' + p.gid + '_')}<div class="bubble"></div><div class="status"></div><div class="thought"></div><div class="ticker"></div><div class="subs"></div><div class="tag"><b>${esc(p.name)}</b><span>${esc(p.role)}</span></div><button class="chatbtn" title="Chat with ${esc(p.name)}">Chat</button><button class="ib editbtn" title="Edit ${esc(p.name)}" aria-label="Edit ${esc(p.name)}"><svg viewBox="0 0 16 16"><path d="M10.5 2.5l3 3L6 13H3v-3z"/></svg></button>`;
       // Chat opens the floating window; anywhere else on the tile is a 1:1 with that squiggle.
       t.onclick = (e) => { if (e.target.closest('.editbtn')) openSheet(id); else if (e.target.closest('.chatbtn') || S.office) openChat(id); else oneOnOne(id); };
       t.onkeydown = (e) => { if (e.key === 'Enter' && e.target === t) oneOnOne(id); };
@@ -180,8 +180,15 @@ function paintTile(id) {
   const cb = t.querySelector('.chatbtn'), n = S.unread[id] || 0;
   cb.textContent = n ? `${n} new` : 'Chat'; cb.classList.toggle('unread', !!n);
   if (id === leadId()) $('.tabs [data-view=lead]').innerHTML = n ? `Lead <span class="tcount" title="${n} new from the lead">${n}</span>` : 'Lead';
+  paintSubs(id);
   const cw = document.getElementById('cw-' + id);
   if (cw) cw.querySelector('.chead small').textContent = (s.paused ? 'Paused' : STATUS_WORD[st] || 'Here') + (s.note && st !== 'idle' ? ` · ${s.note}` : '') ;
+}
+// Subagents (t4): a small tile per live Agent call, pinned to its squiggle's tile until it finishes.
+function paintSubs(id) {
+  const t = tileOf(id), el = t?.querySelector('.subs'); if (!el) return;
+  const subs = Object.entries(S.sq[id].subs || {}), p = P(id);
+  el.innerHTML = subs.map(([k, x], i) => `<div class="sub" title="${esc(p.name)}'s helper${x.type ? ` (${esc(x.type)})` : ''}: ${esc(x.desc)}"><div class="tile mini">${avatarSVG(p, undefined, 'sb' + p.gid + '_' + i + '_')}</div><span>${esc(x.desc || x.type || 'Helper')}</span></div>`).join('');
 }
 function renderSummary() {
   if (typeof B !== 'undefined' && B.view === 'team') renderTeam();
@@ -575,6 +582,11 @@ function apply(id, ev, live) {
       if (live && S.present === id) { renderPresent(); armPresent(); }
       if (live && ev.err) oops(id); break;
     }
+    case 'sub':
+      if (!live) break;
+      s.subs ||= {};
+      if (ev.end) delete s.subs[ev.task]; else s.subs[ev.task] = { desc: ev.desc, type: ev.type, at: ev.ts };
+      paintSubs(id); break;
     case 'say':
       // A presenter is heard in full (their 60-second summary); everyone else by their first sentence or two.
       if (live) say(id, presenter() === id ? firstSentences(ev.text, 40, 1400) : firstSentences(ev.text, s.lead ? 2 : 1, s.lead ? 260 : 180), { priority: s.lead || presenter() === id }); break;
@@ -718,6 +730,9 @@ async function openSheet(id) {
       <div><label>Permissions</label><select id="shPerm">${['auto', 'acceptEdits', 'plan', 'bypassPermissions'].map((m) => `<option ${s.permissionMode === m ? 'selected' : ''}>${m}</option>`).join('')}</select></div>
     </div>
     <div class="row2">
+      <div><label>Browser</label><select id="shBrowser"><option value="">Off</option><option value="chrome" ${s.chrome ? 'selected' : ''}>Claude in Chrome</option></select></div>
+    </div>
+    <div class="row2">
       <div><label>Effort</label><select id="shEffort">${['', 'low', 'medium', 'high', 'xhigh', 'max'].map((m) => `<option value="${m}" ${(s.effort ?? '') === m ? 'selected' : ''}>${m || (s.lead ? 'Default' : 'medium (default)')}</option>`).join('')}</select></div>
       <div><label>Turns per wake</label><input id="shTurns" type="number" min="1" value="${esc(s.maxTurns ?? 40)}"></div>
     </div>
@@ -742,7 +757,7 @@ async function openSheet(id) {
       const res = await api(`/squiggles/${id}/remove`, {}); toast(typeof res === 'string' ? res : res.error); $('#sheet').classList.remove('on'); return;
     }
     if (a === 'shuffle') { await restyle(id, { lookSeed: Math.floor(Math.random() * 1e9) }); return openSheet(id); }
-    if (a === 'save') Object.assign(S.sq[id], await api(`/squiggles/${id}/update`, { name: $('#shName').value.trim() || s.name, role: $('#shRole').value.trim() || s.role, charter: $('#shCharter').value, cwd: $('#shCwd').value, every: Number($('#shEvery').value) || 0, model: $('#shModel').value || undefined, permissionMode: $('#shPerm').value, effort: $('#shEffort').value || undefined, awake: !!$('#shAwake').value, maxTurns: Number($('#shTurns').value) || 40, autocompact: Number($('#shCompact').value) || undefined }));
+    if (a === 'save') Object.assign(S.sq[id], await api(`/squiggles/${id}/update`, { name: $('#shName').value.trim() || s.name, role: $('#shRole').value.trim() || s.role, charter: $('#shCharter').value, cwd: $('#shCwd').value, every: Number($('#shEvery').value) || 0, model: $('#shModel').value || undefined, permissionMode: $('#shPerm').value, effort: $('#shEffort').value || undefined, chrome: $('#shBrowser').value === 'chrome', awake: !!$('#shAwake').value, maxTurns: Number($('#shTurns').value) || 40, autocompact: Number($('#shCompact').value) || undefined }));
     paintTile(id); renderSummary(); $('#sheet').classList.remove('on');
   };
   $('#shLook').onchange = async (e) => { await restyle(id, { look: e.target.value }); openSheet(id); };
@@ -780,7 +795,7 @@ function openNew() {
   $('#newSq').classList.add('on'); $('#nName').focus();
 }
 for (const o of ['#sheet', '#newSq']) $(o).addEventListener('click', (e) => { if (e.target === $(o)) $(o).classList.remove('on'); });
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { $('#sheet').classList.remove('on'); $('#newSq').classList.remove('on'); } });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { $('#sheet').classList.remove('on'); $('#newSq').classList.remove('on'); $('#inboxBox').classList.remove('on'); } });
 
 // =====================================================================
 //  composer, mic, header controls, joining
@@ -810,6 +825,18 @@ $('#shareOn').onchange = async (e) => {
 };
 $('#newBtn').onclick = () => { closeMore(); openNew(); };
 // More: secondary header controls behind a chevron so the tabs never overflow.
+// Inbox (t135): parity with the CLI inbox. Text files in the data folder's inbox go to the lead when it's idle, then move to read/.
+async function openInbox() {
+  const r = await api('/inbox'); if (!r?.unread) return toast(r?.error || 'Inbox unavailable');
+  const when = (f) => new Date(f.mtime).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  const list = (fs, none) => fs.length ? `<ul style="margin:0;padding-left:18px">${fs.map((f) => `<li>${esc(f.name)} <span style="color:var(--dim)">${when(f)}</span></li>`).join('')}</ul>` : `<p style="margin:0;color:var(--dim)">${none}</p>`;
+  $('#inboxBody').innerHTML = `<div style="display:flex;align-items:baseline;gap:12px"><h2 style="flex:1">Inbox</h2><button class="chip" data-a="close">Close</button></div>
+    <p style="color:var(--dim)">Drop a text file in <code>${esc(r.dir || 'inbox')}</code>. The lead reads it when idle, then it moves to <code>read/</code>.</p>
+    <h3>Waiting for the lead</h3>${list(r.unread, 'Nothing waiting.')}<h3>Read</h3>${list(r.read.slice(0, 20), 'Nothing yet.')}`;
+  $('#inboxBox').classList.add('on');
+}
+$('#inboxBtn').onclick = () => { closeMore(); openInbox(); };
+$('#inboxBox').onclick = (e) => { if (e.target.id === 'inboxBox' || e.target.dataset.a === 'close') $('#inboxBox').classList.remove('on'); };
 const closeMore = () => { $('#morePanel').classList.remove('on'); $('#moreBtn').setAttribute('aria-expanded', 'false'); };
 $('#moreBtn').onclick = (e) => { e.stopPropagation(); const on = $('#morePanel').classList.toggle('on'); $('#moreBtn').setAttribute('aria-expanded', String(on)); };
 document.addEventListener('click', (e) => { if (!e.target.closest('.more')) closeMore(); });
