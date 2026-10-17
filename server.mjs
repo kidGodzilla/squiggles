@@ -38,12 +38,17 @@ const readText = (f, d = '') => { try { return fs.readFileSync(f, 'utf8'); } cat
 
 // ---------- squiggles on disk ----------
 const sqDir = (id) => path.join(SQ, id);
+// squiggle.json is edited outside the server too; a read caught mid-write falls back to the last good copy,
+// so a squiggle never drops out of the list (t671). Removal moves the directory, which drops it for real.
+const lastMeta = new Map();
 function loadSquiggle(id) {
-  const meta = JSON.parse(readText(path.join(sqDir(id), 'squiggle.json'), 'null'));
+  let meta = null;
+  try { meta = JSON.parse(readText(path.join(sqDir(id), 'squiggle.json'), 'null')); } catch {}
+  if (meta) lastMeta.set(id, meta); else if (fs.existsSync(sqDir(id))) meta = lastMeta.get(id) || null;
   return meta && { ...meta, id };
 }
 function listSquiggles() {
-  return fs.readdirSync(SQ).filter((d) => fs.existsSync(path.join(SQ, d, 'squiggle.json'))).map(loadSquiggle);
+  return fs.readdirSync(SQ).filter((d) => fs.existsSync(path.join(SQ, d, 'squiggle.json')) || lastMeta.has(d)).map(loadSquiggle).filter(Boolean);
 }
 function saveSquiggle(s) {
   const { id, ...meta } = s;
@@ -71,7 +76,7 @@ const R = (id) => {
 };
 function saveState() {
   const out = {};
-  for (const [id, { proc, caff, ...r }] of rt) out[id] = r;
+  for (const [id, { proc, caff, cx, cxThread, cxLast, sig, ...r }] of rt) out[id] = r;
   if (persisted['*limit']) { const { timer, ...l } = persisted['*limit']; out['*limit'] = l; }
   for (const k of ['*meeting', '*started', '*held', '*warned', '*plimit']) if (persisted[k]) out[k] = persisted[k];
   fs.writeFileSync(STATE, JSON.stringify(out, null, 2));
@@ -163,13 +168,16 @@ function systemPrompt(s) {
 // Always pass a model: unset would inherit the CLI default, which may be Fable; squiggles never run on Fable.
 // Sonnet is the floor (Haiku has no auto mode); Opus is the default and the ceiling. config.model sets the default.
 const modelFor = (s) => (/haiku|sonnet/i.test(s.model || CONFIG.model || '') ? 'claude-sonnet-5-5' : 'claude-opus-5-5');
+// Settings baked into a process's flags. A change ends the idle process before the next turn; --resume keeps the session.
+const launchSig = (s) => JSON.stringify([!!s.chrome, modelFor(s), s.permissionMode, s.autocompact, s.maxTurns, s.effort, s.cwd]);
 function launch(s) {
-  const r = R(s.id);
+  const r = R(s.id); r.sig = launchSig(s);
   const args = ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose',
     '--append-system-prompt', systemPrompt(s), '--permission-mode', s.permissionMode || 'auto', '--permission-prompts', 'none',
     '--add-dir', sqDir(s.id), '--add-dir', DATA, '--add-dir', os.homedir(),
     // Squiggles roam the home folder freely, except these.
     '--disallowedTools', ...['Downloads', 'Desktop', 'Documents'].flatMap((d) => [`Read(~/${d}/**)`, `Edit(~/${d}/**)`, `Write(~/${d}/**)`])];
+  if (s.chrome) args.push('--chrome');
   if (modelFor(s)) args.push('--model', modelFor(s));
   // Usage controls (per squiggle, see handoff): context window cap, effort, and a turn cap per wake.
   args.push('--autocompact', String(s.autocompact ?? (s.lead ? 300000 : 200000)), '--max-turns', String(s.maxTurns ?? 40));
@@ -219,6 +227,7 @@ function launch(s) {
   });
   proc.stderr.on('data', (d) => emit(s.id, { k: 'log', text: String(d).slice(0, 2000) }));
   proc.on('exit', (code) => {
+    if (r.proc !== proc) return; // replaced by a relaunch
     r.proc = null;
     if (r.status === 'working') setStatus(s.id, code ? 'error' : 'idle', code ? `exited ${code}` : '');
   });
@@ -233,7 +242,9 @@ const providerOf = (s) => (CONFIG.codex && Object.keys(PROVIDERS).find((p) => PR
 const plimit = persisted['*plimit'] ||= {};
 function providerLimit(p, msg) {
   const t = /\bin\s+(?=\d)(?:(\d+)\s*h\w*\s*)?(?:(\d+)\s*m\w*)?/i.exec(msg), at = parseReset(`session limit resets ${/\bat\s+(\d{1,2}(?::\d{2})?\s*[ap]m)/i.exec(msg)?.[1] || ''}`);
-  const until = at || Date.now() + ((Number(t?.[1]) || 0) * 60 + (Number(t?.[2]) || 0) || 60) * 60000;
+  // Codex weekly limits name a date: "try again at Oct 22nd, 2026 1:59 PM".
+  const day = /\bat\s+([a-z]{3,9}\s+\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})\s+(\d{1,2}:\d{2}\s*[ap]m)/i.exec(msg), dated = day ? Date.parse(`${day[1]}, ${day[2]} ${day[3]}`) || 0 : 0;
+  const until = dated || at || Date.now() + ((Number(t?.[1]) || 0) * 60 + (Number(t?.[2]) || 0) || 60) * 60000;
   plimit[p] = until + 5 * 60000; saveState();
   inbox.push(`[Harness · LIMIT] ${p} usage limit hit; its squiggles' wakes paused until ${hhmm(plimit[p])}.`);
   return plimit[p];
@@ -327,6 +338,7 @@ function send(id, text, from = 'owner', { replay = false, human } = {}) {
     setStatus(id, 'working', '');
     return codexTurn(s, content);
   }
+  if (r.proc && r.status !== 'working' && r.sig !== launchSig(s)) { const old = r.proc; r.proc = null; old.kill('SIGTERM'); emit(id, { k: 'log', text: 'settings changed: relaunching' }); }
   if (!r.proc) launch(s);
   r.lastWake = now(); r.turns = 0; r.board0 = ownNotes(id);
   if (!replay) emit(id, { k: 'user', text, from, ...(who && { human: who.id }) });
@@ -385,7 +397,7 @@ function flushInbox() {
 // Session limit: one hit pauses every scheduled wake (and the lead's inbox) until the reset time plus 5 minutes,
 // shows a banner in the Room, and reports once to the lead when things resume.
 const limit = persisted['*limit'] || { until: 0, reported: 0 };
-const hhmm = (t) => new Date(t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+const hhmm = (t) => (t - Date.now() > 20 * 3600000 ? new Date(t).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }) + ' ' : '') + new Date(t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 function parseReset(text) {
   const m = /session limit[^\n]*?resets\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i.exec(text || ''); if (!m) return 0;
   let h = Number(m[1]) % 12; if ((m[3] || '').toLowerCase() === 'pm') h += 12;
@@ -456,17 +468,21 @@ function stop(id) {
 }
 
 // ---------- scheduler: squiggles wake themselves on their cadence ----------
-// Paused while the session limit is hit. Staggered: no two squiggles start within 10 minutes of each other. Jittered: schedule.mjs.
+// Paused while the session limit is hit. Staggered per provider: no two squiggles on the same provider start within 2 minutes of each other. Jittered: schedule.mjs.
 const dueAt = createSchedule();
 setInterval(() => {
-  if (limit.until > Date.now()) return;
-  const newest = Math.max(0, ...[...rt.values()].map((r) => Date.parse(r.lastWake || 0) || 0));
-  if (Date.now() - newest < 10 * 60000) return;
-  for (const s of listSquiggles()) {
+  const all = listSquiggles();
+  const newest = {};
+  for (const s of all) { const t = Date.parse(R(s.id).lastWake || 0) || 0; const p = providerOf(s); if (!(newest[p] > t)) newest[p] = t; }
+  const started = new Set();
+  for (const s of all) {
     if (s.lead || s.paused || !(s.every > 0)) continue;
+    const p = providerOf(s);
+    if (started.has(p) || Date.now() - (newest[p] || 0) < 2 * 60000) continue;
+    if (!p && limit.until > Date.now()) continue;
     const r = R(s.id);
     const last = Date.parse(r.lastWake || 0) || 0;
-    if (r.status !== 'working' && Date.now() >= dueAt(s.id, s.every, last) && wake(s.id)) break;
+    if (r.status !== 'working' && Date.now() >= dueAt(s.id, s.every, last) && wake(s.id)) started.add(p);
   }
 }, 30000);
 
@@ -585,7 +601,8 @@ setInterval(() => {
 
 // ---------- share on the tailnet: `tailscale serve` proxies https://<this mac>.<tailnet>.ts.net/ to this server. No ACL: the tailnet is trusted. ----------
 const TS = fs.existsSync('/Applications/Tailscale.app/Contents/MacOS/Tailscale') ? '/Applications/Tailscale.app/Contents/MacOS/Tailscale' : 'tailscale';
-const tsRun = (args) => new Promise((ok, no) => execFile(TS, args, { timeout: 15000 }, (e, out, err) => e ? no(new Error(String(err || e.message).trim().split('\n').pop())) : ok(out)));
+// Without a terminal the app binary tries to start its GUI ('The Tailscale GUI failed to start'); TAILSCALE_BE_CLI keeps it a CLI.
+const tsRun = (args) => new Promise((ok, no) => execFile(TS, args, { timeout: 15000, env: { ...process.env, TAILSCALE_BE_CLI: '1' } }, (e, out, err) => e ? no(new Error(String(err || e.message).trim().split('\n').pop())) : ok(out)));
 // The serve entry pointing at this port, if any: {on, url}.
 function shareFrom(status, port = PORT) {
   for (const [host, w] of Object.entries(status?.Web || {}))
@@ -593,7 +610,11 @@ function shareFrom(status, port = PORT) {
       if (new RegExp(`^https?://(127\\.0\\.0\\.1|localhost):${port}/?$`).test(h.Proxy || '')) return { on: true, url: `https://${host.replace(/:443$/, '')}${p}` };
   return { on: false, url: '' };
 }
-const shareStatus = async () => !CONFIG.tailnet ? { on: false, url: '', off: true } : shareFrom(JSON.parse((await tsRun(['serve', 'status', '--json'])) || '{}'));
+const shareStatus = async () => {
+  if (!CONFIG.tailnet) return { on: false, url: '', off: true };
+  const out = (await tsRun(['serve', 'status', '--json'])).trim();
+  try { return shareFrom(JSON.parse(out || '{}')); } catch { throw new Error(out.split('\n').pop()); }
+};
 async function share(on) {
   if (!CONFIG.tailnet) throw new Error('tailnet sharing is off: set "tailnet": true in config.json');
   if (on) await tsRun(['serve', '--bg', String(PORT)]); else if ((await shareStatus()).on) await tsRun(['serve', '--https=443', 'off']);
@@ -707,7 +728,7 @@ function serveFile(res, file) {
   fs.createReadStream(file).pipe(res);
 }
 const view = (s) => {
-  const { proc, caff, ...r } = R(s.id);
+  const { proc, caff, cx, cxThread, cxLast, sig, ...r } = R(s.id);
   return { ...s, ...r, voice: voiceFor(s.id), charter: readText(path.join(sqDir(s.id), 'charter.md')) };
 };
 function tailEvents(id, n = 400) {

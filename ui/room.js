@@ -508,7 +508,9 @@ function showLimit(until) {
 }
 async function load() {
   api('/limit').then((l) => showLimit(l.until || 0));
-  const list = await api('/squiggles');
+  const list = await api('/squiggles').catch(() => null);
+  // A failed read must not empty the room (t671): keep what's on screen and try again.
+  if (!Array.isArray(list)) { setTimeout(load, 2000); return; }
   S.sq = {}; for (const s of list) S.sq[s.id] = s;
   S.hist = {}; S.term = {}; S.todos = {};
   document.querySelectorAll('.cw .msgs').forEach((m) => (m.innerHTML = ''));
