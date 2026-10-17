@@ -267,7 +267,7 @@ function diffHtml(text) {
 // Diff view (t176): Merge beside the title, commits and files fold to 5 lines, the diff gets the rest of the height.
 const fold = (lines, cls) => `<div class="dfold ${cls}">${lines.length > 5 ? `<pre class="dl">${esc(lines.slice(0, 5).join('\n'))}</pre><pre class="dl dall">${esc(lines.join('\n'))}</pre><button data-a="more" data-n="${lines.length}">Show all ${lines.length}</button>` : `<pre class="dl">${esc(lines.join('\n'))}</pre>`}</div>`;
 async function openDiff(id) {
-  const d = await api(`/merges/${id}/diff`); if (d?.error) return toast(d.error);
+  const d = await api(`/merges/${encodeURIComponent(id)}/diff`); if (d?.error) return toast(d.error);
   const m = B.merges.find((x) => x.id === id), why = m && (m.error || (m.head !== m.base ? `${repoName(m.repo)} is on ${m.head}: check out ${m.base} first` : ''));
   const stat = String(d.stat || '').split('\n').filter(Boolean), sum = stat.pop() || '';
   const box = $('#diffBody');
