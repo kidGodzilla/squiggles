@@ -66,8 +66,10 @@ const cmds = {
   tasks: async () => {
     const t = (await call('/board')).tasks.filter((x) => !a[0] || x.goal === a[0] || x.owner === a[0]);
     return t.filter((x) => x.status !== 'done' || a[0]).map((x) =>
-      `${x.id}  ${x.status}  ${x.split ? '(needs splitting) ' : ''}${x.title}${x.parent ? `  (part of ${x.parent})` : ''}${x.goal ? `  [${x.goal}]` : ''}${x.owner ? `  @${x.owner}` : ''}${x.branch ? `  branch ${x.repo ? x.repo + ':' : ''}${x.branch}` : ''}  confirmed ${x.confirmed}${x.note ? `  — ${x.note}` : ''}`).join('\n') || 'no tasks';
+      `${x.id}  ${x.status}  ${x.split ? '(needs splitting) ' : ''}${x.title}${x.parent ? `  (part of ${x.parent})` : ''}${x.goal ? `  [${x.goal}]` : ''}${x.owner ? `  @${x.owner}` : ''}${x.branch ? `  branch ${x.repo ? x.repo + ':' : ''}${x.branch}` : ''}${x.needs?.some((n) => !n.done) ? `  needs ${x.needs.filter((n) => !n.done).length} before merge` : ''}  confirmed ${x.confirmed}${x.note ? `  — ${x.note}` : ''}`).join('\n') || 'no tasks';
   },
+  // task worktree <id> [repo]: the only way to make a worktree, at ~/wt/<repo>-<id>, recorded on the task (gated goals) |
+  // task needs <id> add "<what merging needs>" | done|undo|drop <n> | clear (also task edit <id> needs ...) |
   // task add <title> [goal] [owner] | task split <id> <subtask>... | task claim <id> [owner] | task release <id> | task edit <id> split true|false | task edit <id> parent <id> | task move <id> <todo|doing|blocked|done> [note] | task move <id> review [repo:]<branch> [note] | task edit <id> branch [repo:]<branch> | task confirm <id> | task edit <id> <field> <value> | task drop <id>
   task: () => {
     const [op, x, y, z] = a;
@@ -77,15 +79,22 @@ const cmds = {
     if (op === 'claim') return call('/tasks', { op: 'edit', id: x, owner: y || process.env.AGENTS_ID || '' });
     if (op === 'release') return call('/tasks', { op: 'edit', id: x, owner: '' });
     if (op === 'split') return call('/tasks', { op, id: x, titles: a.slice(2), by: process.env.AGENTS_ID });
+    if (op === 'worktree') return call('/tasks', { op, id: x, ...(y ? { repo: y } : {}) }).then((t) => `${t.created ? 'created' : 'already there'}: ${t.path} on ${t.branch}`);
+    if (op === 'needs' || (op === 'edit' && y === 'needs')) { const [act, v] = op === 'needs' ? [y, z] : [z, a[4]]; return call('/tasks', { op: 'needs', id: x, act, ...(/^\d+$/.test(v || '') ? { n: v } : { text: v }) }); }
     if (op === 'edit') return call('/tasks', { op, id: x, [y]: z ?? '' });
     return call('/tasks', { op, id: x });
+  },
+  // worktrees [check]: every extra worktree in the goals' repos with its task and owner; check refreshes the lead's orphan note (t769).
+  worktrees: async () => {
+    const r = a[0] === 'check' ? (await call('/worktrees', {})).worktrees : await call('/worktrees'), home = (p) => p.replace(/^\/Users\/[^/]+/, '~');
+    return r.map((w) => `${w.orphan ? 'ORPHAN  ' : `${w.task}  `}${home(w.path)}  ${w.branch || '(detached)'}${w.task ? `  ${w.status}${w.owner ? ` @${w.owner}` : ''}` : ''}${w.dirty ? `  ${w.dirty} uncommitted` : ''}${w.missing ? '  folder gone' : ''}${w.home ? '' : '  (not in ~/wt)'}`).join('\n') || 'no extra worktrees';
   },
   // merges | merge <task> | merge diff <task> | merge back <task> <note>. The user merges from the Merge tab; the lead runs `merge` only when they say so for that item.
   merges: async () => a[0] === 'refresh'
     ? ((r) => r.closed.length ? r.closed.map((c) => `${c.id} done: ${c.why}`).join('\n') : `nothing merged outside; ${r.merges.length} in review`)(await call('/merges', { op: 'refresh' }))
     : (await call('/merges')).map((m) => m.error
     ? `${m.id}  ${m.title}  ${m.repo}:${m.branch}  — ${m.error}`
-    : `${m.id}  ${m.title}  ${m.repo}:${m.branch}  ${m.ahead} ahead${m.behind ? `, ${m.behind} behind` : ''} of ${m.base}  ${m.age}d${m.stale ? ' STALE' : ''}${m.owner ? `  @${m.owner}` : ''}${m.result ? `  — ${m.result}` : '  — no test result'}${m.desktop ? `\n    desktop: ${m.desktop}` : ''}${m.compare ? `\n    github: ${m.compare}` : ''}`).join('\n') || 'nothing in review',
+    : `${m.id}  ${m.title}  ${m.repo}:${m.branch}  ${m.ahead} ahead${m.behind ? `, ${m.behind} behind` : ''} of ${m.base}  ${m.age}d${m.stale ? ' STALE' : ''}${m.owner ? `  @${m.owner}` : ''}${m.result ? `  — ${m.result}` : '  — no test result'}${m.needs?.length ? m.needs.map((x, i) => `\n    needs ${i + 1}${x.done ? ' (done)' : ''}: ${x.t}`).join('') : ''}${m.desktop ? `\n    desktop: ${m.desktop}` : ''}${m.compare ? `\n    github: ${m.compare}` : ''}`).join('\n') || 'nothing in review',
   // meetings [days] [from YYYY-MM-DD] (past ones say Done or Missed) | meeting add "<title>" "<when>" <id,id> [once|daily|weekdays|weekly] ["<agenda>"] | meeting edit <id> <field> <value> (presenters <id,id> sets the turn order; showtell true|false builds each presenter's agenda from their work since the last one) | meeting cancel <id> [date] | meeting start <id> | meeting next | meeting end | meeting now
   meetings: async () => {
     const { upcoming } = await call(`/meetings?days=${Number(a[0]) || 7}${a[1] ? `&from=${a[1]}T00:00` : ''}`);
@@ -168,7 +177,7 @@ const cmds = {
 };
 
 if (!cmds[cmd]) {
-  console.log('usage: agents.mjs list | team | wake <id> [why] | tell <id> <text> | stop <id> | clear <id> | remove <id> | room radio|volume|voices|chatter|view|chat <value> | room view 1on1 <id> | room view blocked|rethink | room lock | room reload | call <teams-url> [until <time>] | call status | call leave | restart | upgrade | limit | inbox | screen diff <task>|url <url>|file <path>|off [--as <id>] | share on|off|status | humans | human add "<name>" [avatar] | human edit <id> name|avatar <value> | human remove <id> | tail <id> [n] | journal <id> | charter <id> [new text] | rename <id> <name> [role] | create <id> <name> <role> <cwd> <every> <charter> | set <id> <field> <value> | goals | goal add|move|confirm|owner|note|repos|merge|edit|drop ... | tasks [goal|owner] | task add|move|confirm|edit|drop ... | task move <id> review [repo:]<branch> ["<test result>"] | meetings [days] [from YYYY-MM-DD] | meeting add "<title>" "<when>" <id,id> [once|daily|weekdays|weekly] ["<agenda>"] | meeting edit <id> <field> <value> | meeting cancel <id> [date] | meeting start <id> | meeting next | meeting end | meeting now | meet now <id,id> ["topic"] [--presenters <id,id>] | meet merges | merges [refresh] | merge <task> | merge diff <task> | merge back <task> "<note>"');
+  console.log('usage: agents.mjs list | team | wake <id> [why] | tell <id> <text> | stop <id> | clear <id> | remove <id> | room radio|volume|voices|chatter|view|chat <value> | room view 1on1 <id> | room view blocked|rethink | room lock | room reload | call <teams-url> [until <time>] | call status | call leave | restart | upgrade | limit | inbox | screen diff <task>|url <url>|file <path>|off [--as <id>] | share on|off|status | humans | human add "<name>" [avatar] | human edit <id> name|avatar <value> | human remove <id> | tail <id> [n] | journal <id> | charter <id> [new text] | rename <id> <name> [role] | create <id> <name> <role> <cwd> <every> <charter> | set <id> <field> <value> | goals | goal add|move|confirm|owner|note|repos|merge|edit|drop ... | tasks [goal|owner] | task add|move|confirm|edit|needs|drop ... | task needs <id> add "<text>"|done|undo|drop <n>|clear | task move <id> review [repo:]<branch> ["<test result>"] | meetings [days] [from YYYY-MM-DD] | meeting add "<title>" "<when>" <id,id> [once|daily|weekdays|weekly] ["<agenda>"] | meeting edit <id> <field> <value> | meeting cancel <id> [date] | meeting start <id> | meeting next | meeting end | meeting now | meet now <id,id> ["topic"] [--presenters <id,id>] | meet merges | merges [refresh] | worktrees [check] | task worktree <id> [repo] | merge <task> | merge diff <task> | merge back <task> "<note>"');
   process.exit(1);
 }
 try {

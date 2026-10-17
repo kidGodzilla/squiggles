@@ -13,7 +13,7 @@ const prefs = Object.assign({ voice: true, music: true, station: 'fip', musicVol
 const savePrefs = () => { try { localStorage.agentsPrefs = JSON.stringify(prefs); } catch {} };
 
 const S = {
-  sq: {}, order: [], term: {}, todos: {}, run: {}, speakers: new Set(), present: null, pin: {}, focus: null, office: '', officeIds: [], meeting: null,
+  sq: {}, order: [], term: {}, todos: {}, run: {}, speakers: new Set(), present: null, pin: {}, vis: {}, focus: null, office: '', officeIds: [], meeting: null,
   queue: [], level: {}, hist: {}, unread: {}, spokeAt: performance.now(), fill: 0, joined: false, lastFill: '',
 };
 const P = (id) => persona(S.sq[id]);
@@ -233,8 +233,11 @@ function pushTool(id, ev) {
 }
 function attachOut(id, ev) {
   const buf = S.term[id] || [];
-  for (let i = buf.length - 1; i >= 0; i--) if (buf[i].ev.tid === ev.tid) { Object.assign(buf[i], { out: ev.text, err: ev.err, imgs: ev.imgs || [], end: ev.ts, picAt: ev.imgs?.length ? performance.now() : 0 }); return buf[i]; }
+  for (let i = buf.length - 1; i >= 0; i--) if (buf[i].ev.tid === ev.tid) { Object.assign(buf[i], { out: ev.text, err: ev.err, imgs: ev.imgs || [], end: ev.ts }); if (ev.imgs?.length) seen(id, { view: 'image', title: buf[i].ev.file ? base(buf[i].ev.file) : buf[i].ev.name, imgs: ev.imgs.slice(0, 3) }, ev.ts); return buf[i]; }
 }
+// Visuals outrank bash (t764): the last screenshot or page a squiggle made stays on screen for VIS_FRESH, held VIS_HOLD.
+const VIS_FRESH = 90000, VIS_HOLD = 20000;
+function seen(id, m, ts) { S.vis[id] = { ...m, at: ts || Date.now() }; }
 function setTicker(id, e) {
   const t = tileOf(id); if (!t || !e) return; const tk = t.querySelector('.ticker'), running = e.end == null, ev = e.ev;
   const arg = ev.kind === 'cmd' ? (ev.note || ev.text) : ev.file ? base(ev.file) : (ev.arg || '');
@@ -244,9 +247,9 @@ function setTicker(id, e) {
 function termModel(id) {
   const buf = S.term[id] || [], last = buf[buf.length - 1], lines = [], more = (n) => ({ c: 'dim', t: `… +${n} lines` });
   const stat = !last ? '' : last.end == null ? `${last.ev.name} · running` : `${last.err ? 'failed' : 'ok'} · ${last.ev.name} · ${fmtDur(last.end - last.ts)}`;
-  const pic = buf.slice(-6).reverse().find((e) => e.imgs?.length);
-  if (pic && performance.now() - pic.picAt < 9000) return { view: 'image', title: pic.ev.file ? base(pic.ev.file) : pic.ev.name, imgs: pic.imgs.slice(0, 3), lines, stat };
-  if (last && ['edit', 'write', 'read'].includes(last.ev.kind)) {
+  const vis = S.vis[id], age = vis ? Date.now() - vis.at : Infinity, code = last && ['edit', 'write', 'read'].includes(last.ev.kind);
+  if (age < VIS_FRESH && !(code && age > VIS_HOLD)) return { ...vis, stat };
+  if (code) {
     const d = last.ev, rows = (txt, c) => String(txt || '').split('\n').slice(0, 16).map((t) => ({ c, t }));
     if (d.kind === 'read') {
       if (last.out == null) lines.push({ c: 'dim', t: 'Opening file…' });
@@ -316,7 +319,7 @@ function renderPresent() {
   const id = S.present, s = S.sq[id]; if (!s) return; const pinned = document.body.classList.contains('screen') && pinOne() === id && !!S.pin[id], m = pinned ? pinModel(id) : termModel(id), p = P(id);
   if (pinned && $('#present')._pin === S.pin[id]) return; // unchanged: keep the user's scroll
   $('#present')._pin = pinned ? S.pin[id] : null; $('#present').classList.toggle('pinned', pinned);
-  $('#present .pwin').className = 'pwin ' + m.view; $('#present').classList.toggle('pic', m.view === 'image');
+  $('#present .pwin').className = 'pwin ' + m.view; $('#present').classList.toggle('pic', m.view === 'image' || m.view === 'page');
   $('#ptitle').textContent = m.view === 'term' ? `${s.name} — ${s.cwd}` : m.title;
   const pb = $('#pbody');
   if (m.view === 'diff') pb.innerHTML = m.html;
@@ -340,7 +343,7 @@ function showPresent(id) {
 function armPresent() {
   clearTimeout(presentTimer); if ($('#present').classList.contains('pinned')) return;
   if (presenter() === S.present) return; // a presenter's screen stays up for their turn
-  presentTimer = setTimeout(() => { const last = (S.term[S.present] || []).slice(-1)[0]; if (last && last.end == null) armPresent(); else hidePresent(); }, $('#present').classList.contains('pic') ? 9000 : 4500);
+  presentTimer = setTimeout(() => { const last = (S.term[S.present] || []).slice(-1)[0]; if (last && last.end == null) armPresent(); else hidePresent(); }, $('#present').classList.contains('pic') ? VIS_HOLD : 4500);
 }
 // The sharer's camera works like their tile (t346): their 1:1, or their chat inside an office.
 $('#pcam').onclick = () => { const id = $('#pcam').dataset.id; if (!S.sq[id]) return; if (S.office) openChat(id); else oneOnOne(id); };
@@ -383,15 +386,35 @@ const chatLine = (id, ev) => {
   }
   if (ev.k === 'user') {
     const from = ev.from === 'lead' ? 'From the lead' : ev.from === 'mention' ? 'Mentioned' : ev.from === 'harness' ? (/^Team reports/.test(ev.text) ? 'Team reports' : 'Woke up') : ev.from;
-    return { cls: 'm sys', text: /^Team reports/.test(ev.text) ? `${from}: ${ev.text.split('\n').filter((l) => l.startsWith('[')).length}` : `${from}: ${ev.text.split('\n')[0].slice(0, 80)}` };
+    const rep = /^Team reports/.test(ev.text) ? ev.text.split('\n').filter((l) => l.startsWith('[')) : null;
+    return { cls: 'm sys', rep, text: rep ? `${from}: ${ev.text.split('\n').filter((l) => l.startsWith('[')).length}` : `${from}: ${ev.text.split('\n')[0].slice(0, 80)}` };
   }
-  if (ev.k === 'say') { const t = ev.text.replace(/^\s*(DONE|IDLE):.*$/gim, '').trim(); return t ? { cls: 'm lead', html: (ev.by ? `<b class="by">${esc(S.sq[ev.by]?.name || ev.by)}</b>` : '') + mentionHtml(md(t)) + `<span class="when">${when(ev.ts)}</span>` } : null; }
+  if (ev.k === 'say') { const t = ev.text.replace(/^\s*(DONE|IDLE):.*$/gim, '').trim(); if (HANDLED.test(t)) return { handled: true }; return t ? { cls: 'm lead', html: (ev.by ? `<b class="by">${esc(S.sq[ev.by]?.name || ev.by)}</b>` : '') + mentionHtml(md(t)) + `<span class="when">${when(ev.ts)}</span>` } : null; }
   if (ev.k === 'end' && !s?.lead && ev.status !== 'idle' && ev.note) return { cls: 'm sys', text: `${STATUS_WORD[ev.status] || ev.status}: ${ev.note}` };
   return null;
 };
+// The lead answers most team reports with just "Handled." (t801): the reply and the report it answers fold into
+// one quiet line, "7 reports handled", that opens to list them. The transcript keeps everything.
+const HANDLED = /^handled[.!]?$/i;
+function foldHandled(id, ts) {
+  const h = S.hist[id] = S.hist[id] || [], last = h[h.length - 1];
+  let items = [];
+  if (last?.rep) { h.pop(); last.el?.remove(); items = last.rep.map((r) => ({ r, ts: last.ts })); }
+  const prev = h[h.length - 1];
+  if (prev?.fold) { prev.fold.push(...items); prev.ts = ts; foldPaint(prev); return; }
+  const f = { cls: 'm sys fold', fold: items, ts }; foldPaint(f); h.push(f);
+  const cw = document.getElementById('cw-' + id);
+  if (cw && !cw.classList.contains('min')) appendLine(cw, f, true);
+}
+function foldPaint(f) {
+  const n = f.fold.length, item = ({ r, ts }) => { const m = /^\[(.+?) · \w+\]\s*(.*)$/.exec(r); return `<li>${m ? `<b>${esc(m[1])}</b> ${esc(m[2])}` : esc(r)}<span class="when">${when(ts)}</span></li>`; };
+  f.html = `<button type="button" class="fhead">${n ? `${n} report${n === 1 ? '' : 's'} handled` : 'Handled'}</button>${n ? `<ul>${f.fold.map(item).join('')}</ul>` : ''}`;
+  if (f.el) { const open = f.el.classList.contains('open'); f.el.innerHTML = f.html; f.el.classList.toggle('open', open); }
+}
 function chatEvent(id, ev, live) {
   const line = chatLine(id, ev); if (!line) return;
   line.ts = +new Date(ev.ts || Date.now());
+  if (line.handled) return foldHandled(id, line.ts);
   if (S.meeting?.attendees.includes(id)) queueThread();
   (S.hist[id] = S.hist[id] || []).push(line); if (S.hist[id].length > 300) S.hist[id].shift();
   const cw = document.getElementById('cw-' + id);
@@ -400,7 +423,8 @@ function chatEvent(id, ev, live) {
 }
 function appendLine(cw, line, keepPlace) {
   const box = cw.querySelector('.msgs'), d = document.createElement('div');
-  d.className = line.cls; if (line.html) d.innerHTML = line.html; else d.textContent = line.text;
+  d.className = line.cls; if (line.html) d.innerHTML = line.html; else d.textContent = line.text; line.el = d;
+  if (line.fold) d.onclick = (e) => { if (e.target.closest('.fhead')) d.classList.toggle('open'); };
   box.querySelector('.empty')?.remove();
   box.appendChild(d); if (box.pinned !== false || !keepPlace) pinBottom(box);
 }
@@ -579,7 +603,7 @@ function apply(id, ev, live) {
       showPresent(id); break;
     case 'out': {
       const e = attachOut(id, ev); if (!e) break; setTicker(id, e);
-      if (live && S.present === id) { renderPresent(); armPresent(); }
+      if (live && ev.imgs?.length) showPresent(id); else if (live && S.present === id) { renderPresent(); armPresent(); }
       if (live && ev.err) oops(id); break;
     }
     case 'sub':
@@ -589,10 +613,11 @@ function apply(id, ev, live) {
       paintSubs(id); break;
     case 'say':
       // A presenter is heard in full (their 60-second summary); everyone else by their first sentence or two.
-      if (live) say(id, presenter() === id ? firstSentences(ev.text, 40, 1400) : firstSentences(ev.text, s.lead ? 2 : 1, s.lead ? 260 : 180), { priority: s.lead || presenter() === id }); break;
+      if (live && !HANDLED.test(ev.text.replace(/^\s*(DONE|IDLE):.*$/gim, '').trim())) say(id, presenter() === id ? firstSentences(ev.text, 40, 1400) : firstSentences(ev.text, s.lead ? 2 : 1, s.lead ? 260 : 180), { priority: s.lead || presenter() === id }); break;
     case 'screen':
       if (ev.kind === 'off' || ev.gone) delete S.pin[id]; else S.pin[id] = ev;   // gone: content not kept past a restart (t854)
-      if (pinOne() === id) syncPin(); break;
+      if (!ev.gone && (ev.kind === 'image' || ev.kind === 'url')) seen(id, ev.kind === 'url' ? { view: 'page', title: ev.title, url: ev.url } : { view: 'image', title: ev.title, imgs: [ev.url] }, ev.ts);
+      if (pinOne() === id) syncPin(); else if (live && S.vis[id]) showPresent(id); break;
     case 'state':
       s.status = ev.status; s.note = ev.note; paintTile(id); renderSummary();
       if (ev.status !== 'working') setAct(id, '');

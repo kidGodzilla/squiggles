@@ -230,22 +230,22 @@ function editTask(el) {
 // ---------- Merge: branches in review across gated goals ----------
 B.merges = [];
 async function loadMerges() {
-  const m = await api('/merges'); if (!Array.isArray(m)) { toast(m?.error || 'merge queue unavailable'); return; }
-  B.merges = m; renderMerges();
+  const [m, w] = await Promise.all([api('/merges'), api('/worktrees').catch(() => [])]); if (!Array.isArray(m)) { toast(m?.error || 'merge queue unavailable'); return; }
+  B.merges = m; B.worktrees = Array.isArray(w) ? w : []; renderMerges();
 }
 const repoName = (p) => String(p || '').replace(/\/+$/, '').split('/').pop();
 B.mopen = new Set();
 function renderMerges() {
   const list = B.merges, g = (id) => goalById(id)?.title || id || '', stale = list.filter((m) => m.stale).length;
   $('#mcount').textContent = list.length ? `${list.length} branch${list.length > 1 ? 'es' : ''} waiting${stale ? `, ${stale} stale` : ''}` : 'Nothing waiting';
-  if (!list.length) { $('#mq').innerHTML = '<div class="empty">Nothing in review. Squiggles put branches here with task move &lt;id&gt; review &lt;branch&gt; "&lt;test result&gt;".</div>'; return; }
+  if (!list.length) { $('#mq').innerHTML = '<div class="empty">Nothing in review. Squiggles put branches here with task move &lt;id&gt; review &lt;branch&gt; "&lt;test result&gt;".</div>' + worktreesHtml(); return; }
   const row = (m) => {
     const open = B.mopen.has(m.id), why = m.error || (m.head !== m.base ? `${repoName(m.repo)} is on ${m.head}: check out ${m.base} first` : '');
-    const ab = m.error ? '' : `${m.ahead} ahead${m.behind ? `, ${m.behind} behind` : ''}`;
+    const ab = m.error ? '' : `${m.ahead} ahead${m.behind ? `, ${m.behind} behind` : ''}`, left = (m.needs || []).filter((x) => !x.done).length;
     const acts = `<button data-a="diff" ${m.error ? 'disabled' : ''}>Diff</button><button data-a="back">Send back</button><button class="go" data-a="merge" ${why ? 'disabled' : ''} title="${esc(why || `Merge into ${m.base}, delete the branch, mark done`)}">Merge</button>`;
     return `<tr class="mrow ${open ? 'open' : ''} ${m.error ? 'err' : ''}" data-merge="${esc(m.id)}">
       <td class="mid">${esc(m.id)}${m.stale ? ` <span class="mtag" title="In review ${m.age} days">Stale</span>` : ''}</td>
-      <td class="mtt" title="${esc(m.title)}"><span>${esc(m.title)}</span></td>
+      <td class="mtt" title="${esc(m.title)}">${left ? `<span class="mtag mneed" title="${esc(m.needs.filter((x) => !x.done).map((x) => x.t).join('\n'))}">Needs ${left}</span>` : ''}<span>${esc(m.title)}</span></td>
       <td class="mrepo">${esc(repoName(m.repo))}</td>
       <td class="mab">${ab}</td>
       <td class="mres ${m.error ? 'bad' : m.result ? '' : 'none'}" title="${esc(m.error || m.result)}">${m.error ? esc(m.error) : m.result ? esc(m.result) : 'No test result'}</td>
@@ -253,6 +253,7 @@ function renderMerges() {
       <td class="macts">${acts}</td>
     </tr>${open ? `<tr class="mdet"><td colspan="7"><div class="mdbox">
       <p class="mdt">${esc(m.title)}</p>
+      ${m.needs?.length ? `<div class="mneeds"><h5>Before merging${left ? '' : ': all done'}</h5>${m.needs.map((x, i) => `<label class="${x.done ? 'done' : ''}"><input type="checkbox" data-a="need" data-n="${i + 1}" ${x.done ? 'checked' : ''}><span>${esc(x.t)}</span></label>`).join('')}</div>` : ''}
       <dl><dt>Goal</dt><dd>${esc(g(m.goal))}</dd><dt>Branch</dt><dd><code>${esc(m.repo)}:${esc(m.branch)}</code></dd>
       ${m.error ? '' : `<dt>Base</dt><dd>${esc(m.base)}, ${ab}${m.dirty ? `, ${m.dirty} uncommitted file${m.dirty > 1 ? 's' : ''} in the repo` : ''}</dd>`}
       <dt>Test result</dt><dd>${esc(m.error || m.result || 'None on the note')}</dd><dt>In review</dt><dd>since ${esc(m.reviewed || '')} (${m.age <= 0 ? 'today' : `${m.age}d`})${m.owner ? `, by ${esc(ownerName(m.owner))}` : ''}</dd>
@@ -260,7 +261,18 @@ function renderMerges() {
       ${m.desktop || m.compare ? `<p class="mlinks">${m.desktop ? `<a href="${esc(m.desktop)}">Open in GitHub Desktop</a>` : ''}${m.compare ? `<a href="${esc(m.compare)}" target="_blank" rel="noopener">View on GitHub</a>` : m.desktop ? '<span title="The branch is not on GitHub; nobody pushes it from here">Not on GitHub yet</span>' : ''}</p>` : ''}
       <div class="macts mdacts">${m.owner ? `<button data-a="owner">Discuss with ${esc(ownerName(m.owner))}</button>` : ''}${acts}</div></div></td></tr>` : ''}`;
   };
-  $('#mq').innerHTML = `<table class="mtab"><thead><tr><th class="mid">Task</th><th>Title</th><th class="mrepo">Repo</th><th class="mab">Commits</th><th class="mres">Test result</th><th class="mown">Owner</th><th></th></tr></thead><tbody>${list.map(row).join('')}</tbody></table>`;
+  $('#mq').innerHTML = `<table class="mtab"><thead><tr><th class="mid">Task</th><th>Title</th><th class="mrepo">Repo</th><th class="mab">Commits</th><th class="mres">Test result</th><th class="mown">Owner</th><th></th></tr></thead><tbody>${list.map(row).join('')}</tbody></table>` + worktreesHtml();
+}
+// Worktrees (t769): every extra worktree in the goals' repos and the task that owns it. CLI: worktrees.
+function worktreesHtml() {
+  const w = B.worktrees || [], orphans = w.filter((x) => x.orphan).length; if (!w.length) return '';
+  const home = (p) => p.replace(/^\/Users\/[^/]+/, '~');
+  return `<h3 class="wth">Worktrees <span>${w.length}${orphans ? `, ${orphans} without a task` : ''}</span></h3><table class="mtab wtab"><thead><tr><th>Task</th><th>Folder</th><th>Branch</th><th>State</th><th>Owner</th></tr></thead><tbody>${w.map((x) => `<tr>
+    <td class="mid">${x.orphan ? '<span class="mtag">Orphan</span>' : esc(x.task)}</td>
+    <td title="${esc(x.path)}"><code>${esc(home(x.path))}</code></td>
+    <td title="${esc(x.branch)}"><code>${esc(x.branch || 'detached')}</code></td>
+    <td class="wst">${[x.task ? esc(x.status) : '', x.dirty ? `${x.dirty} uncommitted` : '', x.missing ? 'folder gone' : '', x.home ? '' : 'not in ~/wt'].filter(Boolean).join(', ')}</td>
+    <td class="mown">${x.owner ? face(x.owner, 'wt' + hash(x.path) + '_') : ''}</td></tr>`).join('')}</tbody></table>`;
 }
 function diffHtml(text) {
   return text.split('\n').map((l) => { const c = l.startsWith('+++') || l.startsWith('---') ? 'f' : l.startsWith('diff ') ? 'f' : l[0] === '+' ? 'a' : l[0] === '-' ? 'd' : l.startsWith('@@') ? 'h' : ''; return c ? `<span class="${c}">${esc(l)}</span>` : esc(l); }).join('\n');
@@ -317,6 +329,7 @@ $('#mergeView').onclick = async (e) => {
     toast(`Sent back to ${ownerName(m.owner)}`); return loadMerges();
   }
   if (a === 'merge') return mergeBranch(m, e.target);
+  if (a === 'need') { const r = await api('/tasks', { op: 'needs', id, act: e.target.checked ? 'done' : 'undo', n: e.target.dataset.n }); if (r?.error) toast(r.error); return loadMerges(); }
 };
 
 // ---------- Team: every squiggle, what it cares about and guards, how it runs ----------
