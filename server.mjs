@@ -409,7 +409,8 @@ function screen(id, { kind, arg, by } = {}) {
 function wake(id, why = 'scheduled') {
   const s = loadSquiggle(id);
   if (!s || R(id).status === 'working' || plimit[providerOf(s)] > Date.now()) return false;
-  send(id, `Wake (${why}), ${new Date().toLocaleString()}. Read your charter and the end of your journal, decide the single most valuable thing to do now, do it, verify it, append a dated journal entry, then end with a status line. You have ${s.maxTurns ?? 40} turns this wake; journal findings as you confirm them.`, 'harness');
+  let news = []; try { news = board.suggestionNews(id); } catch {}
+  send(id, `Wake (${why}), ${new Date().toLocaleString()}. Read your charter and the end of your journal, decide the single most valuable thing to do now, do it, verify it, append a dated journal entry, then end with a status line. You have ${s.maxTurns ?? 40} turns this wake; journal findings as you confirm them.${news.length ? `\n\nYour suggestions, decided by the lead:\n${news.map((x) => `- ${x}`).join('\n')}` : ''}`, 'harness');
   return true;
 }
 
@@ -872,7 +873,12 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/room' && req.method === 'POST') { const b = await body(req); broadcast('*room', { k: 'room', ...b }); return json(res, 'ok'); }
     if (url.pathname === '/api/board') return json(res, { goals: board.goals(), tasks: board.tasks() });
     if (url.pathname === '/api/goals' && req.method === 'POST') return json(res, board.goalOp(await body(req)));
-    if (url.pathname === '/api/tasks' && req.method === 'POST') return json(res, board.taskOp(await body(req)));
+    if (url.pathname === '/api/tasks' && req.method === 'POST') {
+      const b = await body(req), r = board.taskOp(b);
+      // A new suggestion rides along with the next team report to the lead; it never wakes anyone on its own (t825).
+      if (b.op === 'suggest' && !r.dup) inbox.push(`[${(r.by && loadSquiggle(r.by)?.name) || r.by || 'Someone'} · SUGGESTION] ${r.id} ${r.title}${r.evidence ? ` (evidence: ${r.evidence})` : ''}`);
+      return json(res, r);
+    }
     if (url.pathname === '/api/meetings' && req.method === 'GET') {
       const days = Math.min(366, Number(url.searchParams.get('days')) || 7), from = url.searchParams.get('from') ? new Date(url.searchParams.get('from')) : new Date();
       return json(res, { meetings: meetings.all(), upcoming: markPast(meetings.upcoming(from, new Date(from.getTime() + days * 864e5)), new Set(persisted['*started'] || []), readText(path.join(RUNS, 'meetings.log'))), current: meetingNow() });

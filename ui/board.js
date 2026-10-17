@@ -50,7 +50,11 @@ function renderGoals() {
 }
 
 // ---------- Tasks: the cork board ----------
+// Suggestions (t825) live in their own filter until the lead accepts one; then it's a normal note.
+const isSug = (t) => t.kind === 'suggestion' && t.decision !== 'accepted';
 function taskVisible(t) {
+  if (B.tshow === 'suggest') return t.kind === 'suggestion' && hit(B.tq.toLowerCase(), t.title, t.evidence, t.why, ownerName(t.by));
+  if (isSug(t)) return false;
   if (B.tgoal && t.goal !== B.tgoal) return false;
   if (B.towner && (t.owner || '') !== (B.towner === '-' ? '' : B.towner)) return false;
   if (!hit(B.tq.toLowerCase(), t.title, t.note, goalById(t.goal)?.title, ownerName(t.owner))) return false;
@@ -68,7 +72,7 @@ function renderTasks() {
   $('#corkcols').innerHTML = COLS.map(([st, name]) => {
     const list = vis.filter((t) => t.status === st);
     let body;
-    if (B.tidy && !B.towner) {
+    if (B.tidy && !B.towner && B.tshow !== 'suggest') {
       // Tidy: each agent's notes collapse into one pile; loose (unowned) notes stay on the board.
       const piles = {}, loose = [];
       for (const t of list) (t.owner && S.sq[t.owner] ? (piles[t.owner] = piles[t.owner] || []) : loose).push(t);
@@ -77,6 +81,7 @@ function renderTasks() {
     return `<div class="ccol" data-status="${st}"><h3><span>${name}<small>${list.length || ''}</small></span></h3><div class="notes">${body}</div></div>`;
   }).join('');
   linkTasks($('#corkcols'));
+  const sb = $('#tshow [data-v=suggest]'), open = B.tasks.filter((t) => t.kind === 'suggestion' && !t.decision).length; if (sb) sb.textContent = open ? `Suggestions ${open}` : 'Suggestions';
   $('#tcount').textContent = `${vis.length} of ${B.tasks.length} notes`;
   $('#ttidy').classList.toggle('on', B.tidy); $('#ttidy').textContent = B.tidy ? 'Tidy: piles' : 'Tidy: off';
 }
@@ -88,13 +93,18 @@ function pileHtml(owner, ts, st) {
     <div class="ph">${face(owner, 'pl' + st + owner + '_')}<b>${esc(s.name)}</b><span>${ts.length} note${ts.length > 1 ? 's' : ''}</span></div>
     ${ts.slice(0, 3).map((t) => `<div class="pt">${esc(t.title)}</div>`).join('')}${ts.length > 3 ? `<div class="pt more">+${ts.length - 3} more</div>` : ''}</div>`;
 }
+function sugHtml(t) {
+  const ev = t.evidence ? (/^https?:\/\//.test(t.evidence) ? `<a href="${esc(t.evidence)}" target="_blank" rel="noopener">${esc(t.evidence)}</a>` : esc(t.evidence)) : '';
+  const d = t.decision === 'accepted' ? `Accepted for ${esc(ownerName(t.owner))}` : t.decision === 'declined' ? `Declined: ${esc(t.why || '')}` : 'Waiting for the lead';
+  return `<div class="nsug">Suggested by ${esc(ownerName(t.by))}${t.also?.length ? ` and ${t.also.map((x) => esc(ownerName(x))).join(', ')}` : ''}</div>${ev ? `<div class="nev">Evidence: ${ev}</div>` : ''}<div class="ndec ${t.decision || 'open'}">${d}</div>`;
+}
 function noteHtml(t) {
   const stale = taskStale(t), g = t.goal && goalById(t.goal), q = B.tq.toLowerCase();
   return `<div class="note c${colorOf(t.goal)} ${stale ? 'stale' : ''} ${t.status === 'done' ? 'done' : ''} ${B.fresh.has(t.id) ? 'new' : ''}"
       draggable="true" data-task="${esc(t.id)}" style="--r:${rot(t.id)}deg">
     ${t.parent ? `<div class="np">Part of: ${esc(B.tasks.find((x) => x.id === t.parent)?.title || t.parent)}</div>` : ''}
     <div class="nt">${hl(t.title, q)}</div>${t.note ? `<div class="nn">${hl(t.note, q)}</div>` : ''}
-    ${t.branch ? `<div class="nb" title="Branch">${esc(branchOf(t))}</div>` : ''}${t.split ? '<div class="nsplit">Needs splitting</div>' : ''}${subLine(t)}
+    ${t.kind === 'suggestion' ? sugHtml(t) : ''}${t.branch ? `<div class="nb" title="Branch">${esc(branchOf(t))}</div>` : ''}${t.split ? '<div class="nsplit">Needs splitting</div>' : ''}${subLine(t)}
     <div class="nf">${t.owner && S.sq[t.owner] ? `<span class="nown" data-owner="${esc(t.owner)}" title="Discuss with ${esc(ownerName(t.owner))}">${face(t.owner, 'nf' + t.id + '_')}</span>` : ''}<span class="age" title="Last confirmed ${esc(t.confirmed)}">${stale ? `${ago(t.confirmed)} old` : ago(t.created)}</span>${g ? `<span class="ng">${esc(g.title)}</span>` : ''}</div></div>`;
 }
 $('#gq').oninput = (e) => { B.gq = e.target.value; renderGoals(); syncUrl(); };
@@ -207,6 +217,8 @@ function editTask(el) {
     <label>Branch (repo:branch when the goal has several repos)</label><input id="ptB" value="${esc(branchOf(t))}" placeholder="feature/thing">
     <div class="row">${COLS.map(([st, n]) => `<button data-st="${st}" class="${t.status === st ? 'cur' : ''}">${n}</button>`).join('')}</div>
     ${kidsOf(t).length ? `<label>Subtasks</label><div class="subs">${kidsOf(t).map((k) => `<div class="sub ${k.status}" data-sub="${esc(k.id)}">${k.status === 'done' ? '<s>' + esc(k.title) + '</s>' : esc(k.title)} <em>${esc(COLS.find(([s]) => s === k.status)[1])}</em></div>`).join('')}</div>` : ''}
+    ${t.kind === 'suggestion' && !t.decision ? `<label>Suggestion from ${esc(ownerName(t.by))}: accept with the goal and owner above, or decline with a reason</label><textarea id="ptW" placeholder="Why not (sent to ${esc(ownerName(t.by))})"></textarea>
+    <div class="row"><button class="go" data-a="accept">Accept</button><button class="bad" data-a="decline">Decline</button></div>` : ''}
     <label>Split into subtasks (one per line)</label><textarea id="ptS" placeholder="First small piece&#10;Second small piece"></textarea>
     <div class="row"><button data-a="split">Split now</button><button data-a="mark" class="${t.split ? 'cur' : ''}">${t.split ? 'Marked: needs splitting' : 'Split later'}</button></div>
     <div class="row"><button class="go" data-a="save">Save</button><button data-a="confirm">Still needed</button>${t.owner ? '<button data-a="release">Release</button><button data-a="chat">Chat with owner</button>' : ''}<button class="bad" data-a="drop">Tear off</button></div>
@@ -217,6 +229,10 @@ function editTask(el) {
       const branch = pop.querySelector('#ptB').value.trim();
       if (st) { const r = await api('/tasks', { op: 'move', id: t.id, status: st, ...(st === 'review' ? { branch } : {}) }); if (r?.error) { toast(r.error); pop.querySelector('#ptB').focus(); return; } }
       if (a === 'save') { const r = await api('/tasks', { op: 'edit', id: t.id, title: pop.querySelector('#ptT').value.trim() || t.title, goal: pop.querySelector('#ptG').value, owner: pop.querySelector('#ptO').value, ...(branch !== branchOf(t) ? { branch } : {}) }); if (r?.error) { toast(r.error); return; } }
+      if (a === 'accept' || a === 'decline') {
+        const w = pop.querySelector('#ptW'), body = a === 'accept' ? { goal: pop.querySelector('#ptG').value, owner: pop.querySelector('#ptO').value } : { why: w.value.trim() };
+        const r = await api('/tasks', { op: a, id: t.id, by: me().id, ...body }); if (r?.error) { toast(r.error); (a === 'decline' ? w : pop.querySelector(body.goal ? '#ptO' : '#ptG')).focus(); return; }
+      }
       if (a === 'confirm') await api('/tasks', { op: 'confirm', id: t.id });
       if (a === 'release') await api('/tasks', { op: 'edit', id: t.id, owner: '' });
       if (a === 'split') { const titles = pop.querySelector('#ptS').value.split('\n').map((x) => x.trim()).filter(Boolean); if (!titles.length) { pop.querySelector('#ptS').focus(); return; } await api('/tasks', { op: 'split', id: t.id, titles, by: me().id }); }
@@ -558,7 +574,7 @@ function viewFromUrl(search, nav) {
   const q = new URLSearchParams(search), v = q.get('view');
   if (!VIEWS.includes(v)) return false;
   if (v === 'goals') $('#gq').value = B.gq = q.get('q') || '';
-  if (v === 'tasks') { $('#tq').value = B.tq = q.get('q') || ''; B.tgoal = q.get('goal') || ''; B.towner = q.get('owner') || ''; B.tshow = ['open', 'all', 'stale'].includes(q.get('show')) ? q.get('show') : 'open'; }
+  if (v === 'tasks') { $('#tq').value = B.tq = q.get('q') || ''; B.tgoal = q.get('goal') || ''; B.towner = q.get('owner') || ''; B.tshow = ['open', 'all', 'stale', 'suggest'].includes(q.get('show')) ? q.get('show') : 'open'; }
   if (v === 'calendar') { const w = /^(\d{4})-(\d\d)-(\d\d)$/.exec(q.get('week') || ''); B.week = mondayOf(w ? new Date(+w[1], w[2] - 1, +w[3]) : new Date()); }
   const d = v === 'merge' && q.get('diff'); if (!d) closeDiff(false);
   setView(v, q.get('with') || '', nav); if (d) openDiff(d); return true;

@@ -77,6 +77,10 @@ function deleteMerged(repo, branch) {
     git(at, ['branch', '-d', branch]); return true;
   } catch { return false; } finally { if (tmp) { try { git(repo, ['worktree', 'remove', tmp]); } catch {} try { git(repo, ['worktree', 'prune']); } catch {} } }
 }
+const STOP = new Set('the a an and or of to in on for with is are be no not it its this that from at by as has have'.split(' '));
+const words = (s) => new Set(String(s).toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').split(/\s+/).filter((w) => w.length > 2 && !STOP.has(w)));
+// Two titles name the same thing when most of their words overlap (Jaccard over content words).
+export function similar(a, b) { const x = words(a), y = words(b); if (!x.size || !y.size) return false; let i = 0; for (const w of x) if (y.has(w)) i++; return i / (x.size + y.size - i) >= 0.5; }
 export function createBoard(root, onChange) {
   const GOALS = path.join(root, 'goals.json'), TASKS = path.join(root, 'tasks.json');
   const read = (f, d) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return d; } };
@@ -123,8 +127,18 @@ export function createBoard(root, onChange) {
     saveGoals(g); return f.goal;
   }
 
-  function taskOp({ op, id, title, goal, owner, status, note, by, parent, split, titles, branch, act, text, n, repo: repoArg }) {
+  function taskOp({ op, id, title, goal, owner, status, note, by, parent, split, titles, branch, act, text, n, repo: repoArg, evidence, why }) {
     const t = tasks();
+    // Suggestions (t825): a squiggle notices something outside its task and files it for the lead, unowned and off every goal.
+    // Similar titles (open or declined) count as the same suggestion. accept turns it into a normal task; decline closes it.
+    if (op === 'suggest') {
+      if (!String(title || '').trim()) throw new Error('a suggestion needs one line saying what you noticed');
+      const same = t.find((x) => x.kind === 'suggestion' && (x.status !== 'done' || x.decision === 'declined') && similar(x.title, title));
+      if (same) { if (by && by !== same.by && !(same.also || []).includes(by)) { same.also = [...(same.also || []), by]; saveTasks(t); } return { ...same, dup: true }; }
+      const n = t.reduce((m, x) => Math.max(m, parseInt(String(x.id).slice(1), 10) || 0), 0) + 1;
+      const task = { id: 't' + n, kind: 'suggestion', title: String(title).trim(), status: 'todo', created: today(), confirmed: today(), ...(by ? { by } : {}), ...(evidence ? { evidence: String(evidence).trim() } : {}) };
+      t.push(task); saveTasks(t); return task;
+    }
     if (op === 'add') {
       if (!title) throw new Error('a task needs a title');
       const n = t.reduce((m, x) => Math.max(m, parseInt(String(x.id).slice(1), 10) || 0), 0) + 1;
@@ -150,6 +164,20 @@ export function createBoard(root, onChange) {
       const p = have?.path || fs.realpathSync(at);
       task.repo = repo; task.branch = have?.branch || br; task.worktrees = [...new Set([...(task.worktrees || []), p])]; task.confirmed = today();
       saveTasks(t); return { ...task, path: p, created: !have };
+    }
+    if (op === 'accept' || op === 'decline') {
+      if (task.kind !== 'suggestion') throw new Error(`${task.id} is not a suggestion`);
+      if (task.decision) throw new Error(`${task.id} was already ${task.decision}`);
+      if (op === 'accept') {
+        const g = TIERS.flatMap((x) => goals()[x]).find((x) => x.id === goal); if (!g) throw new Error(`accept needs a goal: suggestion accept ${task.id} <goal> <owner>`);
+        if (!owner) throw new Error(`accept needs an owner: suggestion accept ${task.id} ${goal} <owner>`);
+        Object.assign(task, { goal, owner, decision: 'accepted', decidedBy: by || 'lead', decided: today(), confirmed: today() });
+      } else {
+        if (!String(why || '').trim()) throw new Error(`decline needs a reason: suggestion decline ${task.id} "<why>"`);
+        Object.assign(task, { status: 'done', finished: today(), decision: 'declined', why: String(why).trim(), decidedBy: by || 'lead', decided: today() });
+      }
+      if (task.by) task.untold = true;
+      saveTasks(t); return task;
     }
     if (op === 'split') {
       // One note becomes child notes that inherit its goal and owner; the parent stays as the umbrella.
@@ -344,10 +372,16 @@ export function createBoard(root, onChange) {
     x.note = `merged into ${r.base} at ${sha}${by ? ` by ${by}` : ''}${kept}${x.note ? ` — ${x.note}` : ''}`;
     saveTasks(t); return { ...r, sha, task: x, worktrees: w.removed };
   }
+  // The author hears what became of their suggestions at their next wake, once (t825).
+  function suggestionNews(id) {
+    const t = tasks(), mine = t.filter((x) => x.kind === 'suggestion' && x.by === id && x.untold); if (!mine.length) return [];
+    for (const x of mine) delete x.untold; saveTasks(t);
+    return mine.map((x) => x.decision === 'accepted' ? `${x.id} "${x.title}" accepted, on ${x.goal} for ${x.owner}` : `${x.id} "${x.title}" declined: ${x.why}`);
+  }
   function mergeBack(id, note, by) {
     mergeTask(id); if (!String(note || '').trim()) throw new Error('send back needs a note saying what to fix');
     return taskOp({ op: 'move', id, status: 'doing', note: `sent back${by ? ` by ${by}` : ''}: ${String(note).trim()}` });
   }
 
-  return { goals, tasks, goalOp, taskOp, merges, mergeSweep, mergeDiff, merge, mergeBack, worktrees, orphanNotes, TIERS, STATUSES, MERGE };
+  return { goals, tasks, goalOp, taskOp, suggestionNews, merges, mergeSweep, mergeDiff, merge, mergeBack, worktrees, orphanNotes, TIERS, STATUSES, MERGE };
 }

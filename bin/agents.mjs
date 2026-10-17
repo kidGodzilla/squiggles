@@ -64,9 +64,26 @@ const cmds = {
     return call('/goals', { op, id: x });
   },
   tasks: async () => {
-    const t = (await call('/board')).tasks.filter((x) => !a[0] || x.goal === a[0] || x.owner === a[0]);
+    const t = (await call('/board')).tasks.filter((x) => (x.kind !== 'suggestion' || x.decision === 'accepted') && (!a[0] || x.goal === a[0] || x.owner === a[0]));
     return t.filter((x) => x.status !== 'done' || a[0]).map((x) =>
       `${x.id}  ${x.status}  ${x.split ? '(needs splitting) ' : ''}${x.title}${x.parent ? `  (part of ${x.parent})` : ''}${x.goal ? `  [${x.goal}]` : ''}${x.owner ? `  @${x.owner}` : ''}${x.branch ? `  branch ${x.repo ? x.repo + ':' : ''}${x.branch}` : ''}${x.needs?.some((n) => !n.done) ? `  needs ${x.needs.filter((n) => !n.done).length} before merge` : ''}  confirmed ${x.confirmed}${x.note ? `  — ${x.note}` : ''}`).join('\n') || 'no tasks';
+  },
+  // Suggestions (t825): suggest "<one line>" [evidence path/url] files one for the lead; similar titles dedupe.
+  suggest: async () => {
+    const r = await call('/tasks', { op: 'suggest', title: a[0], evidence: a.slice(1).join(' ') || undefined, by: process.env.AGENTS_ID });
+    return r.dup ? `already suggested as ${r.id}: ${r.title}${r.decision ? ` (${r.decision}${r.why ? `: ${r.why}` : ''})` : ''}` : `${r.id} suggested; the lead sees it with the next team report`;
+  },
+  // suggestions [all]: open ones, or every one with the lead's decision
+  suggestions: async () => {
+    const t = (await call('/board')).tasks.filter((x) => x.kind === 'suggestion' && (a[0] === 'all' || !x.decision));
+    return t.map((x) => `${x.id}  ${x.decision || 'open'}  ${x.title}  by ${x.by || '?'}${x.also?.length ? ` (also ${x.also.join(', ')})` : ''}${x.evidence ? `  evidence: ${x.evidence}` : ''}${x.decision === 'accepted' ? `  -> [${x.goal}] @${x.owner}` : ''}${x.why ? `  why: ${x.why}` : ''}`).join('\n') || (a[0] === 'all' ? 'no suggestions' : 'no open suggestions');
+  },
+  // suggestion accept <id> <goal> <owner> | suggestion decline <id> "<why>"
+  suggestion: async () => {
+    const [op, id, x, y] = a, by = process.env.AGENTS_ID || 'owner';
+    if (op === 'accept') { const r = await call('/tasks', { op, id, goal: x, owner: y, by }); return `${r.id} accepted: on ${r.goal} for ${r.owner}`; }
+    if (op === 'decline') { const r = await call('/tasks', { op, id, why: a.slice(2).join(' '), by }); return `${r.id} declined; ${r.by || 'the author'} hears why at their next wake`; }
+    throw new Error('usage: suggestion accept <id> <goal> <owner> | suggestion decline <id> "<why>"');
   },
   // task worktree <id> [repo]: the only way to make a worktree, at ~/wt/<repo>-<id>, recorded on the task (gated goals) |
   // task needs <id> add "<what merging needs>" | done|undo|drop <n> | clear (also task edit <id> needs ...) |
@@ -177,7 +194,7 @@ const cmds = {
 };
 
 if (!cmds[cmd]) {
-  console.log('usage: agents.mjs list | team | wake <id> [why] | tell <id> <text> | stop <id> | clear <id> | remove <id> | room radio|volume|voices|chatter|view|chat <value> | room view 1on1 <id> | room view blocked|rethink | room lock | room reload | call <teams-url> [until <time>] | call status | call leave | restart | upgrade | limit | inbox | screen diff <task>|url <url>|file <path>|off [--as <id>] | share on|off|status | humans | human add "<name>" [avatar] | human edit <id> name|avatar <value> | human remove <id> | tail <id> [n] | journal <id> | charter <id> [new text] | rename <id> <name> [role] | create <id> <name> <role> <cwd> <every> <charter> | set <id> <field> <value> | goals | goal add|move|confirm|owner|note|repos|merge|edit|drop ... | tasks [goal|owner] | task add|move|confirm|edit|needs|drop ... | task needs <id> add "<text>"|done|undo|drop <n>|clear | task move <id> review [repo:]<branch> ["<test result>"] | meetings [days] [from YYYY-MM-DD] | meeting add "<title>" "<when>" <id,id> [once|daily|weekdays|weekly] ["<agenda>"] | meeting edit <id> <field> <value> | meeting cancel <id> [date] | meeting start <id> | meeting next | meeting end | meeting now | meet now <id,id> ["topic"] [--presenters <id,id>] | meet merges | merges [refresh] | worktrees [check] | task worktree <id> [repo] | merge <task> | merge diff <task> | merge back <task> "<note>"');
+  console.log('usage: agents.mjs list | team | wake <id> [why] | tell <id> <text> | stop <id> | clear <id> | remove <id> | room radio|volume|voices|chatter|view|chat <value> | room view 1on1 <id> | room view blocked|rethink | room lock | room reload | call <teams-url> [until <time>] | call status | call leave | restart | upgrade | limit | inbox | screen diff <task>|url <url>|file <path>|off [--as <id>] | share on|off|status | humans | human add "<name>" [avatar] | human edit <id> name|avatar <value> | human remove <id> | tail <id> [n] | journal <id> | charter <id> [new text] | rename <id> <name> [role] | create <id> <name> <role> <cwd> <every> <charter> | set <id> <field> <value> | goals | goal add|move|confirm|owner|note|repos|merge|edit|drop ... | tasks [goal|owner] | task add|move|confirm|edit|needs|drop ... | task needs <id> add "<text>"|done|undo|drop <n>|clear | task move <id> review [repo:]<branch> ["<test result>"] | meetings [days] [from YYYY-MM-DD] | meeting add "<title>" "<when>" <id,id> [once|daily|weekdays|weekly] ["<agenda>"] | meeting edit <id> <field> <value> | meeting cancel <id> [date] | meeting start <id> | meeting next | meeting end | meeting now | meet now <id,id> ["topic"] [--presenters <id,id>] | meet merges | merges [refresh] | worktrees [check] | task worktree <id> [repo] | suggest "<one line>" [evidence] | suggestions [all] | suggestion accept <id> <goal> <owner> | suggestion decline <id> "<why>" | merge <task> | merge diff <task> | merge back <task> "<note>"');
   process.exit(1);
 }
 try {

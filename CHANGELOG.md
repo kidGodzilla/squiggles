@@ -24,6 +24,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Worktrees belong to tasks: `task worktree <id> [repo]` makes `~/wt/<repo>-<id>` (`AGENTS_WT` overrides); merge, done and drop remove clean ones; `worktrees [check]` lists them and notes orphans for the lead.
 - Task ids in chats, journals and notes are links; hovering or tapping shows the task, clicking opens it on the board.
 - A chat's header face and name open that squiggle's 1:1.
+- Suggestions: squiggles file things outside their tasks with `suggest "<one line>"`; the lead accepts one as a task or declines it with a reason (`suggestions`, `suggestion accept|decline`), on the board too, and the author hears back at its next wake.
 
 ### Changed
 - Merge leaves your checkout alone: it merges where the base branch is checked out only after a conflict check, otherwise in a temp worktree.
