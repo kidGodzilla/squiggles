@@ -347,6 +347,23 @@ function send(id, text, from = 'owner', { replay = false, human } = {}) {
   r.proc.stdin.write(JSON.stringify({ type: 'user', message: { role: 'user', content } }) + '\n');
 }
 
+// @mentions in a chat (t657): "@lead" or "@<id or name>" in a message to one squiggle also goes to the mentioned one,
+// with the chat's last few lines; its reply at the end of that turn is posted back into the original chat.
+function relayMentions(id, text, from, human) {
+  const s = loadSquiggle(id), all = listSquiggles(), lead = all.find((x) => x.lead);
+  const find = (w) => (w === 'lead' ? lead : all.find((x) => x.id === w || x.name.toLowerCase() === w));
+  const ids = [...new Set([...String(text || '').matchAll(/@([\w-]+)/g)].map((m) => find(m[1].toLowerCase())?.id).filter((m) => m && m !== id && m !== from))];
+  if (!ids.length) return;
+  const hn = humans.all().find((h) => h.id === (human || 'owner'))?.name;
+  const who = from === 'owner' ? (hn && hn !== 'You' ? hn : USER) : loadSquiggle(from)?.name || from, Who = who[0].toUpperCase() + who.slice(1);
+  const recent = tailEvents(id, 80).filter((e) => (e.k === 'user' && e.from !== 'harness') || e.k === 'say').slice(-7, -1)
+    .map((e) => `${e.k === 'say' ? (e.by ? loadSquiggle(e.by)?.name || e.by : s.name) : e.from === 'owner' ? User : e.from}: ${e.text.replace(/\s+/g, ' ').slice(0, 300)}`).join('\n');
+  for (const m of ids) {
+    const r = R(m); (r.relay ||= []).push(id); saveState();
+    send(m, `${Who} mentioned you in their chat with ${s.name}.${recent ? `\n\nRecent lines:\n${recent}` : ''}\n\n${Who}: ${text}\n\nReply to ${who} in plain words. Your reply at the end of this turn is posted in that chat.`, 'mention');
+  }
+}
+
 function wake(id, why = 'scheduled') {
   const s = loadSquiggle(id);
   if (!s || R(id).status === 'working' || plimit[providerOf(s)] > Date.now()) return false;
@@ -380,6 +397,7 @@ function turnEnded(s, text, isError, subtype) {
     : subtype === 'error_max_turns' ? { status: 'error', note: `hit the turn cap (${s.maxTurns ?? 40}); ${lastSaved(s)}; fresh process next wake` }
     : isError ? { status: 'error', note: 'turn failed' } : statusLine(text) || { status: 'idle', note: '' };
   R(s.id).lastEnd = now();
+  const relay = R(s.id).relay; if (relay?.length && !isError && text?.trim()) { delete R(s.id).relay; saveState(); for (const t of new Set(relay)) emit(t, { k: 'say', text, by: s.id }); }
   emit(s.id, { k: 'end', status: st.status, note: st.note });
   setStatus(s.id, st.status, st.note);
   if (!s.lead && st.status !== 'idle' && st.status !== 'waiting') {
@@ -819,7 +837,7 @@ const server = http.createServer(async (req, res) => {
       switch (p[3]) {
         case 'events': return json(res, tailEvents(id, Number(url.searchParams.get('n') || 400)));
         case 'journal': return json(res, readText(path.join(sqDir(id), 'journal.md')));
-        case 'send': send(id, b.text, b.from || 'owner', { human: b.human }); return json(res, 'ok');
+        case 'send': send(id, b.text, b.from || 'owner', { human: b.human }); relayMentions(id, b.text, b.from || 'owner', b.human); return json(res, 'ok');
         case 'wake': return json(res, wake(id, b.why || 'asked'));
         case 'stop': stop(id); return json(res, 'ok');
         case 'clear': return json(res, clearChat(id));

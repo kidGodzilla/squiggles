@@ -4,9 +4,16 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 
 ## 0.1.2 (unreleased)
 
+### Added
+- @mentions: type @ in a chat to pick a squiggle or person; the mentioned squiggle gets the message and its reply posts back in that chat.
+- The speaker stays visible: their tile scrolls into view, or a caption shows their face and words.
+- Owner faces on Merge and Tasks open a 1:1 with the item drafted.
+- Phone: the lead's unread count shows on the Lead tab.
+
 ### Changed
 - Merge leaves your checkout alone: it merges where the base branch is checked out only after a conflict check, otherwise in a temp worktree.
 - Merges, send-backs, task adds and meeting adds record who did them.
+- Banners under the header push chats and meeting bars down instead of covering them.
 - Squiggles prove a branch is merged before deleting it, and end review talk with `merge <id>`.
 
 ## 0.1.1

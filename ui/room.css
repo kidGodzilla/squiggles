@@ -325,10 +325,10 @@ body.v-one #stage .tile { display: none }
 body.v-one #stage .tile.office { display: block; height: auto; aspect-ratio: 4 / 3; grid-column: span 1; grid-row: span 1 }
 body.v-one #present { display: none }
 body.v-one #chats .cw:not(.office) { display: none }
-body.v-one #chats .cw.office { display: flex; left: calc(min(36vw, 420px) + 24px) !important; top: 68px !important; right: 16px; bottom: 16px; width: auto !important; height: auto !important; min-width: 0; resize: none; animation: none }
+body.v-one #chats .cw.office { display: flex; left: calc(min(36vw, 420px) + 24px) !important; top: calc(68px + var(--bh, 0px)) !important; right: 16px; bottom: 16px; width: auto !important; height: auto !important; min-width: 0; resize: none; animation: none }
 body.v-one .cw.office .ib[data-a=min], body.v-one .cw.office .ib[data-a=close] { display: none }
 #meetBar { display: none }
-body.v-meet #meetBar { display: flex; flex-direction: column; gap: 6px; position: fixed; left: calc(min(36vw, 420px) + 24px); right: 16px; top: 68px; z-index: 5; padding: 10px 14px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line) }
+body.v-meet #meetBar { display: flex; flex-direction: column; gap: 6px; position: fixed; left: calc(min(36vw, 420px) + 24px); right: 16px; top: calc(68px + var(--bh, 0px)); z-index: 5; padding: 10px 14px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line) }
 #meetBar p { margin: 0; white-space: pre-wrap; max-height: 6em; overflow: auto; color: var(--dim, inherit) }
 #meetBar .row { display: flex; flex-wrap: wrap; gap: 8px }
 body.v-meet #stage { grid-template-columns: 1fr 1fr }
@@ -350,7 +350,7 @@ body.v-meet .cw.presenting { border-color: var(--accent); box-shadow: 0 0 0 2px 
 body.v-meet.sharing #present.on { display: flex; align-self: flex-start; width: min(52vw, 820px); margin: 16px 0 0 16px; border-radius: 12px; border: 1px solid var(--line) }
 body.v-meet.sharing #stage { display: none } /* the presenter's camera is on their screen */
 @media (min-width: 761px) { body.v-meet.sharing #meetBar { left: calc(min(52vw, 820px) + 24px) } }
-@media (max-width: 760px) { body.v-meet #stage, body.v-meet.sharing #present.on { display: none } body.v-meet #meetBar { left: 16px; top: 112px } }
+@media (max-width: 760px) { body.v-meet #stage, body.v-meet.sharing #present.on { display: none } body.v-meet #meetBar { left: 16px; top: calc(112px + var(--bh, 0px)) } }
 body.v-one.v-meet #chats .cw.office { left: var(--mx) !important; top: var(--my) !important; width: var(--mw) !important; height: var(--mh) !important; min-height: 0; right: auto; bottom: auto }
 #officeBack { display: none } body.v-one #officeBack { display: block; position: absolute; left: 24px; top: calc(24px + min(36vw, 420px) * .75 - 24px + 16px) }
 
@@ -447,12 +447,12 @@ body.v-lead #callBar { display: flex; flex-wrap: wrap; align-items: center; gap:
   body.v-one:not(.v-meet) #stage { flex: none; width: auto; padding: 8px 12px; overflow: hidden }
   body.v-one:not(.v-meet) #stage .tile.office { width: 58px; border-radius: 10px }
   body.v-one:not(.v-meet) #stage .tile.office > :not(svg) { display: none }
-  body.v-one:not(.v-meet) #officeBack { position: fixed; left: 80px; top: calc(var(--hh, 89px) + 15px) }
-  body.v-lead #callBar { position: fixed; left: 12px; right: 12px; top: calc(var(--hh, 89px) + 68px); width: auto; flex-wrap: nowrap; padding: 4px 4px 4px 10px }
+  body.v-one:not(.v-meet) #officeBack { position: fixed; left: 80px; top: calc(var(--hh, 89px) + var(--bh, 0px) + 15px) }
+  body.v-lead #callBar { position: fixed; left: 12px; right: 12px; top: calc(var(--hh, 89px) + var(--bh, 0px) + 68px); width: auto; flex-wrap: nowrap; padding: 4px 4px 4px 10px }
   body.v-lead #callBar #callState, body.v-lead #callBar #callUntil { display: none }
   body.v-lead #callBar #callUrl { flex: 1; min-width: 0 }
-  body.v-one:not(.v-meet) #chats .cw.office { left: 0 !important; right: 0; top: calc(var(--hh, 89px) + 60px) !important; bottom: max(var(--kb, 0px), var(--tabh, 0px)); border-radius: 18px 18px 0 0; padding-bottom: env(safe-area-inset-bottom) }
-  body.v-one.v-lead:not(.v-meet) #chats .cw.office { top: calc(var(--hh, 89px) + 130px) !important }
+  body.v-one:not(.v-meet) #chats .cw.office { left: 0 !important; right: 0; top: calc(var(--hh, 89px) + var(--bh, 0px) + 60px) !important; bottom: max(var(--kb, 0px), var(--tabh, 0px)); border-radius: 18px 18px 0 0; padding-bottom: env(safe-area-inset-bottom) }
+  body.v-one.v-lead:not(.v-meet) #chats .cw.office { top: calc(var(--hh, 89px) + var(--bh, 0px) + 130px) !important }
 }
 .calday.today { border-color: var(--accent) } .calday.past { opacity: .6 }
 .calday h3 { display: flex; align-items: baseline; gap: 6px; margin: 0 0 2px; font-size: 13px } .calday h3 span { color: var(--dim); font-weight: 500 } .calday h3 em { margin-left: auto; font: 600 11px var(--sans); color: var(--accent) }
@@ -480,3 +480,24 @@ body.v-lead #callBar { display: flex; flex-wrap: wrap; align-items: center; gap:
   header .chip, #summary button { position: relative }
   header .chip::after, #summary button::after, .chatbtn::after, .editbtn::after { content: ''; position: absolute; left: 50%; top: 50%; width: max(100%, 44px); height: max(100%, 44px); transform: translate(-50%, -50%) }
 }
+/* Owner faces open a 1:1 (t627). */
+.mowner { padding: 0; border-radius: 6px; cursor: pointer } .mowner:hover .face, .nown:hover .face { outline: 2px solid var(--accent) }
+.nown { cursor: pointer }
+/* Relayed @mention replies name who answered (t657). */
+.m.lead .by { display: block; font-size: 12px; color: var(--dim); margin-bottom: 2px }
+.tabs .tcount { display: inline-block; min-width: 16px; margin-left: 4px; padding: 0 5px; border-radius: 99px; background: var(--accent); color: #0d1020; font-size: 11px; line-height: 16px; text-align: center } /* t352 */
+/* Speaker caption when their tile is off screen (t670) */
+#speakcap { display: none; position: fixed; z-index: 45; left: 50%; bottom: 24px; transform: translateX(-50%); width: min(560px, calc(100vw - 24px)); box-sizing: border-box; align-items: center; gap: 12px; padding: 10px 14px; background: rgba(16,18,27,.94); backdrop-filter: blur(8px); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 12px 36px rgba(0,0,0,.5); cursor: pointer; animation: fadein .2s }
+#speakcap.on { display: flex } #speakcap .tile.mini { width: 64px; height: 48px } #speakcap > div:last-child { min-width: 0 }
+#speakcap b { font-size: 13px } #speakcap p { margin: 2px 0 0; font-size: 13.5px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden }
+@media (max-width: 760px) { #speakcap { bottom: calc(var(--tabh) + 10px) } }
+/* @mentions (t677) */
+.mwrap { flex: 1; min-width: 0; display: grid } .mwrap > * { grid-area: 1 / 1 } .mwrap textarea { position: relative; width: 100%; box-sizing: border-box }
+.mmirror { padding: 5px 0; max-height: 140px; overflow: hidden; font: inherit; line-height: 1.45; white-space: pre-wrap; overflow-wrap: break-word; color: transparent; pointer-events: none }
+.mmirror .mention { color: transparent; background: color-mix(in srgb, var(--accent) 28%, transparent); border-radius: 4px; box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 28%, transparent) }
+.msgs .mention { color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, transparent); border-radius: 5px; padding: 0 3px; font-weight: 600 }
+.m.you .mention { color: inherit; background: rgba(255,255,255,.2) }
+#mentions { display: none; position: fixed; z-index: 60; max-height: 320px; overflow-y: auto; padding: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 14px 40px rgba(0,0,0,.5) } #mentions.on { display: block }
+#mentions .mo { display: flex; align-items: center; gap: 10px; padding: 5px 8px; border-radius: 8px; cursor: pointer } #mentions .mo.on, #mentions .mo:hover { background: var(--panel2) }
+#mentions .mf { flex: none; width: 32px; height: 24px; border-radius: 6px; overflow: hidden; display: grid; place-items: center } #mentions .mf svg { width: 100%; height: 100% }
+#mentions b { font-size: 13px } #mentions small { margin-left: auto; color: var(--dim); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0 }

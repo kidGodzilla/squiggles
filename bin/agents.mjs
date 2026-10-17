@@ -147,8 +147,8 @@ const cmds = {
   },
   limit: async () => { const l = await call('/limit'); return l.until ? `session limit: scheduled wakes paused until ${new Date(l.until).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : 'no session limit in effect'; },
   remove: () => call(`/squiggles/${a[0]}/remove`, {}),
-  // room radio <fip|fipjazz|...|off> | room volume <0-1> | room voices on|off | room chatter quiet|normal|lively | room view room|lead|meeting|team|calendar|goals|tasks|merge | room view blocked|rethink | room view 1on1 <id> | room chat <id> | room lock
-  room: () => call('/room', { action: a[0], value: a[1], ...(a[2] ? { id: a[2] } : {}) }),
+  // room radio <fip|fipjazz|...|off> | room volume <0-1> | room voices on|off | room chatter quiet|normal|lively | room view room|lead|meeting|team|calendar|goals|tasks|merge | room view blocked|rethink | room view 1on1 <id> | room chat <id> ["<draft>"] | room lock
+  room: () => call('/room', { action: a[0], value: a[1], ...(a[0] === 'chat' ? (a[2] ? { text: a.slice(2).join(' ') } : {}) : a[2] ? { id: a[2] } : {}) }),
   rename: () => call(`/squiggles/${a[0]}/update`, { name: a[1], ...(a[2] ? { role: a[2] } : {}) }),
   create: () => call('/squiggles', { id: a[0], name: a[1], role: a[2], cwd: a[3], every: a[4], charter: a[5] }),
   set: () => {

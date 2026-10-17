@@ -94,7 +94,7 @@ function noteHtml(t) {
     ${t.parent ? `<div class="np">Part of: ${esc(B.tasks.find((x) => x.id === t.parent)?.title || t.parent)}</div>` : ''}
     <div class="nt">${hl(t.title, q)}</div>${t.note ? `<div class="nn">${hl(t.note, q)}</div>` : ''}
     ${t.branch ? `<div class="nb" title="Branch">${esc(branchOf(t))}</div>` : ''}${t.split ? '<div class="nsplit">Needs splitting</div>' : ''}${subLine(t)}
-    <div class="nf">${face(t.owner, 'nf' + t.id + '_')}<span class="age" title="Last confirmed ${esc(t.confirmed)}">${stale ? `${ago(t.confirmed)} old` : ago(t.created)}</span>${g ? `<span class="ng">${esc(g.title)}</span>` : ''}</div></div>`;
+    <div class="nf">${t.owner && S.sq[t.owner] ? `<span class="nown" data-owner="${esc(t.owner)}" title="Discuss with ${esc(ownerName(t.owner))}">${face(t.owner, 'nf' + t.id + '_')}</span>` : ''}<span class="age" title="Last confirmed ${esc(t.confirmed)}">${stale ? `${ago(t.confirmed)} old` : ago(t.created)}</span>${g ? `<span class="ng">${esc(g.title)}</span>` : ''}</div></div>`;
 }
 $('#gq').oninput = (e) => { B.gq = e.target.value; renderGoals(); syncUrl(); };
 $('#tq').oninput = (e) => { B.tq = e.target.value; renderTasks(); syncUrl(); };
@@ -134,6 +134,7 @@ for (const v of ['#goalsView', '#tasksView']) {
     const add = e.target.closest('[data-addgoal]'); if (add) return addGoal(add);
     if (e.target.closest('[data-addnote]')) return addNote();
     const pile = e.target.closest('[data-pile]'); if (pile) { B.towner = pile.dataset.pile; renderTasks(); return; }
+    const o = e.target.closest('[data-owner]'); if (o) { const t = B.tasks.find((x) => x.id === o.closest('[data-task]')?.dataset.task); return discuss(o.dataset.owner, t ? `About ${t.id}${t.branch ? ` (${t.branch})` : ''}: ` : ''); }
     const n = e.target.closest('[data-task]'); if (n && !n.querySelector('textarea')) return editTask(n);
     const g = e.target.closest('.g[data-goal]'); if (g) return editGoal(g);
     if (!e.target.closest('input,select,.seg')) closePop();
@@ -248,7 +249,7 @@ function renderMerges() {
       <td class="mrepo">${esc(repoName(m.repo))}</td>
       <td class="mab">${ab}</td>
       <td class="mres ${m.error ? 'bad' : m.result ? '' : 'none'}" title="${esc(m.error || m.result)}">${m.error ? esc(m.error) : m.result ? esc(m.result) : 'No test result'}</td>
-      <td class="mown" title="${esc(ownerName(m.owner))}">${face(m.owner, 'mg' + m.id + '_')}</td>
+      <td class="mown">${m.owner ? `<button class="mowner" data-a="owner" title="Discuss with ${esc(ownerName(m.owner))}">${face(m.owner, 'mg' + m.id + '_')}</button>` : ''}</td>
       <td class="macts">${acts}</td>
     </tr>${open ? `<tr class="mdet"><td colspan="7"><div class="mdbox">
       <p class="mdt">${esc(m.title)}</p>
@@ -257,7 +258,7 @@ function renderMerges() {
       <dt>Test result</dt><dd>${esc(m.error || m.result || 'None on the note')}</dd><dt>In review</dt><dd>since ${esc(m.reviewed || '')} (${m.age <= 0 ? 'today' : `${m.age}d`})${m.owner ? `, by ${esc(ownerName(m.owner))}` : ''}</dd>
       ${m.log?.length ? `<dt>Commits</dt><dd><code class="mlog">${esc(m.log.join('\n'))}</code></dd>` : ''}</dl>
       ${m.desktop || m.compare ? `<p class="mlinks">${m.desktop ? `<a href="${esc(m.desktop)}">Open in GitHub Desktop</a>` : ''}${m.compare ? `<a href="${esc(m.compare)}" target="_blank" rel="noopener">View on GitHub</a>` : m.desktop ? '<span title="The branch is not on GitHub; nobody pushes it from here">Not on GitHub yet</span>' : ''}</p>` : ''}
-      <div class="macts mdacts">${acts}</div></div></td></tr>` : ''}`;
+      <div class="macts mdacts">${m.owner ? `<button data-a="owner">Discuss with ${esc(ownerName(m.owner))}</button>` : ''}${acts}</div></div></td></tr>` : ''}`;
   };
   $('#mq').innerHTML = `<table class="mtab"><thead><tr><th class="mid">Task</th><th>Title</th><th class="mrepo">Repo</th><th class="mab">Commits</th><th class="mres">Test result</th><th class="mown">Owner</th><th></th></tr></thead><tbody>${list.map(row).join('')}</tbody></table>`;
 }
@@ -297,10 +298,13 @@ $('#mrefresh').onclick = async () => {
   return loadMerges();
 };
 $('#mergeView').onclick = async (e) => {
-  const a = e.target.dataset.a, row = e.target.closest('[data-merge]'); if (!row) return;
+  // Buttons in the expanded row (the only ones on phone) belong to the row above it.
+  const a = e.target.closest('[data-a]')?.dataset.a, det = e.target.closest('.mdet'), row = e.target.closest('[data-merge]') || (a && det?.previousElementSibling); if (!row) return;
   if (!a) { if (e.target.closest('button,a')) return; const id = row.dataset.merge; B.mopen.has(id) ? B.mopen.delete(id) : B.mopen.add(id); return renderMerges(); }
   const id = row.dataset.merge, m = B.merges.find((x) => x.id === id);
   if (a === 'diff') return openDiff(id);
+  // The owner opens a 1:1 with the item in the message box (t627). CLI: room chat <id> "<text>".
+  if (a === 'owner') return discuss(m.owner, `About ${m.id} (${repoName(m.repo)}:${m.branch}): `);
   if (a === 'back') {
     const note = prompt(`Send "${m.title}" back to ${ownerName(m.owner)}. What should change?`); if (!note || !note.trim()) return;
     const r = await api('/merges', { op: 'back', id, note: note.trim(), by: me().id }); if (r?.error) return toast(r.error);

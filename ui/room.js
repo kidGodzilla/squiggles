@@ -110,7 +110,7 @@ function setMouth(svgRoot, ry, rx) { const m = svgRoot && svgRoot.querySelector(
 function startTalk(id, text, label) {
   const t = tileOf(id); if (!t) return;
   if (S.present && S.present !== id && presenter() !== S.present) hidePresent();
-  S.speakers.add(id); AUD.duck(true); setFocus(id);
+  S.speakers.add(id); AUD.duck(true); setFocus(id); showSpeaker(id, t, text);
   for (const el of [t, ...camsOf(id)]) el.classList.add('speaking');
   t.querySelector('.bubble').innerHTML = (label ? `<small>${esc(label)}</small> ` : '') + esc(text);
   if (S.present === id) $('#pcap').textContent = text;
@@ -127,9 +127,27 @@ function stopTalk(id) {
   const t = tileOf(id);
   for (const el of [t, ...camsOf(id)].filter(Boolean)) { el.classList.remove('speaking'); setMouth(el, 0.9, 4.6); }
   if (S.present === id) $('#pcap').textContent = '';
+  if ($('#speakcap').dataset.id === id) { $('#speakcap').classList.remove('on'); $('#speakcap').dataset.id = ''; }
+}
+// The speaker is always visible (t670): in the Room their tile scrolls into view, unless the user is scrolling the
+// stage; anywhere their tile isn't on screen, a caption with their face, name and words.
+let stageTouched = 0;
+for (const ev of ['wheel', 'touchmove', 'keydown']) $('#stage').addEventListener(ev, () => (stageTouched = Date.now()), { passive: true });
+function onScreen(el) {
+  const r = el.getBoundingClientRect(), top = $('header').offsetHeight, bottom = innerHeight - (PHONE.matches ? parseFloat(getComputedStyle(document.body).paddingBottom) || 0 : 0);
+  return r.width > 40 && r.height > 30 && Math.min(r.bottom, bottom) - Math.max(r.top, top) > r.height * 0.6;
+}
+function showSpeaker(id, t, text) {
+  const cap = $('#speakcap'), room = !document.body.matches('.v-goals,.v-tasks,.v-merge,.v-team,.v-cal');
+  if (room && !S.office && !onScreen(t) && Date.now() - stageTouched > 5000) t.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  else if (!onScreen(t) && !(S.present === id && $('#present').classList.contains('on'))) {
+    const s = S.sq[id];
+    cap.innerHTML = `<div class="tile mini">${avatarSVG(P(id), undefined, 'sc_')}</div><div><b>${esc(s.name)}</b><p>${esc(text)}</p></div>`;
+    cap.dataset.id = id; cap.classList.add('on'); cap.onclick = () => (S.office ? openChat(id) : oneOnOne(id));
+  }
 }
 const tileOf = (id) => document.getElementById('t-' + id);
-const camsOf = (id) => [S.present === id ? $('#pcam') : null, document.querySelector(`#cw-${id} .tile.mini`)].filter(Boolean);
+const camsOf = (id) => [S.present === id ? $('#pcam') : null, document.querySelector(`#cw-${id} .tile.mini`), $('#speakcap').dataset.id === id ? $('#speakcap .tile') : null].filter(Boolean);
 
 // =====================================================================
 //  tiles
@@ -161,6 +179,7 @@ function paintTile(id) {
   el.title = s.note || '';
   const cb = t.querySelector('.chatbtn'), n = S.unread[id] || 0;
   cb.textContent = n ? `${n} new` : 'Chat'; cb.classList.toggle('unread', !!n);
+  if (id === leadId()) $('.tabs [data-view=lead]').innerHTML = n ? `Lead <span class="tcount" title="${n} new from the lead">${n}</span>` : 'Lead';
   const cw = document.getElementById('cw-' + id);
   if (cw) cw.querySelector('.chead small').textContent = (s.paused ? 'Paused' : STATUS_WORD[st] || 'Here') + (s.note && st !== 'idle' ? ` · ${s.note}` : '') ;
 }
@@ -302,13 +321,13 @@ const chatLine = (id, ev) => {
   const s = S.sq[id];
   if (ev.k === 'user' && ev.from === 'owner') {
     const h = ev.human || 'owner';
-    return h === (S.me || 'owner') ? { cls: 'm you', text: ev.text } : { cls: 'm you other', text: `${B.humans.find((x) => x.id === h)?.name || h}: ${ev.text}` };
+    return h === (S.me || 'owner') ? { cls: 'm you', html: mentionHtml(esc(ev.text)) } : { cls: 'm you other', html: mentionHtml(esc(`${B.humans.find((x) => x.id === h)?.name || h}: ${ev.text}`)) };
   }
   if (ev.k === 'user') {
-    const from = ev.from === 'lead' ? 'From the lead' : ev.from === 'harness' ? (/^Team reports/.test(ev.text) ? 'Team reports' : 'Woke up') : ev.from;
+    const from = ev.from === 'lead' ? 'From the lead' : ev.from === 'mention' ? 'Mentioned' : ev.from === 'harness' ? (/^Team reports/.test(ev.text) ? 'Team reports' : 'Woke up') : ev.from;
     return { cls: 'm sys', text: /^Team reports/.test(ev.text) ? `${from}: ${ev.text.split('\n').filter((l) => l.startsWith('[')).length}` : `${from}: ${ev.text.split('\n')[0].slice(0, 80)}` };
   }
-  if (ev.k === 'say') { const t = ev.text.replace(/^\s*(DONE|IDLE):.*$/gim, '').trim(); return t ? { cls: 'm lead', html: md(t) + `<span class="when">${when(ev.ts)}</span>` } : null; }
+  if (ev.k === 'say') { const t = ev.text.replace(/^\s*(DONE|IDLE):.*$/gim, '').trim(); return t ? { cls: 'm lead', html: (ev.by ? `<b class="by">${esc(S.sq[ev.by]?.name || ev.by)}</b>` : '') + mentionHtml(md(t)) + `<span class="when">${when(ev.ts)}</span>` } : null; }
   if (ev.k === 'end' && !s?.lead && ev.status !== 'idle' && ev.note) return { cls: 'm sys', text: `${STATUS_WORD[ev.status] || ev.status}: ${ev.note}` };
   return null;
 };
@@ -349,6 +368,14 @@ function saveWin(cw) {
   if (!cw.offsetWidth || !cw.offsetHeight || (S.office && S.officeIds.includes(cw.dataset.id))) return;
   const all = winPos(), prev = all[cw.dataset.id] || {}, min = cw.classList.contains('min');
   all[cw.dataset.id] = { x: cw.offsetLeft, y: cw.offsetTop, w: cw.offsetWidth, h: min ? prev.h || 520 : cw.offsetHeight }; try { localStorage.agentsWins = JSON.stringify(all); } catch {} }
+// A chat with a draft waiting (t627): the 1:1 (or the floating chat), the text in the box, not sent. An unsent draft already there wins.
+function discuss(id, text, office = true) {
+  if (!S.sq[id]) return;
+  if (office) oneOnOne(id); else openChat(id);
+  const ta = document.querySelector(`#cw-${id} textarea`); if (!ta) return;
+  if (text && !ta.value.trim()) { ta.value = text; ta.dispatchEvent(new Event('input')); }
+  ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
+}
 function openChat(id) {
   const s = S.sq[id]; if (!s) return;
   let cw = document.getElementById('cw-' + id);
@@ -375,14 +402,67 @@ if (window.visualViewport) {
   const vv = visualViewport, kb = () => { const r = document.documentElement.style; r.setProperty('--kb', Math.max(0, innerHeight - vv.height - vv.offsetTop) + 'px'); r.setProperty('--vvh', vv.height + 'px'); r.setProperty('--vvt', vv.offsetTop + 'px'); };
   vv.addEventListener('resize', kb); vv.addEventListener('scroll', kb); kb();
 }
-// The header wraps on phone; the office rows sit under it (t153).
+// The header wraps on phone; the office rows sit under it (t153). Banners under the header (limit, meeting on) push fixed panels down too (t605).
+{ const bh = () => document.documentElement.style.setProperty('--bh', $('#limit').offsetHeight + $('#meetOn').offsetHeight + 'px'), ro = new ResizeObserver(bh); ro.observe($('#limit')); ro.observe($('#meetOn')); }
 new ResizeObserver(() => document.documentElement.style.setProperty('--hh', $('header').offsetHeight + 'px')).observe($('header'));
 function clearUnread(id) { if (S.unread[id]) { S.unread[id] = 0; paintTile(id); } }
 const PHONE = matchMedia('(max-width: 760px)');
+// @mentions (t677): typing @ in a chat offers squiggles and people; a known @name is a chip in the input and in messages.
+const mentionables = () => [
+  ...S.order.map((id) => ({ key: /^[\w-]+$/.test(S.sq[id].name) ? S.sq[id].name : id, id, name: S.sq[id].name, role: S.sq[id].lead ? 'Lead' : S.sq[id].role, face: () => avatarSVG(P(id), undefined, 'mn_' + id) })),
+  ...(typeof B !== 'undefined' ? B.humans : []).map((h) => ({ key: /^[\w-]+$/.test(h.name) ? h.name : h.id, id: h.id, name: h.name, role: 'Person', human: true, face: () => humanFace(h) })),
+];
+const isMention = (w) => { w = w.toLowerCase(); return w === 'lead' || mentionables().some((m) => m.id.toLowerCase() === w || m.name.toLowerCase() === w); };
+// Marks known @names in already-escaped text/HTML (never inside a tag).
+const mentionHtml = (html) => html.replace(/(<[^>]*>)|(?<=^|[\s(>])@([\w-]+)/g, (all, tag, w) => tag ? tag : isMention(w) ? `<span class="mention">@${w}</span>` : all);
+const MN = { el: null, ta: null, list: [], i: 0, at: -1 };
+function mentionMirror(ta) {
+  if (ta._mirror) return ta._mirror;
+  const wrap = document.createElement('span'), mir = document.createElement('div');
+  wrap.className = 'mwrap'; mir.className = 'mmirror'; mir.setAttribute('aria-hidden', 'true');
+  ta.parentNode.insertBefore(wrap, ta); wrap.append(mir, ta);
+  ta.addEventListener('scroll', () => (mir.scrollTop = ta.scrollTop));
+  return (ta._mirror = mir);
+}
+function paintMirror(ta) { const mir = mentionMirror(ta); mir.innerHTML = mentionHtml(esc(ta.value)) + '\u200b'; mir.scrollTop = ta.scrollTop; }
+function mentionClose() { if (MN.el) MN.el.classList.remove('on'); MN.ta = null; MN.list = []; }
+function mentionOpen(ta) {
+  const before = ta.value.slice(0, ta.selectionStart), m = before.match(/(^|\s)@([\w-]*)$/);
+  if (!m) return mentionClose();
+  const q = m[2].toLowerCase();
+  MN.list = mentionables().filter((x) => !q || x.name.toLowerCase().startsWith(q) || x.id.toLowerCase().startsWith(q) || (q && x.role === 'Lead' && 'lead'.startsWith(q)));
+  if (!MN.list.length) return mentionClose();
+  MN.ta = ta; MN.at = before.length - m[2].length - 1; MN.i = Math.min(MN.i, MN.list.length - 1);
+  if (!MN.el) { MN.el = document.createElement('div'); MN.el.id = 'mentions'; MN.el.setAttribute('role', 'listbox'); document.body.append(MN.el);
+    MN.el.addEventListener('mousedown', (e) => { const b = e.target.closest('[data-i]'); if (b) { e.preventDefault(); mentionPick(+b.dataset.i); } }); }
+  MN.el.innerHTML = MN.list.map((x, i) => `<div class="mo${i === MN.i ? ' on' : ''}" data-i="${i}" role="option"><span class="mf${x.human ? ' hf' : ''}">${x.face()}</span><b>${esc(x.name)}</b><small>${esc(x.role || '')}</small></div>`).join('');
+  const r = (ta.closest('form') || ta).getBoundingClientRect();
+  Object.assign(MN.el.style, { left: Math.max(8, r.left) + 'px', bottom: innerHeight - r.top + 6 + 'px', width: Math.min(300, r.width) + 'px' });
+  MN.el.classList.add('on'); MN.el.querySelector('.mo.on')?.scrollIntoView({ block: 'nearest' });
+}
+function mentionPick(i) {
+  const x = MN.list[i], ta = MN.ta; if (!x || !ta) return;
+  const end = ta.selectionStart, ins = `@${x.key} `;
+  ta.value = ta.value.slice(0, MN.at) + ins + ta.value.slice(end); ta.selectionStart = ta.selectionEnd = MN.at + ins.length;
+  mentionClose(); ta.focus(); ta.dispatchEvent(new Event('input', { bubbles: true }));
+}
+const chatInput = (t) => t?.tagName === 'TEXTAREA' && t.closest('.cw form');
+document.addEventListener('input', (e) => { if (!chatInput(e.target)) return; paintMirror(e.target); if (e.isTrusted || MN.ta) mentionOpen(e.target); });
+document.addEventListener('focusin', (e) => { if (chatInput(e.target)) paintMirror(e.target); });
+document.addEventListener('focusout', (e) => { if (e.target === MN.ta) setTimeout(mentionClose, 120); });
+document.addEventListener('keydown', (e) => {
+  if (!MN.ta || e.target !== MN.ta || !MN.el?.classList.contains('on')) return;
+  const n = MN.list.length;
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { MN.i = (MN.i + (e.key === 'ArrowDown' ? 1 : n - 1)) % n; mentionOpen(MN.ta); }
+  else if (e.key === 'Enter' || e.key === 'Tab') mentionPick(MN.i);
+  else if (e.key === 'Escape') mentionClose();
+  else return;
+  e.preventDefault(); e.stopPropagation();
+}, true);
 function wireChat(cw, id) {
   const ta = cw.querySelector('textarea'), head = cw.querySelector('.chead');
   const autosize = () => { ta.style.height = 'auto'; ta.style.height = Math.min(140, ta.scrollHeight) + 'px'; };
-  const send = async () => { const t = ta.value.trim(); if (!t) return; ta.value = ''; autosize(); await api(`/squiggles/${id}/send`, { text: t, from: 'owner', human: me().id }); };
+  const send = async () => { const t = ta.value.trim(); if (!t) return; ta.value = ''; autosize(); paintMirror(ta); mentionClose(); await api(`/squiggles/${id}/send`, { text: t, from: 'owner', human: me().id }); };
   ta.addEventListener('input', autosize);
   ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); } if (e.key === 'Escape') cw.classList.add('min'); });
   cw.querySelector('form').onsubmit = (e) => { e.preventDefault(); send(); };
@@ -487,7 +567,7 @@ async function roomCommand(ev) {
     case 'voices': prefs.voice = v !== 'off'; paintVoice(); break;
     case 'chatter': if (['quiet', 'normal', 'lively'].includes(v)) { prefs.chatter = v; $('#chatter').value = v; } break;
     case 'view': if (['room', 'lead', 'meeting', 'team', 'calendar', 'goals', 'tasks', 'merge'].includes(v)) setView(v); else if (v === 'blocked' || v === 'rethink') openStuck(v); else if (v === '1on1' && S.sq[ev.id]) oneOnOne(ev.id); break;
-    case 'chat': if (S.sq[ev.value]) { if (S.office && !S.officeIds.includes(ev.value)) setView('room'); openChat(ev.value); } break;
+    case 'chat': if (S.sq[ev.value]) { if (S.office && !S.officeIds.includes(ev.value)) setView('room'); discuss(ev.value, ev.text, false); } break;
     case 'lock': lock(); break;
     case 'reload': location.reload(); break;
     case 'restarting': toast('Server restarting with the latest code…'); setTimeout(() => location.reload(), 4000); break;
@@ -790,7 +870,8 @@ $('#joinBtn').onclick = () => {
   AUD.init(); S.joined = true; $('#join').classList.remove('on'); document.body.classList.remove('locked'); AUD.join();
   if (rejoin) { S.spokeAt = performance.now(); AUD.apply(); return; }
   const lead = leadId(), chat = new URLSearchParams(URL0).get('chat');
-  if (lead) { openChat(lead); say(lead, pick(['Hey. Everyone’s here.', `${(h => h < 5 ? 'Late one' : h < 12 ? 'Morning' : h < 18 ? 'Afternoon' : 'Evening')(new Date().getHours())}. The team is in.`, 'Hi. We’re all set up.']), { priority: true }); }
+  // On phone the lead's chat would cover the room; its unread count sits on the Lead tab instead (t352).
+  if (lead) { if (!PHONE.matches) openChat(lead); say(lead, pick(['Hey. Everyone’s here.', `${(h => h < 5 ? 'Late one' : h < 12 ? 'Morning' : h < 18 ? 'Afternoon' : 'Evening')(new Date().getHours())}. The team is in.`, 'Hi. We’re all set up.']), { priority: true }); }
   if (S.sq[chat]) openChat(chat);
 };
 document.addEventListener('keydown', (e) => { if (e.key === '/' && S.joined && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) { e.preventDefault(); const l = leadId(); if (l) openChat(l); } });
