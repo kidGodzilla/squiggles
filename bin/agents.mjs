@@ -227,6 +227,24 @@ const cmds = {
     const o = ks.length === 1 && ks[0] === first ? opts[first] : ks.map((k) => `${k}=${opts[k]}`).join(',');
     return call(`/squiggles/${a[0]}/update`, { look: gen + (o ? ':' + o : '') });
   },
+  // calendar [from] [to] [calendar] [--json] | calendar list | status | allow (t785): this Mac's calendars via EventKit, read-only, local (no server).
+  // Dates YYYY-MM-DD, today or tomorrow; to is inclusive. Only `allow` shows the macOS prompt.
+  calendar: async () => {
+    const { execFileSync } = await import('node:child_process'), fs = await import('node:fs'), dir = new URL('.', import.meta.url).pathname;
+    const bin = dir + 'calendar-reader', src = bin + '.swift';
+    if (!fs.existsSync(bin) || fs.statSync(bin).mtimeMs < fs.statSync(src).mtimeMs)
+      execFileSync('swiftc', ['-O', src, '-o', bin, '-Xlinker', '-sectcreate', '-Xlinker', '__TEXT', '-Xlinker', '__info_plist', '-Xlinker', bin + '.plist'], { stdio: 'inherit' });
+    const json = a.includes('--json'), r = a.filter((x) => x !== '--json'), day = (x) => x === 'today' || x === 'tomorrow' || /^\d{4}-\d{2}-\d{2}$/.test(x);
+    const iso = (x) => { if (x !== 'today' && x !== 'tomorrow') return x; const d = new Date(); if (x === 'tomorrow') d.setDate(d.getDate() + 1); return d.toLocaleDateString('sv'); };
+    const sub = ['status', 'allow', 'list'].includes(r[0]) ? r[0] : 'events', dates = r.filter(day).map(iso), cal = sub === 'events' && r.find((x) => !day(x));
+    const argv = sub === 'list' ? ['calendars'] : sub !== 'events' ? [sub] : ['events', ...(dates[0] ? ['--from', dates[0]] : []), ...(dates[1] ? ['--to', dates[1]] : []), ...(cal ? ['--calendar', cal] : [])];
+    let v; try { v = JSON.parse(execFileSync(bin, argv, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })); }
+    catch (e) { let m = e.message; try { m = JSON.parse(e.stderr).error; } catch {} throw new Error(m); }
+    if (json || sub === 'status' || sub === 'allow') return sub === 'status' || sub === 'allow' ? (json ? v : `calendar access: ${v.status}`) : v;
+    if (sub === 'list') return v.map((c) => `${c.title}  (${c.source}, ${c.type})`).join('\n') || 'no calendars';
+    const t = (s) => new Date(s).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }), d = (s) => new Date(s).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+    let last = ''; return v.events.map((e) => { const h = d(e.start) !== last ? `${(last = d(e.start))}\n` : ''; return `${h}  ${e.allDay ? 'all day' : `${t(e.start)}-${t(e.end)}`}  ${e.title}  [${e.calendar}]${e.location ? `  @ ${e.location}` : ''}`; }).join('\n') || 'no events';
+  },
   set: () => {
     const v = a[2] === 'true' ? true : a[2] === 'false' ? false : /^\d+$/.test(a[2]) ? Number(a[2]) : a[2];
     return call(`/squiggles/${a[0]}/update`, { [a[1]]: v });
@@ -234,7 +252,7 @@ const cmds = {
 };
 
 if (!cmds[cmd]) {
-  console.log('usage: agents.mjs list | team | wake <id> [why] | tell <id> <text> [--image <path>] | stop <id> | clear <id> | remove <id> | room radio|volume|voices|chatter|characters|view|chat <value> | room passcode set <code>|clear|status|local on|off | room view 1on1 <id> | room view settings [room|characters|squiggles|people|sharing|defaults|security] | room view blocked|rethink | room lock | room reload | call <teams-url> [until <time>] | call status | call leave | restart | upgrade | limit | inbox | screen diff <task>|url <url>|file <path>|off [--as <id>] | share on|off|status | defaults [model|effort|every <value>] | humans | human add "<name>" [avatar] | human edit <id> name|avatar <value> | human remove <id> | tail <id> [n] | journal <id> | charter <id> [new text] | rename <id> <name> [role] | create <id> <name> <role> <cwd> <every> <charter> | set <id> <field> <value> | look <id> [<generator>[:<options>]|character|auto|shuffle] | goals | goal add|move|confirm|owner|note|repos|merge|edit|drop ... | tasks [goal|owner] | task add|move|confirm|edit|needs|drop ... | task needs <id> add "<text>"|done|undo|drop <n>|clear | task move <id> review [repo:]<branch> ["<test result>"] | meetings [days] [from YYYY-MM-DD] | meeting add "<title>" "<when>" <id,id> [once|daily|weekdays|weekly] ["<agenda>"] | meeting edit <id> <field> <value> | meeting cancel <id> [date] | meeting start <id> | meeting next | meeting end | meeting now | meet now <id,id> ["topic"] [--presenters <id,id>] | meet merges | merges [refresh] | worktrees [check] | task worktree <id> [repo] | suggest "<one line>" [evidence] | suggestions [all] | suggestion accept <id> <goal> <owner> | suggestion decline <id> "<why>" | merge <task> | merge diff <task> | merge back <task> "<note>"');
+  console.log('usage: agents.mjs list | team | wake <id> [why] | tell <id> <text> [--image <path>] | stop <id> | clear <id> | remove <id> | room radio|volume|voices|chatter|characters|view|chat <value> | room passcode set <code>|clear|status|local on|off | room view 1on1 <id> | room view settings [room|characters|squiggles|people|sharing|defaults|security] | room view blocked|rethink | room lock | room reload | call <teams-url> [until <time>] | call status | call leave | restart | upgrade | limit | inbox | screen diff <task>|url <url>|file <path>|off [--as <id>] | share on|off|status | defaults [model|effort|every <value>] | calendar [from] [to] [calendar] [--json] | calendar list|status|allow | humans | human add "<name>" [avatar] | human edit <id> name|avatar <value> | human remove <id> | tail <id> [n] | journal <id> | charter <id> [new text] | rename <id> <name> [role] | create <id> <name> <role> <cwd> <every> <charter> | set <id> <field> <value> | look <id> [<generator>[:<options>]|character|auto|shuffle] | goals | goal add|move|confirm|owner|note|repos|merge|edit|drop ... | tasks [goal|owner] | task add|move|confirm|edit|needs|drop ... | task needs <id> add "<text>"|done|undo|drop <n>|clear | task move <id> review [repo:]<branch> ["<test result>"] | meetings [days] [from YYYY-MM-DD] | meeting add "<title>" "<when>" <id,id> [once|daily|weekdays|weekly] ["<agenda>"] | meeting edit <id> <field> <value> | meeting cancel <id> [date] | meeting start <id> | meeting next | meeting end | meeting now | meet now <id,id> ["topic"] [--presenters <id,id>] | meet merges | merges [refresh] | worktrees [check] | task worktree <id> [repo] | suggest "<one line>" [evidence] | suggestions [all] | suggestion accept <id> <goal> <owner> | suggestion decline <id> "<why>" | merge <task> | merge diff <task> | merge back <task> "<note>"');
   process.exit(1);
 }
 try {
