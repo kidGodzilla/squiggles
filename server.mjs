@@ -767,9 +767,14 @@ ${(g.todo || []).map(line).join('\n') || '- none'}
 In flight (${open.length}): ${open.slice(0, 30).map((t) => `${t.id} ${t.status} ${t.title.slice(0, 70)}${t.owner ? ` @${t.owner}` : ''}`).join('; ')}`;
 }
 // The squiggle's room avatar as its call face: idle, talking and open-mouth SVGs from ui/cast.js, for claude-in-call's --face=avatar:<dir>.
+// Room-wide settings that outlive a page: { characters: <default generator> }.
+const ROOMCFG = path.join(DATA, 'room.json');
+const roomCfg = () => { try { return JSON.parse(fs.readFileSync(ROOMCFG, 'utf8')); } catch { return {}; } };
+// ui/cast.js in a sandbox, with the room's default generator applied.
+function castCtx() { const ctx = vm.createContext({}); vm.runInContext(readText(path.join(ROOT, 'ui', 'cast.js')), ctx); ctx.roomGen(roomCfg().characters || 'cast'); return ctx; }
 function callFace(s) {
   try {
-    const ctx = vm.createContext({}); vm.runInContext(readText(path.join(ROOT, 'ui', 'cast.js')), ctx);
+    const ctx = castCtx();
     const p = ctx.persona(s), dir = path.join(RUNS, 'call-face'); fs.mkdirSync(dir, { recursive: true });
     for (const [k, m] of [['idle', 0], ['talk', 1], ['open', 2]]) fs.writeFileSync(path.join(dir, `${k}.svg`), ctx.avatarSVG(p, { m }, 'cf_'));
     return dir;
@@ -870,7 +875,16 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/restart' && req.method === 'POST') { restartPending = true; setTimeout(maybeRestart, 500); return json(res, 'restarting as soon as nobody is mid-turn'); }
     if (url.pathname === '/api/voice') return json(res, kokoro.status());
     // Room controls (radio, voices, chatter, tabs, chat windows) so the lead can do whatever the user can.
-    if (url.pathname === '/api/room' && req.method === 'POST') { const b = await body(req); broadcast('*room', { k: 'room', ...b }); return json(res, 'ok'); }
+    if (url.pathname === '/api/room' && req.method === 'POST') {
+      const b = await body(req);
+      if (b.action === 'characters') {   // the room's default character generator (t832), saved so every page agrees
+        const gens = Object.keys(castCtx().GENS), g = String(b.value || '').toLowerCase();
+        if (!gens.includes(g)) return json(res, { error: `generators: ${gens.join(', ')}` }, 400);
+        fs.writeFileSync(ROOMCFG, JSON.stringify({ ...roomCfg(), characters: g }, null, 2) + '\n'); b.value = g;
+      }
+      broadcast('*room', { k: 'room', ...b }); return json(res, 'ok');
+    }
+    if (url.pathname === '/api/room') return json(res, roomCfg());
     if (url.pathname === '/api/board') return json(res, { goals: board.goals(), tasks: board.tasks() });
     if (url.pathname === '/api/goals' && req.method === 'POST') return json(res, board.goalOp(await body(req)));
     if (url.pathname === '/api/tasks' && req.method === 'POST') {

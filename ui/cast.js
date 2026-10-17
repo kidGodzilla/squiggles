@@ -3,7 +3,7 @@
 // static renders (o given: { m: 0|1|2, working, done }) draw one state, for files like the call face.
 // ui/cast-preview.html shows the whole cast for testing.
 // Only these names are global (var, so Node's vm sees them too); everything else stays inside, clear of room.js and board.js.
-var { hash, PAL, mix, avatarSVG, persona, LOOKS } = (() => {
+var { hash, PAL, mix, avatarSVG, persona, LOOKS, GENS, parseLook, roomGen } = (() => {
 const hash = (s) => { let h = 2166136261; for (const c of s) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return h >>> 0; };
 const PAL = ['#ff7a6b', '#ffb347', '#ffd84a', '#4fd1a5', '#4cc3ff', '#7c8cff', '#b583ff', '#ff7eb6'];
 const hexRGB = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
@@ -220,7 +220,7 @@ const PAW = { Puff: '#f58a74', Sprig: '#e9a52a', Wisp: '#e8e1ff', Gloop: '#5fcf5
   Mallow: '#ffd6e6', Bao: '#efd9bb', Pebble: '#9a9eae', Boba: '#e2bf92', Wick: '#f1dcb4', Bumble: '#3a3040', Pip: '#4f5f80', Acorn: '#b9773d', Jelly: '#c9a8ff', Toast: '#c98a4b' };
 const LOOKS = CHARS.map((c) => c.name);
 
-function avatarSVG(p, o, uid = '') {   // uid keeps SVG ids unique per instance: duplicate ids make gradients vanish when the first copy is hidden
+function castSVG(p, o, uid = '') {   // uid keeps SVG ids unique per instance: duplicate ids make gradients vanish when the first copy is hidden
   MODE = o ? { working: !!o.working, done: !!o.done, speaking: o.m > 0, mopen: o.m === 2 } : null; FACE = p.face;
   const c = CHARS[p.char], room = ROOMS[p.room], fit = FIT[c.name], u = uid + 'a';
   const art = c.svg(u), cut = art.indexOf('<g class="face">'), body = cut < 0 ? art : art.slice(0, cut), rest = cut < 0 ? '' : art.slice(cut);
@@ -240,19 +240,44 @@ function avatarSVG(p, o, uid = '') {   // uid keeps SVG ids unique per instance:
   MODE = null; return out;
 }
 
-// A squiggle's look. look (a character name) and lookSeed (any number) can be set per squiggle; otherwise both come from its id.
+// The cast's persona. opts.character (a name) and s.lookSeed (any number) can be set per squiggle; otherwise both come from its id.
 // The lead, unless given a seed, is Puff in headphones on the rooftop.
-function persona(s) {
+function castPersona(s, opts = {}) {
   const h = hash(s.id), seed = s.lookSeed != null && s.lookSeed !== '' ? Number(s.lookSeed) : h;
   let v = (seed >>> 0) || 1; const r = () => { v ^= v << 13; v >>>= 0; v ^= v >>> 17; v ^= v << 5; v >>>= 0; return v / 4294967296; };
   const pick = (xs) => xs[Math.floor(r() * xs.length)];
-  let char = LOOKS.indexOf(s.look); if (char < 0) char = s.lead ? 0 : (h >>> 7) % CHARS.length;
+  let char = LOOKS.indexOf(opts.character); if (char < 0) char = s.lead ? 0 : (h >>> 7) % CHARS.length;
   const base = { id: s.id, name: s.name, role: s.role, lead: !!s.lead, gid: s.lead ? 'lead' : h.toString(36), char };
-  if (s.lead && base.gid === 'lead' && s.lookSeed == null && !s.look) return { ...base, face: { eyes: 0, mouth: 0, cheeks: 0 }, hue: 0, acc: 'headphones', accCol: '#f5c04a', decor: 'clock', room: 1 };
+  if (s.lead && base.gid === 'lead' && s.lookSeed == null && !opts.character) return { ...base, face: { eyes: 0, mouth: 0, cheeks: 0 }, hue: 0, acc: 'headphones', accCol: '#f5c04a', decor: 'clock', room: 1 };
   r(); r();
   return { ...base, face: { eyes: Math.floor(r() * 5), mouth: Math.floor(r() * 4), cheeks: Math.floor(r() * 4) },
     hue: r() < .4 ? 0 : pick(HUES), acc: r() < .7 ? pick(FIT[CHARS[char].name].ok.split(' ')) : null, accCol: pick(ACOL),
     decor: r() < .8 ? pick(Object.keys(DECOR)) : null, room: Math.floor(r() * ROOMS.length) };
 }
-return { hash, PAL, mix, avatarSVG, persona, LOOKS };
+
+// Character generators (t832). Each: id, name, options (key: allowed values; the first key is what a bare value sets),
+// persona(s, opts) for the render data, render(p, o, uid) to SVG. Live renders carry the state layers room.css animates.
+const GENS = {
+  cast: { id: 'cast', name: 'Squiggles', options: { character: LOOKS }, persona: castPersona, render: castSVG },
+};
+// look is '<generator>[:<options>]', options 'value' (the first option) or 'k=v,k=v'. A bare cast name ('Puff') is the cast.
+// No look, or an unknown generator, means the room default.
+let DEF = 'cast';
+const roomGen = (g) => { if (g !== undefined) DEF = GENS[g] ? g : 'cast'; return DEF; };
+function parseLook(look) {
+  const str = String(look || '').trim(); if (!str) return { gen: DEF, opts: {} };
+  const i = str.indexOf(':'), head = i < 0 ? str : str.slice(0, i), rest = i < 0 ? '' : str.slice(i + 1);
+  const id = head.toLowerCase();
+  if (!GENS[id]) { const c = LOOKS.find((n) => n.toLowerCase() === id); return c ? { gen: 'cast', opts: { character: c } } : { gen: DEF, opts: {} }; }
+  const G = GENS[id], keys = Object.keys(G.options), opts = {};
+  for (const part of rest.split(',').filter(Boolean)) {
+    const [k, v] = part.includes('=') ? part.split('=') : [keys[0], part];
+    const vals = G.options[k]; if (!vals) continue;
+    const hit = vals.find((x) => String(x).toLowerCase() === String(v).toLowerCase()); if (hit != null) opts[k] = hit;
+  }
+  return { gen: id, opts };
+}
+function persona(s) { const { gen, opts } = parseLook(s.look); return { ...GENS[gen].persona(s, opts), gen, opts }; }
+const avatarSVG = (p, o, uid = '') => (GENS[p.gen] || GENS.cast).render(p, o, uid);
+return { hash, PAL, mix, avatarSVG, persona, LOOKS, GENS, parseLook, roomGen };
 })();

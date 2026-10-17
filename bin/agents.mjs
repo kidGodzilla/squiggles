@@ -183,10 +183,24 @@ const cmds = {
   },
   limit: async () => { const l = await call('/limit'); return l.until ? `session limit: scheduled wakes paused until ${new Date(l.until).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : 'no session limit in effect'; },
   remove: () => call(`/squiggles/${a[0]}/remove`, {}),
-  // room radio <fip|fipjazz|...|off> | room volume <0-1> | room voices on|off | room chatter quiet|normal|lively | room view room|lead|meeting|team|calendar|goals|tasks|merge | room view blocked|rethink | room view 1on1 <id> | room chat <id> ["<draft>"] | room lock
+  // room radio <fip|fipjazz|...|off> | room volume <0-1> | room voices on|off | room chatter quiet|normal|lively | room characters <generator> | room view room|lead|meeting|team|calendar|goals|tasks|merge | room view blocked|rethink | room view 1on1 <id> | room chat <id> ["<draft>"] | room lock
   room: () => call('/room', { action: a[0], value: a[1], ...(a[0] === 'chat' ? (a[2] ? { text: a.slice(2).join(' ') } : {}) : a[2] ? { id: a[2] } : {}) }),
   rename: () => call(`/squiggles/${a[0]}/update`, { name: a[1], ...(a[2] ? { role: a[2] } : {}) }),
   create: () => call('/squiggles', { id: a[0], name: a[1], role: a[2], cwd: a[3], every: a[4], charter: a[5] }),
+  // look <id> [<generator>[:<options>]|<character>|auto|shuffle] (t832): the squiggle's character; auto follows the room default
+  // (room characters <generator>); shuffle rerolls the seed. Options: a bare value or k=v,k=v, checked against ui/cast.js.
+  look: async () => {
+    if (a[1] === 'shuffle') return call(`/squiggles/${a[0]}/update`, { lookSeed: Math.floor(Math.random() * 1e9) });
+    if (!a[1] || a[1] === 'auto') return call(`/squiggles/${a[0]}/update`, { look: '' });
+    const vm = await import('node:vm'), { readFileSync } = await import('node:fs'), ctx = vm.createContext({});
+    vm.runInContext(readFileSync(new URL('../ui/cast.js', import.meta.url), 'utf8'), ctx);
+    const { gen, opts } = ctx.parseLook(a[1]), G = ctx.GENS[gen], want = a[1].split(':')[0].toLowerCase();
+    const given = a[1].includes(':') ? a[1].slice(a[1].indexOf(':') + 1).split(',').filter(Boolean).length : 0;
+    if (!G || (gen !== want && !opts.character) || Object.keys(opts).length < given) return `unknown look. generators: ${Object.keys(ctx.GENS).join(', ')}; cast characters: ${ctx.LOOKS.join(', ')}`;
+    const first = Object.keys(G.options)[0], ks = Object.keys(opts);
+    const o = ks.length === 1 && ks[0] === first ? opts[first] : ks.map((k) => `${k}=${opts[k]}`).join(',');
+    return call(`/squiggles/${a[0]}/update`, { look: gen + (o ? ':' + o : '') });
+  },
   set: () => {
     const v = a[2] === 'true' ? true : a[2] === 'false' ? false : /^\d+$/.test(a[2]) ? Number(a[2]) : a[2];
     return call(`/squiggles/${a[0]}/update`, { [a[1]]: v });
@@ -194,7 +208,7 @@ const cmds = {
 };
 
 if (!cmds[cmd]) {
-  console.log('usage: agents.mjs list | team | wake <id> [why] | tell <id> <text> | stop <id> | clear <id> | remove <id> | room radio|volume|voices|chatter|view|chat <value> | room view 1on1 <id> | room view blocked|rethink | room lock | room reload | call <teams-url> [until <time>] | call status | call leave | restart | upgrade | limit | inbox | screen diff <task>|url <url>|file <path>|off [--as <id>] | share on|off|status | humans | human add "<name>" [avatar] | human edit <id> name|avatar <value> | human remove <id> | tail <id> [n] | journal <id> | charter <id> [new text] | rename <id> <name> [role] | create <id> <name> <role> <cwd> <every> <charter> | set <id> <field> <value> | goals | goal add|move|confirm|owner|note|repos|merge|edit|drop ... | tasks [goal|owner] | task add|move|confirm|edit|needs|drop ... | task needs <id> add "<text>"|done|undo|drop <n>|clear | task move <id> review [repo:]<branch> ["<test result>"] | meetings [days] [from YYYY-MM-DD] | meeting add "<title>" "<when>" <id,id> [once|daily|weekdays|weekly] ["<agenda>"] | meeting edit <id> <field> <value> | meeting cancel <id> [date] | meeting start <id> | meeting next | meeting end | meeting now | meet now <id,id> ["topic"] [--presenters <id,id>] | meet merges | merges [refresh] | worktrees [check] | task worktree <id> [repo] | suggest "<one line>" [evidence] | suggestions [all] | suggestion accept <id> <goal> <owner> | suggestion decline <id> "<why>" | merge <task> | merge diff <task> | merge back <task> "<note>"');
+  console.log('usage: agents.mjs list | team | wake <id> [why] | tell <id> <text> | stop <id> | clear <id> | remove <id> | room radio|volume|voices|chatter|characters|view|chat <value> | room view 1on1 <id> | room view blocked|rethink | room lock | room reload | call <teams-url> [until <time>] | call status | call leave | restart | upgrade | limit | inbox | screen diff <task>|url <url>|file <path>|off [--as <id>] | share on|off|status | humans | human add "<name>" [avatar] | human edit <id> name|avatar <value> | human remove <id> | tail <id> [n] | journal <id> | charter <id> [new text] | rename <id> <name> [role] | create <id> <name> <role> <cwd> <every> <charter> | set <id> <field> <value> | look <id> [<generator>[:<options>]|character|auto|shuffle] | goals | goal add|move|confirm|owner|note|repos|merge|edit|drop ... | tasks [goal|owner] | task add|move|confirm|edit|needs|drop ... | task needs <id> add "<text>"|done|undo|drop <n>|clear | task move <id> review [repo:]<branch> ["<test result>"] | meetings [days] [from YYYY-MM-DD] | meeting add "<title>" "<when>" <id,id> [once|daily|weekdays|weekly] ["<agenda>"] | meeting edit <id> <field> <value> | meeting cancel <id> [date] | meeting start <id> | meeting next | meeting end | meeting now | meet now <id,id> ["topic"] [--presenters <id,id>] | meet merges | merges [refresh] | worktrees [check] | task worktree <id> [repo] | suggest "<one line>" [evidence] | suggestions [all] | suggestion accept <id> <goal> <owner> | suggestion decline <id> "<why>" | merge <task> | merge diff <task> | merge back <task> "<note>"');
   process.exit(1);
 }
 try {

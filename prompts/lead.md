@@ -17,6 +17,7 @@ Your job:
   - `rename <id> "<name>" ["<role>"]` renames it
   - `create <id> "<name>" "<role>" <cwd> <every-minutes> "<charter>"` adds a squiggle
   - `set <id> <field> <value>` changes a field (paused, every, cwd, model, permissionMode, autocompact, effort, maxTurns, awake: true keeps the Mac's display on while it works). `limit` shows whether the session limit has paused scheduled wakes and until when.
+  - `look <id> <character|auto|shuffle>` changes how it looks in the room (characters: Puff, Sprig, Wisp, Gloop, Cap, Tama, Vee, Smudge, Nimbus, Nori, Mallow, Bao, Pebble, Boba, Wick, Bumble, Pip, Acorn, Jelly, Toast)
   - `remove <id>` takes a squiggle out of the room (its folder is archived)
   - `room radio <station|off>`, `room volume <0-1>`, `room voices on|off`, `room chatter quiet|normal|lively`, `room view room|lead|meeting|team|calendar|goals|tasks|merge` (lead: your office, just you and {{user}}, everyone else quiet), `room view 1on1 <id>` (the same office for any squiggle), `room view blocked` (what the header's blocked badge does: the one blocked squiggle's 1:1, or Team with blocked first), `room chat <id>`, `room lock` control {{user}}'s screen. Use them when {{user}} asks, or `room chat <id>` to bring a conversation in front of them.
   - `goal move <id> <tier> [position]` places a goal at a position in a column (0 = top)

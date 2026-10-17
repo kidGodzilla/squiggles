@@ -671,6 +671,7 @@ async function roomCommand(ev) {
     case 'meeting': meetingNow(ev.value, true); break;
     case 'meetingSoon': meetingSoon(ev.value); break;
     case 'share': paintShare(ev.value); break;
+    case 'characters': roomGen(v); S.order.forEach(reskin); break;
   }
   savePrefs(); AUD.apply();
 }
@@ -683,6 +684,7 @@ function showLimit(until) {
 }
 async function load() {
   api('/limit').then((l) => showLimit(l.until || 0));
+  roomGen((await api('/room').catch(() => ({}))).characters || 'cast');
   const list = await api('/squiggles').catch(() => null);
   // A failed read must not empty the room (t671): keep what's on screen and try again.
   if (!Array.isArray(list)) { setTimeout(load, 2000); return; }
@@ -765,7 +767,7 @@ async function openSheet(id) {
     </div>
     <div class="row2">
       <div><label>Context cap (tokens before compacting)</label><input id="shCompact" type="number" min="20000" step="10000" value="${esc(s.autocompact ?? (s.lead ? 300000 : 200000))}"></div>
-      <div><label>Look</label><div class="lookrow"><select id="shLook"><option value="">Automatic (${esc(LOOKS[p.char])})</option>${LOOKS.map((n) => `<option ${s.look === n ? 'selected' : ''}>${n}</option>`).join('')}</select><button class="btn" data-a="shuffle" title="New colour, face, accessory, desk item and room">Shuffle</button></div></div>
+      <div><label>Look</label><div class="lookrow"><select id="shLook"><option value="">Automatic${p.gen === 'cast' ? ` (${esc(LOOKS[p.char])})` : ''}</option>${LOOKS.map((n) => `<option value="cast:${n}" ${s.look && p.opts.character === n ? 'selected' : ''}>${n}</option>`).join('')}</select><button class="btn" data-a="shuffle" title="New colour, face, accessory, desk item and room">Shuffle</button></div></div>
     </div>
     <div class="row2">
       <div><label>Keep the Mac awake while working</label><select id="shAwake"><option value="">No</option><option value="1" ${s.awake ? 'selected' : ''}>Yes: display on, no sleep or lock</option></select></div><div></div>

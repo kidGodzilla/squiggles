@@ -25,6 +25,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Task ids in chats, journals and notes are links; hovering or tapping shows the task, clicking opens it on the board.
 - A chat's header face and name open that squiggle's 1:1.
 - Suggestions: squiggles file things outside their tasks with `suggest "<one line>"`; the lead accepts one as a task or declines it with a reason (`suggestions`, `suggestion accept|decline`), on the board too, and the author hears back at its next wake.
+- `look <id> <character|auto|shuffle>` sets a squiggle's character; looks take a generator (`cast:Puff`), and `room characters <generator>` sets the room default, saved in room.json.
 
 ### Changed
 - New installs default to port 4327 (was 4317). Existing rooms keep the port in their config.json.
