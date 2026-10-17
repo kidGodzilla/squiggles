@@ -59,6 +59,7 @@
     <div id="stage"></div>
     <button class="chip" id="officeBack">Back to the Room</button>
     <div id="meetBar"><div><b id="meetTitle"></b> <span id="meetWhen"></span></div><p id="meetAgenda"></p><div class="row"><span id="meetTurn" hidden></span><button class="chip go" id="meetNext" hidden></button><button class="chip" id="meetBack">Back to the Room</button><button class="chip" id="meetEnd">End meeting</button></div></div>
+    <div id="meetThread"><div class="msgs"></div><form><textarea rows="1" placeholder="Message everyone, or @name"></textarea><button class="send">Send</button></form></div>
     <form id="callBar"><span id="callState">Not in a call</span><input id="callUrl" type="url" placeholder="Teams meeting link" autocomplete="off"><input id="callUntil" type="time" title="Ends at (optional): Lead leaves 5 minutes after"><button class="chip go" id="callJoin">Join call</button><button type="button" class="chip" id="callLeave">Leave</button></form>
     <div id="toasts"></div>
   </section>
@@ -85,7 +86,7 @@
     <div class="cork"><div class="corkcols" id="corkcols"></div></div>
   </section>
   <section id="mergeView" class="bview">
-    <div class="btool"><span id="mcount"></span><span class="sp"></span><button class="chip" id="mrefresh">Refresh</button></div>
+    <div class="btool"><span id="mcount"></span><span class="sp"></span><button class="chip" id="mmeet">Merge review now</button><button class="chip" id="mrefresh">Refresh</button></div>
     <div class="mq" id="mq"></div>
   </section>
   <div id="pop" class="pop"></div>

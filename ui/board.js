@@ -292,6 +292,12 @@ async function mergeBranch(m, btn) {
   AUD.ding(); toast(`Merged ${m.branch} at ${r.sha}`); loadMerges(); return true;
 }
 $('#diffBox').onclick = (e) => { if (e.target.id === 'diffBox') closeDiff(); };
+// Merge review now (t599): a meeting where the squiggles with branches in review present them. CLI: meet merges.
+$('#mmeet').onclick = async () => {
+  const r = await api('/meetings', { op: 'merges', by: me().id });
+  if (r?.error) return toast(r.error);
+  toast(`Merge review on: ${r.presenters.map((id) => S.sq[id]?.name || id).join(', ')}`);
+};
 $('#mrefresh').onclick = async () => {
   const r = await api('/merges', { op: 'refresh' });
   if (r?.closed?.length) toast(`Closed ${r.closed.map((c) => `${c.id} (${c.why})`).join(', ')}`);
@@ -432,6 +438,7 @@ function meetingForm(m, date, occ) {
       <div><label>Repeats</label><select id="cmR">${Object.keys(REPEAT_WORD).map((r) => `<option value="${r}" ${(m?.repeat || 'once') === r ? 'selected' : ''}>${REPEAT_WORD[r] || 'Once'}</option>`).join('')}</select></div></div>
     <label>Who</label><div class="calwho">${S.order.map((id) => `<label><input type="checkbox" value="${esc(id)}" ${who.has(id) ? 'checked' : ''}>${esc(S.sq[id].name)}</label>`).join('')}</div>
     <label>Presenters, in order (optional)</label><input id="cmP" value="${esc((m?.presenters || []).map((id) => S.sq[id]?.name || id).join(', '))}" placeholder="Empty: everyone briefs at once. Or e.g. Vex, Otto">
+    <div class="calwho"><label><input type="checkbox" id="cmS" ${m?.showtell ? 'checked' : ''}>Show and tell: each presenter's agenda is their work since the last one</label></div>
     <label>Agenda</label><textarea id="cmA" class="grow" rows="4" placeholder="What to cover; attendees get this when they wake">${esc(m?.agenda || '')}</textarea>
     ${occ?.past && S.meeting?.id !== m.id ? `<label>Notes</label>${occ.notes ? `<pre class="calnotes">${esc(occ.notes)}</pre>` : `<p class="calempty">${occ.past === 'done' ? 'No notes in runs/meetings.log.' : 'It never started.'}</p>`}`
       : m ? `<div class="row">${S.meeting?.id === m.id ? '<button class="go" data-a="join">Join</button>' : '<button class="go" data-a="start">Meet now</button>'}</div>` : ''}
@@ -444,11 +451,11 @@ function editMeeting(anchor, id, date, start) {
       const a = e.target.dataset.a; if (!a) return;
       let r;
       if (a === 'save') {
-        const v = (s) => pop.querySelector(s).value, attendees = [...pop.querySelectorAll('.calwho input:checked')].map((x) => x.value);
+        const v = (s) => pop.querySelector(s).value, attendees = [...pop.querySelectorAll('.calwho input:checked:not(#cmS)')].map((x) => x.value);
         // Presenters by name or id, in the order typed.
         const byName = (x) => S.order.find((id) => id === x || S.sq[id].name.toLowerCase() === x.toLowerCase()) || x;
         const presenters = v('#cmP').split(',').map((x) => x.trim()).filter(Boolean).map(byName);
-        const f = { title: v('#cmT').trim(), at: v('#cmW'), minutes: Number(v('#cmM')) || 30, repeat: v('#cmR'), agenda: v('#cmA').trim(), attendees, presenters };
+        const f = { title: v('#cmT').trim(), at: v('#cmW'), minutes: Number(v('#cmM')) || 30, repeat: v('#cmR'), agenda: v('#cmA').trim(), attendees, presenters, showtell: pop.querySelector('#cmS').checked };
         r = await api('/meetings', m ? { op: 'edit', id: m.id, ...f } : { op: 'add', by: me().id, ...f });
         if (!r?.error) toast(m ? `Saved ${r.title}` : `Scheduled ${r.title}`);
       }
@@ -466,17 +473,20 @@ $('#calPrev').onclick = () => { B.week.setDate(B.week.getDate() - 7); loadCal();
 $('#calNext').onclick = () => { B.week.setDate(B.week.getDate() + 7); loadCal(); syncUrl(); };
 $('#calToday').onclick = () => { B.week = mondayOf(new Date()); loadCal(); syncUrl(); };
 $('#calAdd').onclick = (e) => editMeeting(e.currentTarget);
-// New meeting (t146, was Meet now): pick who and an optional topic; a 30-minute meeting starts at once. CLI: meet now <id,id> ["topic"].
+// New meeting (t146, was Meet now): pick who, an optional topic and presenters (t604; default: the attendees); a 30-minute meeting starts at once. CLI: meet now <id,id> ["topic"] [--presenters <id,id>].
 function meetNowPop(anchor, id) {
   const who = new Set([id || leadId()].filter(Boolean));
   showPop(anchor, `<label>New meeting with</label><div class="calwho">${S.order.map((x) => `<label><input type="checkbox" value="${esc(x)}" ${who.has(x) ? 'checked' : ''}>${esc(S.sq[x].name)}</label>`).join('')}</div>
     <label>Topic (optional)</label><input id="mnT" placeholder="What it's about">
+    <label>Presenters, in order (optional)</label><input id="mnP" placeholder="Empty: everyone ticked, in this order">
     <div class="row"><button class="go" data-a="start">Start, 30 minutes</button></div>`, (pop) => {
     pop.querySelector('#mnT').onkeydown = (e) => { if (e.key === 'Enter') pop.querySelector('[data-a=start]').click(); };
     pop.onclick = async (e) => {
       if (e.target.dataset.a !== 'start') return;
       const attendees = [...pop.querySelectorAll('.calwho input:checked')].map((x) => x.value);
-      const r = await api('/meetings', { op: 'now', attendees, topic: pop.querySelector('#mnT').value.trim(), by: me().id });
+      const byName = (n) => S.order.find((x) => x === n.toLowerCase() || S.sq[x].name.toLowerCase() === n.toLowerCase()) || n;
+      const presenters = pop.querySelector('#mnP').value.split(',').map((x) => x.trim()).filter(Boolean).map(byName);
+      const r = await api('/meetings', { op: 'now', attendees, presenters, topic: pop.querySelector('#mnT').value.trim(), by: me().id });
       if (r?.error) return toast(r.error);
       closePop(); toast(`Meeting on: ${r.title}`);
     };

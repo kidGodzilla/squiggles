@@ -511,7 +511,8 @@ const meetingNow = () => persisted['*meeting'] || null;
 function startMeeting(m, by = 'calendar') {
   if (meetingNow()) throw new Error(`${meetingNow().title} is still on: end it first`);
   const names = m.attendees.map((id) => loadSquiggle(id)?.name || id), paused = limit.until > Date.now(), pres = (m.presenters || []).filter((id) => m.attendees.includes(id));
-  const cur = { id: m.id, title: m.title, agenda: m.agenda || '', attendees: m.attendees, ...(pres.length ? { presenters: pres, turn: 0 } : {}), start: m.start, end: m.end, key: `${m.id}@${m.start}`, by, at: Date.now() };
+  const showtell = pres.length && meetings.all().find((x) => x.id === m.id)?.showtell;
+  const cur = { id: m.id, title: m.title, agenda: m.agenda || '', attendees: m.attendees, ...(pres.length ? { presenters: pres, turn: 0 } : {}), ...(showtell ? { since: lastShow(m) } : {}), start: m.start, end: m.end, key: `${m.id}@${m.start}`, by, at: Date.now() };
   persisted['*meeting'] = cur; persisted['*started'] = [...(persisted['*started'] || []), cur.key].slice(-100); saveState();
   broadcast('*room', { k: 'room', action: 'meeting', value: cur });
   if (by === 'calendar') macAlert(`Meeting now: ${m.title}`, `${m.title} has started with ${names.join(', ')}. Join it in the room?`, true);
@@ -522,26 +523,54 @@ function startMeeting(m, by = 'calendar') {
     if (!loadSquiggle(id)) continue;
     if (pres[0] === id) send(id, head + presentPrompt(cur, id), 'harness');
     else if (pres.length) send(id, head + `Presenters take turns: ${order}, then ${USER}'s questions. It isn't your turn yet: post nothing now. `
-      + `Read what bears on the agenda so you're ready. You'll get a message when it's your turn; until then answer only what ${USER} asks you in your chat, briefly.`, 'harness');
-    else send(id, head + `${User} runs it from the meeting view, where your chat is open next to the others'. Check your board and journal for what bears on the agenda, `
+      + `Read what bears on the agenda so you're ready. You'll get a message when it's your turn. The meeting is one shared thread: you hear only what ${USER} addresses to you; answer that briefly.`, 'harness');
+    else send(id, head + `${User} runs it from the meeting view: one shared thread with everyone's messages. Check your board and journal for what bears on the agenda, `
       + `then post a short brief: what you did, what you need from ${USER}. Answer questions in your chat until the meeting ends. Keep it brief; journal any decisions.`, 'harness');
   }
   return cur;
 }
 // Meet now (t146): an unscheduled meeting that starts at once, 30 minutes unless said otherwise.
-function meetNow({ attendees, topic = '', minutes = 30, by = 'owner' } = {}) {
-  const ids = (Array.isArray(attendees) ? attendees : String(attendees || '').split(',')).map((x) => String(x).trim()).filter(Boolean);
+// Presenters (t604): given order, else the attendees in the order given; one presenter at a time.
+function meetNow({ attendees, presenters, topic = '', agenda, minutes = 30, by = 'owner' } = {}) {
+  const list = (v) => (Array.isArray(v) ? v : String(v || '').split(',')).map((x) => String(x).trim()).filter(Boolean);
+  const ids = list(attendees), pres = list(presenters);
   if (!ids.length) throw new Error('pick at least one attendee');
-  const bad = ids.filter((id) => !loadSquiggle(id)); if (bad.length) throw new Error(`no squiggle ${bad.join(', ')}`);
+  const bad = [...ids, ...pres].filter((id) => !loadSquiggle(id)); if (bad.length) throw new Error(`no squiggle ${bad.join(', ')}`);
+  for (const id of pres) if (!ids.includes(id)) ids.push(id);
   const s = new Date(), e = new Date(s.getTime() + (Number(minutes) || 30) * 60000), t = String(topic).trim();
-  return startMeeting({ id: `now-${s.getTime().toString(36)}`, title: t || 'Meet now', agenda: t, attendees: ids, start: local(s), end: local(e) }, by);
+  return startMeeting({ id: `now-${s.getTime().toString(36)}`, title: t || 'Meet now', agenda: agenda ?? t, attendees: ids, presenters: pres.length ? pres : ids, start: local(s), end: local(e) }, by);
+}
+// Merge review now (t599): squiggles with branches in review present them, urgent or prod first, then security, then most commits and oldest; at most 5.
+function mergeMeeting(by = 'owner') {
+  const hot = (x) => /\burgent\b|\bprod\b|outage|hotfix/i.test(x.title), sec = (x) => x.owner === 'security' || /secur|vuln|cve|secret/i.test(x.title);
+  const per = {};
+  for (const x of board.merges()) if (x.owner && loadSquiggle(x.owner)) (per[x.owner] = per[x.owner] || []).push(x);
+  const score = (xs) => [xs.some(hot) ? 1 : 0, xs.some(sec) ? 1 : 0, xs.reduce((n, x) => n + (x.ahead || 0), 0), Math.max(...xs.map((x) => x.age || 0))];
+  const ids = Object.keys(per).sort((a, b) => { const A = score(per[a]), B = score(per[b]); for (let i = 0; i < 4; i++) if (A[i] !== B[i]) return B[i] - A[i]; return 0; }).slice(0, 5);
+  if (!ids.length) throw new Error('nothing is in review');
+  const line = (x) => `- ${x.id} ${String(x.title).slice(0, 90)} (${path.basename(x.repo || '')}:${x.branch}, ${x.ahead ?? '?'} ahead${x.stale ? ', stale' : ''}) diff: http://localhost:${PORT}/?view=merge&diff=${x.id}${x.compare ? ` compare: ${x.compare}` : ''}`;
+  const agenda = `Merge review. Each presenter walks ${USER} through their branches: what each changes for them, how it was tested, the risk. ${User} merges or sends back.\n`
+    + ids.map((id) => `${loadSquiggle(id)?.name || id}:\n${per[id].map(line).join('\n')}`).join('\n');
+  return meetNow({ attendees: ids, presenters: ids, topic: 'Merge review', agenda, by });
+}
+// Show and tell (t131): since the last time this meeting ran (else a week ago); a presenter's agenda is their notes done or in review since then.
+function lastShow(m) {
+  const prev = (persisted['*started'] || []).filter((k) => k.startsWith(`${m.id}@`)).map((k) => k.slice(m.id.length + 1)).filter((s) => s < m.start).sort().pop();
+  return (prev || local(new Date(new Date(m.start).getTime() - 7 * 864e5))).slice(0, 10);
+}
+function showItems(id, since) {
+  let ts = []; try { ts = board.tasks(); } catch {}
+  return ts.filter((t) => t.owner === id && ((t.status === 'done' && (t.finished || '') >= since) || (t.status === 'review' && (t.reviewed || '') >= since)))
+    .slice(-12).map((t) => `- ${t.id} ${String(t.title).slice(0, 110)}${t.status === 'review' ? ' (in review)' : ''}`);
 }
 // A presenter's turn: one spoken summary (the room reads it aloud), visuals through tools (shown on the shared screen), then questions.
 function presentPrompt(cur, id) {
   const n = cur.presenters.length, i = cur.presenters.indexOf(id);
-  return `Your turn to present (${i + 1} of ${n}). Present your part of the agenda now in one chat message ${USER} can hear in about 60 seconds: `
+  const items = cur.since ? showItems(id, cur.since) : null;
+  const own = !items ? '' : items.length ? `Your agenda is your work since ${cur.since}:\n${items.join('\n')}\nShow what each one changed for ${USER}, not how. ` : `You have no notes done or in review since ${cur.since}: say so in one line and what you're on now. `;
+  return own + `Your turn to present (${i + 1} of ${n}). Present your part of the agenda now in one chat message ${USER} can hear in about 60 seconds: `
     + `about 150 words, plain words, no tables or code. If a diagram, file or page helps, open it with a tool (Read an image or file, run a command): the room shows your tool output on the shared screen while you present. `
-    + `Then stop and answer ${USER}'s questions in your chat, briefly, until they move on to the next presenter. Journal any decisions.`;
+    + `Then stop and answer ${USER}'s questions in the meeting thread, briefly, until they move on to the next presenter. Journal any decisions.`;
 }
 // The user moves the floor on: the next presenter gets their turn; after the last, open questions.
 function nextTurn() {
@@ -809,6 +838,7 @@ const server = http.createServer(async (req, res) => {
       if (b.op === 'end') return json(res, endMeeting());
       if (b.op === 'next') return json(res, nextTurn());
       if (b.op === 'now') return json(res, meetNow(b));
+      if (b.op === 'merges') return json(res, mergeMeeting(b.by));
       if (b.op === 'start') {
         // Start now, ahead of time: today's (or the next) occurrence, keeping its length.
         const m = meetings.all().find((x) => x.id === b.id); if (!m) throw new Error(`no meeting ${b.id}`);

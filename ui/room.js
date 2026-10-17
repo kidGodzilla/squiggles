@@ -333,6 +333,8 @@ const chatLine = (id, ev) => {
 };
 function chatEvent(id, ev, live) {
   const line = chatLine(id, ev); if (!line) return;
+  line.ts = +new Date(ev.ts || Date.now());
+  if (S.meeting?.attendees.includes(id)) queueThread();
   (S.hist[id] = S.hist[id] || []).push(line); if (S.hist[id].length > 300) S.hist[id].shift();
   const cw = document.getElementById('cw-' + id);
   if (cw && !cw.classList.contains('min')) return appendLine(cw, line, live && line.cls !== 'm you');
@@ -446,7 +448,7 @@ function mentionPick(i) {
   ta.value = ta.value.slice(0, MN.at) + ins + ta.value.slice(end); ta.selectionStart = ta.selectionEnd = MN.at + ins.length;
   mentionClose(); ta.focus(); ta.dispatchEvent(new Event('input', { bubbles: true }));
 }
-const chatInput = (t) => t?.tagName === 'TEXTAREA' && t.closest('.cw form');
+const chatInput = (t) => t?.tagName === 'TEXTAREA' && t.closest('.cw form, #meetThread form');
 document.addEventListener('input', (e) => { if (!chatInput(e.target)) return; paintMirror(e.target); if (e.isTrusted || MN.ta) mentionOpen(e.target); });
 document.addEventListener('focusin', (e) => { if (chatInput(e.target)) paintMirror(e.target); });
 document.addEventListener('focusout', (e) => { if (e.target === MN.ta) setTimeout(mentionClose, 120); });
@@ -771,7 +773,8 @@ function setOffice(who) {
     S.queue = S.queue.filter((q) => ids.includes(q.id));
     for (const id of [...S.speakers]) if (!ids.includes(id)) { stopTalk(id); S.src?.stop?.(); }
     hidePresent();
-    for (const id of ids) { tileOf(id)?.classList.add('office'); openChat(id)?.classList.add('office'); }
+    // A meeting has one shared thread (t604), not a chat per attendee.
+    for (const id of ids) { tileOf(id)?.classList.add('office'); if (!document.body.classList.contains('v-meet')) openChat(id)?.classList.add('office'); }
     $('#officeBack').textContent = `Back to the Room`;
   }
   layout(); layoutMeet();
@@ -835,15 +838,54 @@ $('#meetEnd').onclick = async () => {
   if (r.error) toast(r.error);
 };
 $('#meetBack').onclick = () => setView('room');
-// Meeting view: the attendees' chats share the space right of the stage, under the meeting bar.
+// Meeting view (t604): one shared thread under the meeting bar: every attendee's messages and the user's, in time order, one presenter at a time.
 function layoutMeet() {
-  if (!document.body.classList.contains('v-meet')) { document.querySelectorAll('#chats .cw').forEach((cw) => ['--mx', '--my', '--mw', '--mh'].forEach((k) => cw.style.removeProperty(k))); return; }
-  const cws = S.officeIds.map((id) => document.getElementById('cw-' + id)).filter(Boolean), bar = $('#meetBar'), on = presenter();
-  document.querySelectorAll('#chats .cw').forEach((cw) => cw.classList.toggle('presenting', cw.id === 'cw-' + on));
-  const side = document.body.classList.contains('sharing') ? Math.min(innerWidth * 0.52, 820) : Math.min(innerWidth * 0.36, 420);
-  const left = innerWidth <= 760 ? 16 : side + 24, top = bar.getBoundingClientRect().bottom + 12, W = innerWidth - left - 16, H = innerHeight - top - 16;
-  const cols = Math.max(1, Math.min(cws.length, Math.floor(W / 300))), rows = Math.ceil(cws.length / cols), w = (W - (cols - 1) * 12) / cols, h = (H - (rows - 1) * 12) / rows;
-  cws.forEach((cw, i) => { const s = cw.style; s.setProperty('--mx', left + (i % cols) * (w + 12) + 'px'); s.setProperty('--my', top + Math.floor(i / cols) * (h + 12) + 'px'); s.setProperty('--mw', w + 'px'); s.setProperty('--mh', h + 'px'); });
+  if (!document.body.classList.contains('v-meet')) return;
+  document.documentElement.style.setProperty('--mtt', $('#meetBar').getBoundingClientRect().bottom + 12 + 'px');
+  queueThread();
+}
+new ResizeObserver(() => layoutMeet()).observe($('#meetBar'));
+let threadQ = 0;
+const queueThread = () => { if (!threadQ) threadQ = requestAnimationFrame(() => { threadQ = 0; paintThread(); }); };
+// What the user sent to several attendees at once shows once, with who it went to.
+function threadLines() {
+  const m = S.meeting; if (!m) return [];
+  const all = m.attendees.flatMap((id) => (S.hist[id] || []).filter((l) => l.ts >= m.at - 2000 && l.cls !== 'm sys').map((l) => ({ id, l }))).sort((a, b) => a.l.ts - b.l.ts), out = [];
+  for (const x of all) {
+    const dup = x.l.cls !== 'm lead' && out.slice(-4).find((o) => o.l.cls === x.l.cls && o.l.text === x.l.text && x.l.ts - o.l.ts < 10000);
+    if (dup) dup.to.push(x.id); else out.push({ ...x, to: [x.id] });
+  }
+  return out;
+}
+const mname = (id) => S.sq[id]?.name || id;
+function paintThread() {
+  if (B.view !== 'meeting' || !S.meeting) return;
+  const box = $('#meetThread .msgs'), on = presenter(), rows = threadLines();
+  box.innerHTML = rows.length ? '' : `<div class="empty">${on ? `${esc(mname(on))} presents first. Everyone's messages show here.` : "Everyone's messages show here."}</div>`;
+  for (const { id, l, to } of rows) {
+    const d = document.createElement('div'); d.className = l.cls + (l.cls === 'm lead' && id === on ? ' pres' : '');
+    if (l.cls === 'm lead') d.innerHTML = `<span class="spk">${esc(mname(id))}${id === on ? ', presenting' : ''}</span>` + l.html;
+    else { d.textContent = l.text; const t = document.createElement('span'); t.className = 'to'; t.textContent = `To ${to.map(mname).join(', ')}`; d.prepend(t); }
+    box.appendChild(d);
+  }
+  if (box.pinned !== false) pinBottom(box);
+  $('#meetThread textarea').placeholder = on ? `Message ${mname(on)}, or @name` : 'Message everyone, or @name';
+}
+// Who hears the user: anyone @named, else the presenter, else (no presenters, or open questions) every attendee.
+function threadTo(text) {
+  const m = S.meeting; if (!m) return [];
+  const ids = m.attendees.filter((id) => S.sq[id]), at = (n) => new RegExp(`@${n.replace(/[^\w]/g, '')}\\b`, 'i');
+  const named = ids.filter((id) => at(id).test(text) || at(S.sq[id].name).test(text));
+  return named.length ? named : presenter() ? [presenter()] : ids;
+}
+{
+  const f = $('#meetThread form'), ta = f.querySelector('textarea');
+  pinChat($('#meetThread .msgs'));
+  const autosize = () => { ta.style.height = 'auto'; ta.style.height = Math.min(140, ta.scrollHeight) + 'px'; };
+  const send = async () => { const t = ta.value.trim(); if (!t) return; ta.value = ''; autosize(); paintMirror(ta); mentionClose(); pinBottom($('#meetThread .msgs')); for (const id of threadTo(t)) await api(`/squiggles/${id}/send`, { text: t, from: 'owner', human: me().id }); };
+  ta.addEventListener('input', autosize);
+  ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); } });
+  f.onsubmit = (e) => { e.preventDefault(); send(); };
 }
 addEventListener('resize', () => layoutMeet());
 $('#officeBack').onclick = () => setView('room');

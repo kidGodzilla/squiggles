@@ -9,6 +9,9 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - The speaker stays visible: their tile scrolls into view, or a caption shows their face and words.
 - Owner faces on Merge and Tasks open a 1:1 with the item drafted.
 - Phone: the lead's unread count shows on the Lead tab.
+- Meetings are one shared thread with one presenter at a time; `meet now` takes `--presenters`.
+- Show and tell meetings (`meeting edit <id> showtell on`) build each presenter's agenda from their work since the last one.
+- Merge review: `meet merges` has squiggles with branches in review present them, most urgent first.
 
 ### Changed
 - Merge leaves your checkout alone: it merges where the base branch is checked out only after a conflict check, otherwise in a temp worktree.

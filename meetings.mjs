@@ -69,7 +69,9 @@ export function createMeetings(root, onChange, { isSquiggle = () => true } = {})
       .sort((a, b) => a.start.localeCompare(b.start));
   }
 
-  function op({ op, id, title, agenda, attendees, presenters, at, when, minutes, repeat, date, by }) {
+  // showtell (t131): each presenter's agenda is built from their tasks done or in review since the last one.
+  const flag = (v) => v === true || v === 'true' || v === 'on' || v === 1;
+  function op({ op, id, title, agenda, attendees, presenters, showtell, at, when, minutes, repeat, date, by }) {
     const m = all();
     if (op === 'add') {
       if (!String(title || '').trim()) throw new Error('a meeting needs a title');
@@ -77,7 +79,7 @@ export function createMeetings(root, onChange, { isSquiggle = () => true } = {})
       const n = m.reduce((x, k) => Math.max(x, parseInt(String(k.id).slice(1), 10) || 0), 0) + 1;
       const who = people(attendees), pres = order(presenters, who);
       const mt = { id: 'm' + n, title: String(title).trim(), attendees: who, at: at ? checkAt(at) : parseWhen(when), minutes: Number(minutes) || 30, repeat: r,
-        ...(pres.length ? { presenters: pres } : {}), ...(agenda ? { agenda: String(agenda).trim() } : {}), ...(by ? { by } : {}), created: local(new Date()) };
+        ...(pres.length ? { presenters: pres } : {}), ...(flag(showtell) ? { showtell: true } : {}), ...(agenda ? { agenda: String(agenda).trim() } : {}), ...(by ? { by } : {}), created: local(new Date()) };
       m.push(mt); save(m); return mt;
     }
     const mt = find(m, id);
@@ -92,6 +94,7 @@ export function createMeetings(root, onChange, { isSquiggle = () => true } = {})
       if (attendees !== undefined) { mt.attendees = people(attendees); if (mt.presenters) mt.presenters = mt.presenters.filter((x) => mt.attendees.includes(x)); }
       if (presenters !== undefined) { const pres = order(presenters, mt.attendees); if (pres.length) mt.presenters = pres; else delete mt.presenters; }
       if (mt.presenters && !mt.presenters.length) delete mt.presenters;
+      if (showtell !== undefined) { if (flag(showtell)) mt.showtell = true; else delete mt.showtell; }
       if (at || when) mt.at = at ? checkAt(at) : parseWhen(when);
       if (minutes !== undefined) mt.minutes = Number(minutes) || 30;
       if (repeat !== undefined) { if (!REPEATS.includes(repeat)) throw new Error(`repeat must be one of ${REPEATS.join(', ')}`); mt.repeat = repeat; }

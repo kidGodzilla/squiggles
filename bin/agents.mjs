@@ -86,7 +86,7 @@ const cmds = {
     : (await call('/merges')).map((m) => m.error
     ? `${m.id}  ${m.title}  ${m.repo}:${m.branch}  — ${m.error}`
     : `${m.id}  ${m.title}  ${m.repo}:${m.branch}  ${m.ahead} ahead${m.behind ? `, ${m.behind} behind` : ''} of ${m.base}  ${m.age}d${m.stale ? ' STALE' : ''}${m.owner ? `  @${m.owner}` : ''}${m.result ? `  — ${m.result}` : '  — no test result'}${m.desktop ? `\n    desktop: ${m.desktop}` : ''}${m.compare ? `\n    github: ${m.compare}` : ''}`).join('\n') || 'nothing in review',
-  // meetings [days] [from YYYY-MM-DD] (past ones say Done or Missed) | meeting add "<title>" "<when>" <id,id> [once|daily|weekdays|weekly] ["<agenda>"] | meeting edit <id> <field> <value> (presenters <id,id> sets the turn order) | meeting cancel <id> [date] | meeting start <id> | meeting next | meeting end | meeting now
+  // meetings [days] [from YYYY-MM-DD] (past ones say Done or Missed) | meeting add "<title>" "<when>" <id,id> [once|daily|weekdays|weekly] ["<agenda>"] | meeting edit <id> <field> <value> (presenters <id,id> sets the turn order; showtell true|false builds each presenter's agenda from their work since the last one) | meeting cancel <id> [date] | meeting start <id> | meeting next | meeting end | meeting now
   meetings: async () => {
     const { upcoming } = await call(`/meetings?days=${Number(a[0]) || 7}${a[1] ? `&from=${a[1]}T00:00` : ''}`);
     const day = (s) => new Date(s).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
@@ -95,7 +95,7 @@ const cmds = {
   meeting: async () => {
     const [op, ...r] = a, fmt = (m) => `${m.id} ${m.title}: ${m.at.replace('T', ' ')}, ${m.minutes} min, ${m.repeat}, with ${m.attendees.join(', ')}`;
     if (op === 'add') return fmt(await call('/meetings', { op, title: r[0], when: r[1], attendees: r[2], repeat: ['once', 'daily', 'weekdays', 'weekly'].includes(r[3]) ? r[3] : undefined, agenda: ['once', 'daily', 'weekdays', 'weekly'].includes(r[3]) ? r[4] : r[3], by: process.env.AGENTS_ID || 'owner' }));
-    if (op === 'edit') { if (!['title', 'agenda', 'attendees', 'presenters', 'when', 'minutes', 'repeat'].includes(r[1])) throw new Error('meeting edit <id> title|agenda|attendees|presenters|when|minutes|repeat <value>'); return fmt(await call('/meetings', { op, id: r[0], [r[1]]: r.slice(2).join(' ') })); }
+    if (op === 'edit') { if (!['title', 'agenda', 'attendees', 'presenters', 'showtell', 'when', 'minutes', 'repeat'].includes(r[1])) throw new Error('meeting edit <id> title|agenda|attendees|presenters|showtell|when|minutes|repeat <value>'); return fmt(await call('/meetings', { op, id: r[0], [r[1]]: r.slice(2).join(' ') })); }
     if (op === 'cancel') { const m = await call('/meetings', { op, id: r[0], date: r[1] }); return m.cancelled ? `${m.id} cancelled` : `${m.id} skips ${m.skip.at(-1)}`; }
     if (op === 'start') { const m = await call('/meetings', { op, id: r[0] }); return `meeting on: ${m.title}, ${m.start.slice(11)} to ${m.end.slice(11)}, attendees woken`; }
     if (op === 'end') { await call('/meetings', { op }); return 'meeting ended'; }
@@ -104,10 +104,13 @@ const cmds = {
     if (op === 'list' || !op) return cmds.meetings();
     throw new Error('meeting add|edit|cancel|start|next|end|now|list');
   },
-  // meet now <id,id> ["topic"]: a 30-minute meeting that starts at once
+  // meet now <id,id> ["topic"] [--presenters <id,id>]: a 30-minute meeting that starts at once; presenters default to the attendees in order
   meet: async () => {
-    if (a[0] !== 'now' || !a[1]) throw new Error('meet now <id,id> ["topic"]');
-    const m = await call('/meetings', { op: 'now', attendees: a[1], topic: a.slice(2).join(' '), by: process.env.AGENTS_ID || 'owner' });
+    // meet merges (t599): squiggles with branches in review present them, most urgent first, at most 5
+    if (a[0] === 'merges') { const m = await call('/meetings', { op: 'merges', by: process.env.AGENTS_ID || 'owner' }); return `merge review on: ${m.presenters.join(', ')} present, in that order`; }
+    if (a[0] !== 'now' || !a[1]) throw new Error('meet now <id,id> ["topic"] [--presenters <id,id>] | meet merges');
+    const pi = a.indexOf('--presenters'), presenters = pi > 0 ? a.splice(pi, 2)[1] : '';
+    const m = await call('/meetings', { op: 'now', attendees: a[1], presenters, topic: a.slice(2).join(' '), by: process.env.AGENTS_ID || 'owner' });
     return `meeting on: ${m.title}, ${m.start.slice(11)} to ${m.end.slice(11)} with ${m.attendees.join(', ')}, attendees woken`;
   },
   merge: async () => {
@@ -158,7 +161,7 @@ const cmds = {
 };
 
 if (!cmds[cmd]) {
-  console.log('usage: agents.mjs list | team | wake <id> [why] | tell <id> <text> | stop <id> | clear <id> | remove <id> | room radio|volume|voices|chatter|view|chat <value> | room view 1on1 <id> | room view blocked|rethink | room lock | room reload | call <teams-url> [until <time>] | call status | call leave | restart | upgrade | limit | inbox | share on|off|status | humans | human add "<name>" [avatar] | human edit <id> name|avatar <value> | human remove <id> | tail <id> [n] | journal <id> | charter <id> [new text] | rename <id> <name> [role] | create <id> <name> <role> <cwd> <every> <charter> | set <id> <field> <value> | goals | goal add|move|confirm|owner|note|repos|merge|edit|drop ... | tasks [goal|owner] | task add|move|confirm|edit|drop ... | task move <id> review [repo:]<branch> ["<test result>"] | meetings [days] [from YYYY-MM-DD] | meeting add "<title>" "<when>" <id,id> [once|daily|weekdays|weekly] ["<agenda>"] | meeting edit <id> <field> <value> | meeting cancel <id> [date] | meeting start <id> | meeting next | meeting end | meeting now | meet now <id,id> ["topic"] | merges [refresh] | merge <task> | merge diff <task> | merge back <task> "<note>"');
+  console.log('usage: agents.mjs list | team | wake <id> [why] | tell <id> <text> | stop <id> | clear <id> | remove <id> | room radio|volume|voices|chatter|view|chat <value> | room view 1on1 <id> | room view blocked|rethink | room lock | room reload | call <teams-url> [until <time>] | call status | call leave | restart | upgrade | limit | inbox | share on|off|status | humans | human add "<name>" [avatar] | human edit <id> name|avatar <value> | human remove <id> | tail <id> [n] | journal <id> | charter <id> [new text] | rename <id> <name> [role] | create <id> <name> <role> <cwd> <every> <charter> | set <id> <field> <value> | goals | goal add|move|confirm|owner|note|repos|merge|edit|drop ... | tasks [goal|owner] | task add|move|confirm|edit|drop ... | task move <id> review [repo:]<branch> ["<test result>"] | meetings [days] [from YYYY-MM-DD] | meeting add "<title>" "<when>" <id,id> [once|daily|weekdays|weekly] ["<agenda>"] | meeting edit <id> <field> <value> | meeting cancel <id> [date] | meeting start <id> | meeting next | meeting end | meeting now | meet now <id,id> ["topic"] [--presenters <id,id>] | meet merges | merges [refresh] | merge <task> | merge diff <task> | merge back <task> "<note>"');
   process.exit(1);
 }
 try {

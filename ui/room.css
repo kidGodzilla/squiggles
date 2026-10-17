@@ -501,3 +501,16 @@ body.v-lead #callBar { display: flex; flex-wrap: wrap; align-items: center; gap:
 #mentions .mo { display: flex; align-items: center; gap: 10px; padding: 5px 8px; border-radius: 8px; cursor: pointer } #mentions .mo.on, #mentions .mo:hover { background: var(--panel2) }
 #mentions .mf { flex: none; width: 32px; height: 24px; border-radius: 6px; overflow: hidden; display: grid; place-items: center } #mentions .mf svg { width: 100%; height: 100% }
 #mentions b { font-size: 13px } #mentions small { margin-left: auto; color: var(--dim); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0 }
+/* Meeting thread (t604): one shared chat for the whole meeting under the meeting bar; the presenter's lines are marked. */
+#meetThread { display: none }
+body.v-meet #meetThread { display: flex; flex-direction: column; position: fixed; left: calc(min(36vw, 420px) + 24px); right: 16px; top: var(--mtt, 200px); bottom: 16px; z-index: 14; background: rgba(24,26,34,.97); border: 1px solid var(--line); border-radius: 16px }
+@media (min-width: 761px) { body.v-meet.sharing #meetThread { left: calc(min(52vw, 820px) + 24px) } }
+@media (max-width: 760px) { body.v-meet #meetThread { left: 0; right: 0; bottom: max(var(--kb, 0px), var(--tabh, 0px)); border-radius: 18px 18px 0 0; padding-bottom: env(safe-area-inset-bottom) } }
+#meetThread form { display: flex; align-items: flex-end; gap: 6px; margin: 6px 10px 10px; padding: 6px 6px 6px 12px; background: var(--panel2); border: 1px solid var(--line); border-radius: 14px }
+#meetThread form:focus-within { border-color: var(--accent) }
+#meetThread textarea { flex: 1; resize: none; border: 0; outline: 0; background: none; max-height: 140px; padding: 5px 0; line-height: 1.45 }
+#meetThread .send { height: 30px; padding: 0 12px; border-radius: 9px; font-size: 12px; background: var(--accent); color: #0d1020; font-weight: 600 }
+#meetThread .spk { display: block; font-size: 12px; font-weight: 600; color: var(--dim); margin-bottom: 3px }
+#meetThread .m.lead.pres { border-left: 3px solid var(--accent); padding: 6px 10px; background: rgba(138,164,255,.08); border-radius: 4px 10px 10px 4px }
+#meetThread .m.lead.pres .spk { color: var(--accent) }
+#meetThread .m.you .to { display: block; font-size: 11.5px; opacity: .7; margin-bottom: 2px }
