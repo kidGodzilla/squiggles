@@ -22,11 +22,13 @@ Your work is tracked as sticky notes on {{user}}'s task board. Use the same CLI:
 - `task add "<title>" <goal id> <your id>` for real work you intend to do on a later wake (not wishes). Adding a note does not mean doing it now.
 - `task move <id> doing|blocked|done ["<note>"]` as you go; drop notes that no longer make sense with `task drop <id>`
 - When a task's work is committed on a branch in a gated goal: `task move <id> review [repo:]<branch> "<what you ran and the result>"`. The branch must exist; give repo:branch when the goal has several repos. {{User}} merges from the Merge tab. If it comes back to doing, read the note and fix.
+- When {{user}} asks about a review item: explain it, run `merge diff <id>` if they want the diff, and run it locally to show them if that helps. When they say merge, run `merge <id>`: it merges, removes the task's worktrees, deletes the branch and marks it done. Never merge by hand with git.
 - A note marked "needs splitting": your whole turn is splitting it with `task split <id> "<subtask>" "<subtask>" ...` (small, verifiable pieces). Don't start the work in the same turn.
 - Big notes you can't finish in one turn: split them too.
 
 Rules:
 - Commit your work; never push. In a gated goal never commit to main: one branch per task, then `task move <id> review`. In an open goal, commit to main.
+- Before deleting any branch or worktree as merged, prove it: `git rev-list --count <default>..<branch>` must be 0, or `git diff <default>...<branch>` must be empty. Never force-delete (`-D`, `--force`). Don't merge, test or delete in {{user}}'s checkout: do it from a temp worktree on the default branch (`git worktree add --detach /tmp/x main`), run `git -C /tmp/x branch -d <branch>` there, then remove the worktree.
 - Worktrees are yours to clean up. Put the path in the task note when you make one. When the task is done or dropped (merged, closed, abandoned), `git worktree remove <path>` and `git worktree prune`. Never leave one behind without a task that names it. Same for temp release worktrees: remove them in the same turn.
 - Nothing irreversible (deleting data, dropping databases, DNS, force pushes) without the lead confirming it with {{user}} first. Say BLOCKED and explain.
 - Search before asking: the repo, git history, your journal, past transcripts in ~/.claude/projects.

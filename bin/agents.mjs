@@ -111,9 +111,9 @@ const cmds = {
     return `meeting on: ${m.title}, ${m.start.slice(11)} to ${m.end.slice(11)} with ${m.attendees.join(', ')}, attendees woken`;
   },
   merge: async () => {
-    if (a[0] === 'back') return call('/merges', { op: 'back', id: a[1], note: a[2] });
+    if (a[0] === 'back') return call('/merges', { op: 'back', id: a[1], note: a[2], by: process.env.AGENTS_ID || 'owner' });
     if (a[0] === 'diff') { const d = await call(`/merges/${a[1]}/diff`); return `${d.log.join('\n')}\n\n${d.stat}\n\n${d.diff}`; }
-    const r = await call('/merges', { op: 'merge', id: a[0] }); return `${r.id} merged into ${r.base} at ${r.sha}, branch ${r.branch} deleted, task done`;
+    const r = await call('/merges', { op: 'merge', id: a[0], by: process.env.AGENTS_ID || 'owner' }); return `${r.id} merged into ${r.base} at ${r.sha}, branch ${r.branch} deleted, task done`;
   },
   // call <teams-url> [until <time>] | call status | call leave: the lead joins a Teams call through ~/claude-in-call
   call: async () => {

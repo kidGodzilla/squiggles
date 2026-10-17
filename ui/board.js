@@ -155,7 +155,7 @@ function addNote() {
   n.className = `note c${colorOf(B.tgoal)} new`; n.style.setProperty('--r', '-1deg');
   n.innerHTML = '<textarea placeholder="What needs doing?"></textarea>'; notes.prepend(n); notes.scrollTop = 0;
   const ta = n.querySelector('textarea'); ta.focus();
-  const done = async (save) => { const title = ta.value.trim(); ta.onblur = null; if (save && title) await api('/tasks', { op: 'add', title, goal: B.tgoal || undefined, owner: B.towner && B.towner !== '-' ? B.towner : undefined, by: 'owner' }); else renderTasks(); };
+  const done = async (save) => { const title = ta.value.trim(); ta.onblur = null; if (save && title) await api('/tasks', { op: 'add', title, goal: B.tgoal || undefined, owner: B.towner && B.towner !== '-' ? B.towner : undefined, by: me().id }); else renderTasks(); };
   ta.onkeydown = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); done(true); } if (e.key === 'Escape') done(false); };
   ta.onblur = () => done(true);
 }
@@ -217,7 +217,7 @@ function editTask(el) {
       if (a === 'save') { const r = await api('/tasks', { op: 'edit', id: t.id, title: pop.querySelector('#ptT').value.trim() || t.title, goal: pop.querySelector('#ptG').value, owner: pop.querySelector('#ptO').value, ...(branch !== branchOf(t) ? { branch } : {}) }); if (r?.error) { toast(r.error); return; } }
       if (a === 'confirm') await api('/tasks', { op: 'confirm', id: t.id });
       if (a === 'release') await api('/tasks', { op: 'edit', id: t.id, owner: '' });
-      if (a === 'split') { const titles = pop.querySelector('#ptS').value.split('\n').map((x) => x.trim()).filter(Boolean); if (!titles.length) { pop.querySelector('#ptS').focus(); return; } await api('/tasks', { op: 'split', id: t.id, titles, by: 'owner' }); }
+      if (a === 'split') { const titles = pop.querySelector('#ptS').value.split('\n').map((x) => x.trim()).filter(Boolean); if (!titles.length) { pop.querySelector('#ptS').focus(); return; } await api('/tasks', { op: 'split', id: t.id, titles, by: me().id }); }
       if (a === 'mark') await api('/tasks', { op: 'edit', id: t.id, split: !t.split });
       if (a === 'drop') await api('/tasks', { op: 'drop', id: t.id });
       if (a === 'chat') openChat(t.owner);
@@ -287,7 +287,7 @@ function closeDiff(sync = true) { $('#diffBox').classList.remove('on'); B.diff =
 async function mergeBranch(m, btn) {
   if (!confirm(`Merge ${repoName(m.repo)}:${m.branch} into ${m.base}? The branch is deleted and the task marked done.`)) return false;
   btn.disabled = true; btn.textContent = 'Merging';
-  const r = await api('/merges', { op: 'merge', id: m.id }).catch(() => ({ error: 'Merge request failed' })); if (r?.error) { toast(r.error); btn.disabled = false; btn.textContent = 'Merge'; loadMerges(); return false; }
+  const r = await api('/merges', { op: 'merge', id: m.id, by: me().id }).catch(() => ({ error: 'Merge request failed' })); if (r?.error) { toast(r.error); btn.disabled = false; btn.textContent = 'Merge'; loadMerges(); return false; }
   AUD.ding(); toast(`Merged ${m.branch} at ${r.sha}`); loadMerges(); return true;
 }
 $('#diffBox').onclick = (e) => { if (e.target.id === 'diffBox') closeDiff(); };
@@ -303,7 +303,7 @@ $('#mergeView').onclick = async (e) => {
   if (a === 'diff') return openDiff(id);
   if (a === 'back') {
     const note = prompt(`Send "${m.title}" back to ${ownerName(m.owner)}. What should change?`); if (!note || !note.trim()) return;
-    const r = await api('/merges', { op: 'back', id, note: note.trim() }); if (r?.error) return toast(r.error);
+    const r = await api('/merges', { op: 'back', id, note: note.trim(), by: me().id }); if (r?.error) return toast(r.error);
     toast(`Sent back to ${ownerName(m.owner)}`); return loadMerges();
   }
   if (a === 'merge') return mergeBranch(m, e.target);
@@ -445,7 +445,7 @@ function editMeeting(anchor, id, date, start) {
         const byName = (x) => S.order.find((id) => id === x || S.sq[id].name.toLowerCase() === x.toLowerCase()) || x;
         const presenters = v('#cmP').split(',').map((x) => x.trim()).filter(Boolean).map(byName);
         const f = { title: v('#cmT').trim(), at: v('#cmW'), minutes: Number(v('#cmM')) || 30, repeat: v('#cmR'), agenda: v('#cmA').trim(), attendees, presenters };
-        r = await api('/meetings', m ? { op: 'edit', id: m.id, ...f } : { op: 'add', by: 'owner', ...f });
+        r = await api('/meetings', m ? { op: 'edit', id: m.id, ...f } : { op: 'add', by: me().id, ...f });
         if (!r?.error) toast(m ? `Saved ${r.title}` : `Scheduled ${r.title}`);
       }
       // Join a meeting that's on; Meet now starts this event at once (CLI: meeting start <id>, room view meeting).

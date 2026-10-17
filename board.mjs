@@ -211,35 +211,49 @@ export function createBoard(root, onChange) {
     if (r.error) throw new Error(r.error);
     return { ...r, stat: git(r.repo, ['diff', '--stat', `${r.base}...${r.branch}`]), diff: git(r.repo, ['diff', `${r.base}...${r.branch}`]) };
   }
-  // Merge into the base branch in the repo as it stands (the user's checkout). Fast-forward when possible, a merge commit otherwise.
-  // Refuses rather than switching branches or touching uncommitted work; a conflict is aborted and reported.
-  function merge(id) {
+  // Merge into the base branch without touching the user's checkout. Where the base is checked out (their checkout or a
+  // worktree), merge there, but only after git merge-tree proves it conflict-free, so nothing is ever aborted over their
+  // uncommitted work; git itself refuses if a dirty file would be overwritten. Otherwise merge in a temp worktree on the base.
+  // Fast-forward when possible, a merge commit otherwise. A conflict is reported: send it back.
+  // by: who merged or sent back (t142), a human id from the page or a squiggle id from the CLI.
+  function merge(id, by) {
     const task = mergeTask(id), r = mergeInfo(task);
     if (r.error) throw new Error(r.error);
-    if (r.head !== r.base) throw new Error(`${r.repo} is on ${r.head}: check out ${r.base} first`);
-    let sha;
-    if (r.ahead === 0) sha = git(r.repo, ['rev-parse', '--short', r.base]);
-    else {
-      try { git(r.repo, ['merge', '--no-edit', r.branch]); }
-      catch (e) {
-        const out = String(e.stdout || '') + String(e.stderr || '');
-        try { git(r.repo, ['merge', '--abort']); } catch {}
-        throw new Error(/conflict/i.test(out) ? `conflicts merging ${r.branch} into ${r.base}: send it back` : out.trim().split('\n').pop() || 'merge failed');
+    if (r.head === r.branch) throw new Error(`${r.repo} has ${r.branch} checked out: switch it away first`);
+    const wts = git(r.repo, ['worktree', 'list', '--porcelain']).split(/\n\n+/);
+    const onBase = wts.find((b) => b.match(/^branch (.+)$/m)?.[1] === `refs/heads/${r.base}`)?.match(/^worktree (.+)$/m)?.[1];
+    let sha, tmp;
+    try {
+      if (r.ahead > 0) {
+        try { git(r.repo, ['merge-tree', '--write-tree', r.base, r.branch]); }
+        catch (e) { throw new Error(/conflict/i.test(String(e.stdout || '') + String(e.stderr || '')) ? `conflicts merging ${r.branch} into ${r.base}: send it back` : String(e.stderr || e.message).trim().split('\n').pop()); }
+        let at = onBase;
+        if (!at) { tmp = fs.mkdtempSync(path.join(os.tmpdir(), `merge-${id}-`)); fs.rmdirSync(tmp); git(r.repo, ['worktree', 'add', '--quiet', tmp, r.base]); at = tmp; }
+        try { git(at, ['merge', '--no-edit', r.branch]); }
+        catch (e) {
+          const out = (String(e.stdout || '') + String(e.stderr || '')).trim();
+          throw new Error(/commit your changes or stash/i.test(out) ? `${r.base} is checked out at ${at} with uncommitted changes the merge would overwrite: commit or stash them, then merge again` : out.split('\n').filter(Boolean).slice(-3).join(' ') || 'merge failed');
+        }
       }
       sha = git(r.repo, ['rev-parse', '--short', r.base]);
-    }
-    // A branch checked out in a worktree can't be deleted: remove clean worktrees first; a dirty one keeps the branch.
-    const w = dropWorktrees(r.repo, r.branch);
+      // A branch checked out in a worktree can't be deleted: remove clean worktrees first; a dirty one keeps the branch.
+      // branch -d checks against HEAD, so run it where the base is checked out (the user's HEAD may be elsewhere).
+      var w = dropWorktrees(r.repo, r.branch);
+      if (!w.kept.length) {
+        let at = onBase || tmp;
+        if (!at) { tmp = fs.mkdtempSync(path.join(os.tmpdir(), `merge-${id}-`)); fs.rmdirSync(tmp); git(r.repo, ['worktree', 'add', '--quiet', '--detach', tmp, r.base]); at = tmp; }
+        git(at, ['branch', '-d', r.branch]);
+      }
+    } finally { if (tmp) { try { git(r.repo, ['worktree', 'remove', tmp]); } catch {} try { git(r.repo, ['worktree', 'prune']); } catch {} } }
     const kept = w.kept.length ? `; branch kept, worktree with uncommitted work: ${w.kept.join(', ')}` : '';
-    if (!w.kept.length) git(r.repo, ['branch', '-d', r.branch]);
     const t = tasks(), x = t.find((k) => k.id === id);
-    x.status = 'done'; x.finished = today(); x.confirmed = today(); x.merged = `${r.base}@${sha}`;
-    x.note = `merged into ${r.base} at ${sha}${kept}${x.note ? ` — ${x.note}` : ''}`;
+    x.status = 'done'; x.finished = today(); x.confirmed = today(); x.merged = `${r.base}@${sha}`; if (by) x.mergedBy = by;
+    x.note = `merged into ${r.base} at ${sha}${by ? ` by ${by}` : ''}${kept}${x.note ? ` — ${x.note}` : ''}`;
     saveTasks(t); return { ...r, sha, task: x, worktrees: w.removed };
   }
-  function mergeBack(id, note) {
+  function mergeBack(id, note, by) {
     mergeTask(id); if (!String(note || '').trim()) throw new Error('send back needs a note saying what to fix');
-    return taskOp({ op: 'move', id, status: 'doing', note: `sent back: ${String(note).trim()}` });
+    return taskOp({ op: 'move', id, status: 'doing', note: `sent back${by ? ` by ${by}` : ''}: ${String(note).trim()}` });
   }
 
   return { goals, tasks, goalOp, taskOp, merges, mergeSweep, mergeDiff, merge, mergeBack, TIERS, STATUSES, MERGE };

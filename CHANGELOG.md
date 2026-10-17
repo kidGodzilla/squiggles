@@ -2,6 +2,13 @@
 
 Each version lists Added, Changed and Fixed, plus Migrations and Breaking when present. Breaking entries say how to adapt local changes. Data schema is in `config.json`; see docs/upgrading.md.
 
+## 0.1.2 (unreleased)
+
+### Changed
+- Merge leaves your checkout alone: it merges where the base branch is checked out only after a conflict check, otherwise in a temp worktree.
+- Merges, send-backs, task adds and meeting adds record who did them.
+- Squiggles prove a branch is merged before deleting it, and end review talk with `merge <id>`.
+
 ## 0.1.1
 
 ### Security

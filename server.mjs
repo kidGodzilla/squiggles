@@ -806,8 +806,8 @@ const server = http.createServer(async (req, res) => {
     if (p[1] === 'merges' && p[2] && p[3] === 'diff') return json(res, board.mergeDiff(p[2]));
     if (url.pathname === '/api/merges' && req.method === 'POST') {
       const b = await body(req);
-      if (b.op === 'merge') return json(res, board.merge(b.id));
-      if (b.op === 'back') return json(res, board.mergeBack(b.id, b.note));
+      if (b.op === 'merge') return json(res, board.merge(b.id, b.by));
+      if (b.op === 'back') return json(res, board.mergeBack(b.id, b.note, b.by));
       if (b.op === 'refresh') { const closed = board.mergeSweep(); return json(res, { closed, merges: board.merges() }); }
       return json(res, { error: 'op must be merge, back or refresh' }, 400);
     }
