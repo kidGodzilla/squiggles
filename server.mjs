@@ -85,9 +85,10 @@ function saveState() {
 
 // ---------- events ----------
 const clients = new Set();
-function emit(id, ev) {
+// `stored` is what goes in runs/<id>.jsonl when it shouldn't be the whole event (screen content: t854).
+function emit(id, ev, stored) {
   ev = { ts: Date.now(), ...ev };
-  fs.appendFileSync(path.join(RUNS, `${id}.jsonl`), JSON.stringify(ev) + '\n');
+  fs.appendFileSync(path.join(RUNS, `${id}.jsonl`), JSON.stringify(stored ? { ts: ev.ts, ...stored } : ev) + '\n');
   const line = `data: ${JSON.stringify({ id, ev })}\n\n`;
   for (const res of clients) res.write(line);
 }
@@ -382,17 +383,27 @@ function relayMentions(id, text, from, human) {
 // Shared screen in a 1:1 (t664): what a squiggle pins beside its chat until it (or the user) closes it or pins something else.
 // diff <task> from the merge queue, url <http(s) page> in a frame, file <path> (text, or an image), off.
 const SCREEN_MAX = 400000, IMG = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp' };
+const liveScreen = new Map();
 function screen(id, { kind, arg, by } = {}) {
   let ev;
   if (kind === 'off') ev = { k: 'screen', kind: 'off' };
   else if (kind === 'diff') { const d = board.mergeDiff(String(arg || '')); ev = { k: 'screen', kind, title: `${d.id} · ${path.basename(d.repo)}:${d.branch}`, stat: d.stat, text: d.diff.slice(0, SCREEN_MAX), cut: d.diff.length > SCREEN_MAX }; }
   else if (kind === 'url') { const u = new URL(String(arg || '')); if (!/^https?:$/.test(u.protocol)) throw new Error('url must be http or https'); ev = { k: 'screen', kind, title: u.href, url: u.href }; }
   else if (kind === 'file') {
-    const f = path.resolve(home(String(arg || ''))), ext = path.extname(f).toLowerCase(), size = fs.statSync(f).size;
-    if (IMG[ext]) { if (size > 5e6) throw new Error('image over 5 MB'); ev = { k: 'screen', kind: 'image', title: path.basename(f), url: `data:${IMG[ext]};base64,${fs.readFileSync(f).toString('base64')}` }; }
-    else { const t = fs.readFileSync(f, 'utf8'); ev = { k: 'screen', kind, title: f.replace(os.homedir(), '~'), text: t.slice(0, SCREEN_MAX), cut: t.length > SCREEN_MAX }; }
+    const f = path.resolve(home(String(arg || ''))), ext = path.extname(f).toLowerCase(), st = fs.statSync(f);
+    if (!st.isFile()) throw new Error('not a regular file');
+    if (IMG[ext]) { if (st.size > 5e6) throw new Error('image over 5 MB'); ev = { k: 'screen', kind: 'image', title: path.basename(f), url: `data:${IMG[ext]};base64,${fs.readFileSync(f).toString('base64')}` }; }
+    else {
+      if (st.size > SCREEN_MAX * 4) throw new Error(`file over ${SCREEN_MAX * 4 / 1e6} MB`);
+      const fd = fs.openSync(f, 'r'), buf = Buffer.alloc(Math.min(st.size, SCREEN_MAX));
+      try { fs.readSync(fd, buf, 0, buf.length, 0); } finally { fs.closeSync(fd); }
+      ev = { k: 'screen', kind, title: f.replace(os.homedir(), '~'), text: buf.toString('utf8'), cut: st.size > SCREEN_MAX };
+    }
   } else throw new Error('screen diff <task> | url <url> | file <path> | off');
-  emit(id, { ...ev, ...(by && { by }) }); return { ok: true, kind: ev.kind, title: ev.title || '' };
+  // Content goes out live only; the transcript keeps {kind,title}, and the full event stays in memory for reloads (t854).
+  ev = { ts: Date.now(), ...ev, ...(by && { by }) };
+  if (ev.kind === 'off') { liveScreen.delete(id); emit(id, ev); } else { liveScreen.set(id, ev); emit(id, ev, { k: 'screen', kind: ev.kind, title: ev.title, ...(by && { by }), gone: true }); }
+  return { ok: true, kind: ev.kind, title: ev.title || '' };
 }
 
 function wake(id, why = 'scheduled') {
@@ -812,7 +823,7 @@ const view = (s) => {
 };
 function tailEvents(id, n = 400) {
   const lines = readText(path.join(RUNS, `${id}.jsonl`)).trim().split('\n').filter(Boolean);
-  return lines.slice(-n).map((l) => JSON.parse(l));
+  return lines.slice(-n).map((l) => JSON.parse(l)).map((e) => (e.k === 'screen' && e.gone && liveScreen.get(id)?.ts === e.ts ? liveScreen.get(id) : e));
 }
 
 // Tailnet sharing off: only the local names are allowed, and tailscale is never asked.

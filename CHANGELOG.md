@@ -4,6 +4,9 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 
 ## 0.1.2 (unreleased)
 
+### Security
+- Shared screen reads regular files only, capped in size, and its content isn't saved to the transcript.
+
 ### Added
 - @mentions: type @ in a chat to pick a squiggle or person; the mentioned squiggle gets the message and its reply posts back in that chat.
 - The speaker stays visible: their tile scrolls into view, or a caption shows their face and words.

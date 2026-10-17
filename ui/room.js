@@ -591,7 +591,7 @@ function apply(id, ev, live) {
       // A presenter is heard in full (their 60-second summary); everyone else by their first sentence or two.
       if (live) say(id, presenter() === id ? firstSentences(ev.text, 40, 1400) : firstSentences(ev.text, s.lead ? 2 : 1, s.lead ? 260 : 180), { priority: s.lead || presenter() === id }); break;
     case 'screen':
-      if (ev.kind === 'off') delete S.pin[id]; else S.pin[id] = ev;
+      if (ev.kind === 'off' || ev.gone) delete S.pin[id]; else S.pin[id] = ev;   // gone: content not kept past a restart (t854)
       if (pinOne() === id) syncPin(); break;
     case 'state':
       s.status = ev.status; s.note = ev.note; paintTile(id); renderSummary();
