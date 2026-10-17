@@ -13,7 +13,7 @@ const prefs = Object.assign({ voice: true, music: true, station: 'fip', musicVol
 const savePrefs = () => { try { localStorage.agentsPrefs = JSON.stringify(prefs); } catch {} };
 
 const S = {
-  sq: {}, order: [], term: {}, todos: {}, run: {}, speakers: new Set(), present: null, focus: null, office: '', officeIds: [], meeting: null,
+  sq: {}, order: [], term: {}, todos: {}, run: {}, speakers: new Set(), present: null, pin: {}, focus: null, office: '', officeIds: [], meeting: null,
   queue: [], level: {}, hist: {}, unread: {}, spokeAt: performance.now(), fill: 0, joined: false, lastFill: '',
 };
 const P = (id) => persona(S.sq[id]);
@@ -261,17 +261,65 @@ const lineHtml = (l, view) => view === 'editor'
   ? `<div class="ln ${l.c}"><b>${esc(l.n != null ? l.n : l.c === 'add' ? '+' : l.c === 'del' ? '−' : '')}</b>${esc(l.t) || ' '}</div>`
   : `<div class="tl ${l.c}">${l.c === 'cmd' ? '<span class="ps">❯</span> ' : l.c === 'run' ? '<span class="spin"></span>' : ''}${esc(l.t)}</div>`;
 let presentTimer = null;
+// Shared screen (t664): what a squiggle put up in its 1:1 with `screen`. Stays until closed or replaced.
+const pinOne = () => !document.body.classList.contains('v-meet') && S.officeIds.length === 1 ? S.officeIds[0] : '';
+// A unified diff as files → hunks → lines with old and new line numbers (t665).
+function parseDiff(rows) {
+  const files = []; let f = null, h = null, o = 0, n = 0;
+  for (const t of rows) {
+    if (t.startsWith('diff --git ')) { const m = t.match(/^diff --git a\/(.*) b\/(.*)$/); f = { path: m ? m[2] : t.slice(11), from: m?.[1], add: 0, del: 0, note: '', hunks: [] }; files.push(f); h = null; continue; }
+    if (!f) continue;
+    if (!h) {
+      if (t.startsWith('new file')) f.note = 'New file'; else if (t.startsWith('deleted file')) f.note = 'Deleted';
+      else if (t.startsWith('rename from')) f.note = `Renamed from ${f.from}`; else if (t.startsWith('Binary files')) f.note = 'Binary file';
+    }
+    const hm = t.match(/^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@ ?(.*)$/);
+    if (hm) { o = +hm[1]; n = +hm[2]; h = { at: n, ctx: hm[3], lines: [] }; f.hunks.push(h); continue; }
+    if (!h) continue;
+    if (t[0] === '+') { f.add++; h.lines.push({ c: 'add', n: n++, t: t.slice(1) }); }
+    else if (t[0] === '-') { f.del++; h.lines.push({ c: 'del', o: o++, t: t.slice(1) }); }
+    else if (t[0] === '\\') h.lines.push({ c: 'dim', t: t.slice(2) });
+    else h.lines.push({ c: '', o: o++, n: n++, t: t.slice(1) });
+  }
+  return files;
+}
+const diffCount = (f) => `${f.add ? `<i class="a">+${f.add}</i>` : ''}${f.del ? `<i class="d">−${f.del}</i>` : ''}`;
+const diffView = (files) => !files.length ? '<p class="dnone">No changes</p>'
+  : `<nav class="dfiles">${files.map((f, i) => `<a data-f="${i}"><span>${esc(f.path)}</span>${diffCount(f)}</a>`).join('')}</nav>`
+  + files.map((f, i) => `<section class="dfile" id="df${i}"><h4><span>${esc(f.path)}</span>${f.note ? `<em>${esc(f.note)}</em>` : ''}${diffCount(f)}</h4>`
+    + f.hunks.map((h) => `<div class="dhunk">Line ${h.at}${h.ctx ? `<code>${esc(h.ctx)}</code>` : ''}</div>` + h.lines.map((l) => `<div class="dl2 ${l.c}"><b>${l.o ?? ''}</b><b>${l.n ?? ''}</b><s>${l.c === 'add' ? '+' : l.c === 'del' ? '−' : ''}</s><code>${esc(l.t) || ' '}</code></div>`).join('')).join('')
+    + '</section>').join('');
+$('#pbody').addEventListener('click', (e) => { const a = e.target.closest('.dfiles a'); if (a) $('#df' + a.dataset.f)?.scrollIntoView({ block: 'start' }); });
+function pinModel(id) {
+  const v = S.pin[id], rows = String(v.text || '').split('\n').slice(0, 4000);
+  if (v.kind === 'url') return { view: 'page', title: v.title, url: v.url, stat: v.url };
+  if (v.kind === 'image') return { view: 'image', title: v.title, imgs: [v.url], stat: v.title };
+  if (v.kind === 'diff') { const files = parseDiff(rows), sum = v.stat?.split('\n').pop()?.trim() || `${files.length} file${files.length === 1 ? '' : 's'} changed`; return { view: 'diff', title: v.title, html: diffView(files), stat: (v.cut ? 'Cut short · ' : '') + sum }; }
+  const lines = rows.map((t, i) => ({ c: '', n: i + 1, t }));
+  return { view: 'editor', title: v.title, tab: { file: v.title.split(/[/ ]/).pop(), path: v.kind === 'diff' ? v.stat?.split('\n').pop()?.trim() || '' : v.title }, lines, stat: (v.cut ? 'Cut short · ' : '') + (v.kind === 'diff' ? v.stat?.split('\n').pop()?.trim() || '' : `${rows.length} lines`) };
+}
+function syncPin() {
+  const id = pinOne(), on = !!(id && S.pin[id]);
+  document.body.classList.toggle('screen', on);
+  if (on) { S.present = id; $('#present').classList.add('on'); clearTimeout(presentTimer); renderPresent(); layout(); }
+  else if ($('#present').classList.contains('pinned')) hidePresent();
+}
+$('#pclose').onclick = () => { const id = pinOne(); if (id) api(`/squiggles/${id}/screen`, { kind: 'off', by: S.me || 'owner' }).catch((e) => toast(e.message)); };
 function renderPresent() {
-  const id = S.present, s = S.sq[id]; if (!s) return; const m = termModel(id), p = P(id);
+  const id = S.present, s = S.sq[id]; if (!s) return; const pinned = document.body.classList.contains('screen') && pinOne() === id && !!S.pin[id], m = pinned ? pinModel(id) : termModel(id), p = P(id);
+  if (pinned && $('#present')._pin === S.pin[id]) return; // unchanged: keep the user's scroll
+  $('#present')._pin = pinned ? S.pin[id] : null; $('#present').classList.toggle('pinned', pinned);
   $('#present .pwin').className = 'pwin ' + m.view; $('#present').classList.toggle('pic', m.view === 'image');
   $('#ptitle').textContent = m.view === 'term' ? `${s.name} — ${s.cwd}` : m.title;
   const pb = $('#pbody');
-  if (m.view === 'image') pb.innerHTML = m.imgs.map((u) => `<img src="${esc(u)}" alt="">`).join('');
+  if (m.view === 'diff') pb.innerHTML = m.html;
+  else if (m.view === 'page') { if (pb.firstChild?.dataset?.u !== m.url) pb.innerHTML = `<iframe data-u="${esc(m.url)}" src="${esc(m.url)}" sandbox="allow-scripts allow-same-origin allow-forms allow-popups" referrerpolicy="no-referrer"></iframe>`; }
+  else if (m.view === 'image') pb.innerHTML = m.imgs.map((u) => `<img src="${esc(u)}" alt="">`).join('');
   else pb.innerHTML = (m.view === 'editor' ? `<div class="ptab"><span>${esc(m.tab.file)}</span><em>${esc(m.tab.path)}</em></div>` : '') + m.lines.map((l) => lineHtml(l, m.view)).join('') + (m.view === 'term' ? '<div class="tl"><span class="ps">❯</span> <span class="cursor"></span></div>' : '');
   pb.scrollTop = m.view === 'term' ? pb.scrollHeight : 0; $('#pstat').textContent = m.stat;
   const td = S.todos[id]; $('#present').classList.toggle('has-todo', !!td?.length);
   if (td?.length) $('#ptodo').innerHTML = `<h5>Tasks · ${td.filter((x) => x.s === 'completed').length}/${td.length}</h5>` + td.map((x) => `<div class="td ${x.s}">${esc(x.c)}</div>`).join('');
-  $('#pbadge').textContent = `${s.name} is sharing their screen`;
+  $('#pbadge').textContent = pinned ? `${s.name} is sharing` : `${s.name} is sharing their screen`;
   if ($('#pcam').dataset.id !== id) { $('#pcam').innerHTML = avatarSVG(p, undefined, 'pc_') + `<div class="tag"><b>${esc(s.name)}</b></div>`; $('#pcam').dataset.id = id; }
 }
 const presenter = () => B.view === 'meeting' && S.meeting?.presenters?.[S.meeting.turn];
@@ -283,11 +331,14 @@ function showPresent(id) {
   armPresent();
 }
 function armPresent() {
-  clearTimeout(presentTimer);
+  clearTimeout(presentTimer); if ($('#present').classList.contains('pinned')) return;
   if (presenter() === S.present) return; // a presenter's screen stays up for their turn
   presentTimer = setTimeout(() => { const last = (S.term[S.present] || []).slice(-1)[0]; if (last && last.end == null) armPresent(); else hidePresent(); }, $('#present').classList.contains('pic') ? 9000 : 4500);
 }
-function hidePresent() { clearTimeout(presentTimer); if (!S.present) return; S.present = null; $('#present').classList.remove('on'); $('#pcap').textContent = ''; layout(); sharing(); }
+// The sharer's camera works like their tile (t346): their 1:1, or their chat inside an office.
+$('#pcam').onclick = () => { const id = $('#pcam').dataset.id; if (!S.sq[id]) return; if (S.office) openChat(id); else oneOnOne(id); };
+$('#pcam').onkeydown = (e) => { if (e.key === 'Enter') $('#pcam').click(); };
+function hidePresent() { clearTimeout(presentTimer); $('#present')._pin = null; if (!S.present) return; S.present = null; $('#present').classList.remove('on', 'pinned'); $('#pcap').textContent = ''; layout(); sharing(); }
 // Meeting view: a presenter's screen widens the left column; chats re-flow beside it.
 function sharing() { const on = !!S.present && presenter() === S.present; if (document.body.classList.contains('sharing') !== on) { document.body.classList.toggle('sharing', on); layoutMeet(); } }
 
@@ -527,6 +578,9 @@ function apply(id, ev, live) {
     case 'say':
       // A presenter is heard in full (their 60-second summary); everyone else by their first sentence or two.
       if (live) say(id, presenter() === id ? firstSentences(ev.text, 40, 1400) : firstSentences(ev.text, s.lead ? 2 : 1, s.lead ? 260 : 180), { priority: s.lead || presenter() === id }); break;
+    case 'screen':
+      if (ev.kind === 'off') delete S.pin[id]; else S.pin[id] = ev;
+      if (pinOne() === id) syncPin(); break;
     case 'state':
       s.status = ev.status; s.note = ev.note; paintTile(id); renderSummary();
       if (ev.status !== 'working') setAct(id, '');
@@ -777,7 +831,7 @@ function setOffice(who) {
     for (const id of ids) { tileOf(id)?.classList.add('office'); if (!document.body.classList.contains('v-meet')) openChat(id)?.classList.add('office'); }
     $('#officeBack').textContent = `Back to the Room`;
   }
-  layout(); layoutMeet();
+  syncPin(); layout(); layoutMeet();
 }
 // A meeting the user scheduled (Calendar) is on: chime, then the meeting view. null = it ended.
 function meetingNow(m, live) {

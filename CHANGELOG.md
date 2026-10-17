@@ -11,6 +11,8 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Phone: the lead's unread count shows on the Lead tab.
 - Meetings are one shared thread with one presenter at a time; `meet now` takes `--presenters`.
 - Show and tell meetings (`meeting edit <id> showtell on`) build each presenter's agenda from their work since the last one.
+- Shared screen beside a 1:1: `screen diff <task>|url <url>|file <path>|off` pins a diff, page or file next to the chat; diffs show a file list, line numbers and coloured hunks.
+- The sharer's camera opens their 1:1.
 - Merge review: `meet merges` has squiggles with branches in review present them, most urgent first.
 
 ### Changed

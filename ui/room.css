@@ -129,7 +129,7 @@ main { flex: 1; display: flex; min-height: 0 }
 #ptodo { display: none; flex: 0 0 230px; align-self: flex-start; max-height: 100%; overflow-y: auto; background: rgba(20,22,32,.92); border: 1px solid #2a2d3d; border-radius: 10px; padding: 8px 10px; font-size: 12px }
 #ptodo h5 { margin: 0 0 6px; font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--dim) } .td { display: flex; gap: 7px; padding: 2px 0; color: #c3c6d4 } .td.completed { color: #6b7089; text-decoration: line-through } .td.in_progress { color: #fff }
 #present.has-todo #ptodo { display: block } #present.has-todo #pcam { right: 270px }
-#pcam { position: absolute; right: 30px; bottom: 24px; width: 160px; height: 120px; z-index: 2; cursor: default; box-shadow: 0 8px 24px rgba(0,0,0,.6) }
+#pcam { position: absolute; right: 30px; bottom: 24px; width: 160px; height: 120px; z-index: 2; cursor: pointer; box-shadow: 0 8px 24px rgba(0,0,0,.6) }
 #pcap { position: absolute; left: 26px; right: 210px; bottom: 22px; z-index: 2; background: rgba(10,11,16,.84); backdrop-filter: blur(6px); border-radius: 10px; padding: 6px 12px; font-size: 13px } #pcap:empty { display: none }
 
 /* ---------- chat windows, one per agent, floating over the room ---------- */
@@ -514,3 +514,33 @@ body.v-meet #meetThread { display: flex; flex-direction: column; position: fixed
 #meetThread .m.lead.pres { border-left: 3px solid var(--accent); padding: 6px 10px; background: rgba(138,164,255,.08); border-radius: 4px 10px 10px 4px }
 #meetThread .m.lead.pres .spk { color: var(--accent) }
 #meetThread .m.you .to { display: block; font-size: 11.5px; opacity: .7; margin-bottom: 2px }
+/* Shared screen beside a 1:1 (t664) */
+#pclose { display: none; flex: none; align-items: center; justify-content: center; width: 24px; height: 24px; border: 0; border-radius: 6px; background: none; color: #9aa0b4; font-size: 18px; cursor: pointer } #pclose:hover { background: #2a2d3d; color: #fff } #present.pinned #pclose { display: inline-flex } #present.pinned #pbadge { margin-left: auto }
+#present.pinned #pcam, #present.pinned #ptodo { display: none }
+#present.pinned #pbody { overflow: auto } .pwin.page #pbody { padding: 0; background: #fff } .pwin.page iframe { width: 100%; height: 100%; border: 0; display: block }
+body.v-one.screen:not(.v-meet) #stage { display: none }
+body.v-one.screen:not(.v-meet) #present.on { display: flex; position: fixed; z-index: 5; left: 16px; top: calc(68px + var(--bh, 0px)); right: calc(min(36vw, 460px) + 32px); bottom: 64px; height: auto; padding: 0; background: none; border: 0 }
+body.v-one.screen:not(.v-meet) #present .pwin { flex: 1 }
+body.v-one.screen:not(.v-meet) #officeBack { position: fixed; left: 16px; top: auto; bottom: 16px }
+body.v-one.screen:not(.v-meet) #chats .cw.office { left: auto !important; width: min(36vw, 460px) !important }
+@media (max-width: 760px) {
+  body.v-one.screen:not(.v-meet) #stage { display: block }
+  body.v-one.screen:not(.v-meet) #present.on { left: 8px; right: 8px; top: calc(var(--hh, 89px) + var(--bh, 0px) + 60px); bottom: auto; height: 42vh }
+  body.v-one.screen:not(.v-meet) #officeBack { top: calc(var(--hh, 89px) + var(--bh, 0px) + 15px); bottom: auto; left: 80px }
+  body.v-one.screen:not(.v-meet) #chats .cw.office { left: 0 !important; width: auto !important; top: calc(var(--hh, 89px) + var(--bh, 0px) + 68px + 42vh) !important }
+}
+/* Readable diffs on the shared screen (t665) */
+.pwin.diff #pbody { padding: 0; background: #0d1117; font-size: 12px }
+.dfiles { display: flex; flex-direction: column; background: #161b22; border-bottom: 1px solid #30363d; padding: 6px 0; font-family: var(--sans) }
+.dfiles a { display: flex; gap: 8px; padding: 3px 14px; color: #c9d1d9; cursor: pointer; font-size: 12.5px } .dfiles a:hover { background: #1f2630 }
+.dfiles a span, .dfile h4 span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left }
+.dfiles i, .dfile h4 i { font-style: normal; flex: none } i.a { color: #3fb950 } i.d { color: #f85149 }
+.dfile { border-bottom: 1px solid #30363d } .dfile h4 { display: flex; gap: 10px; margin: 0; padding: 7px 14px; background: #161b22; border-bottom: 1px solid #30363d; color: #e6edf3; font: 600 12.5px var(--sans); scroll-margin-top: 0 }
+.dfile h4 em { font-style: normal; font-weight: 400; color: #8b949e; flex: none }
+.dhunk { display: flex; gap: 10px; padding: 2px 14px 2px 92px; background: rgba(56,139,253,.1); color: #8b949e; font: 11.5px/1.6 var(--sans) } .dhunk code { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 11.5px var(--mono); background: none; padding: 0; color: #8b949e }
+.dl2 { display: flex; line-height: 1.55 } .dl2 b { flex: none; width: 40px; padding-right: 8px; text-align: right; color: #484f58; font-weight: 400; user-select: none } .dl2 s { flex: none; width: 12px; text-decoration: none; color: inherit; user-select: none }
+.dl2 code { flex: 1; min-width: 0; white-space: pre-wrap; word-break: break-word; font: inherit; color: #c9d1d9; background: none; padding: 0 }
+.dl2.add { background: rgba(46,160,67,.15) } .dl2.add code, .dl2.add s { color: #aff5b4 } .dl2.add b { background: rgba(46,160,67,.2) }
+.dl2.del { background: rgba(248,81,73,.15) } .dl2.del code, .dl2.del s { color: #ffdcd7 } .dl2.del b { background: rgba(248,81,73,.2) }
+.dl2.dim code { color: #8b949e; font-style: italic } .dnone { padding: 14px; color: #8b949e }
+@media (max-width: 760px) { .dl2 b:first-child { display: none } .dl2 b { width: 32px } .dhunk { padding-left: 46px } }

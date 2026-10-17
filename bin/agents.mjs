@@ -126,6 +126,13 @@ const cmds = {
     const r = await call('/call', { op: 'join', url: a[0], ...(until ? { until } : {}) });
     return `joining as ${r.name} (pid ${r.pid})${r.ends ? `; leaves at ${r.ends.slice(11)} + 5 min` : ''}; call status to follow it, call leave to hang up`;
   },
+  // screen diff <task> | url <url> | file <path> | off [--as <id>]: pin it on the shared screen beside your 1:1 (t664)
+  screen: async () => {
+    const i = a.indexOf('--as'), as = i >= 0 ? a.splice(i, 2)[1] : process.env.AGENTS_ID;
+    if (!as) throw new Error('screen needs --as <id> outside a squiggle');
+    const arg = a.slice(1).join(' '), r = await call(`/squiggles/${as}/screen`, { kind: a[0], arg: a[0] === 'file' && !/^[~/]/.test(arg) ? `${process.cwd()}/${arg}` : arg, by: process.env.AGENTS_ID || 'owner' });
+    return r.kind === 'off' ? 'screen closed' : `on ${as}'s screen: ${r.title}`;
+  },
   restart: () => call('/restart', {}),
   upgrade: async () => (await import('./upgrade.mjs')).upgrade(),
   // humans | human add "<name>" [avatar] | human edit <id> name|avatar <value> | human remove <id>
@@ -161,7 +168,7 @@ const cmds = {
 };
 
 if (!cmds[cmd]) {
-  console.log('usage: agents.mjs list | team | wake <id> [why] | tell <id> <text> | stop <id> | clear <id> | remove <id> | room radio|volume|voices|chatter|view|chat <value> | room view 1on1 <id> | room view blocked|rethink | room lock | room reload | call <teams-url> [until <time>] | call status | call leave | restart | upgrade | limit | inbox | share on|off|status | humans | human add "<name>" [avatar] | human edit <id> name|avatar <value> | human remove <id> | tail <id> [n] | journal <id> | charter <id> [new text] | rename <id> <name> [role] | create <id> <name> <role> <cwd> <every> <charter> | set <id> <field> <value> | goals | goal add|move|confirm|owner|note|repos|merge|edit|drop ... | tasks [goal|owner] | task add|move|confirm|edit|drop ... | task move <id> review [repo:]<branch> ["<test result>"] | meetings [days] [from YYYY-MM-DD] | meeting add "<title>" "<when>" <id,id> [once|daily|weekdays|weekly] ["<agenda>"] | meeting edit <id> <field> <value> | meeting cancel <id> [date] | meeting start <id> | meeting next | meeting end | meeting now | meet now <id,id> ["topic"] [--presenters <id,id>] | meet merges | merges [refresh] | merge <task> | merge diff <task> | merge back <task> "<note>"');
+  console.log('usage: agents.mjs list | team | wake <id> [why] | tell <id> <text> | stop <id> | clear <id> | remove <id> | room radio|volume|voices|chatter|view|chat <value> | room view 1on1 <id> | room view blocked|rethink | room lock | room reload | call <teams-url> [until <time>] | call status | call leave | restart | upgrade | limit | inbox | screen diff <task>|url <url>|file <path>|off [--as <id>] | share on|off|status | humans | human add "<name>" [avatar] | human edit <id> name|avatar <value> | human remove <id> | tail <id> [n] | journal <id> | charter <id> [new text] | rename <id> <name> [role] | create <id> <name> <role> <cwd> <every> <charter> | set <id> <field> <value> | goals | goal add|move|confirm|owner|note|repos|merge|edit|drop ... | tasks [goal|owner] | task add|move|confirm|edit|drop ... | task move <id> review [repo:]<branch> ["<test result>"] | meetings [days] [from YYYY-MM-DD] | meeting add "<title>" "<when>" <id,id> [once|daily|weekdays|weekly] ["<agenda>"] | meeting edit <id> <field> <value> | meeting cancel <id> [date] | meeting start <id> | meeting next | meeting end | meeting now | meet now <id,id> ["topic"] [--presenters <id,id>] | meet merges | merges [refresh] | merge <task> | merge diff <task> | merge back <task> "<note>"');
   process.exit(1);
 }
 try {
