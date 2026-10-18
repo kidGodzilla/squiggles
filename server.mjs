@@ -266,8 +266,8 @@ function providerLimit(p, msg) {
   inbox.push(`[Harness · LIMIT] ${p} usage limit hit; its squiggles' wakes paused until ${hhmm(plimit[p])}.`);
   return plimit[p];
 }
-// Codex: one `codex exec --json` process per turn, resumed by thread id. No stdin mid-turn, so the
-// turn cap kills the process and messages sent mid-turn wait for the next turn.
+// Codex: one `codex app-server` per squiggle, kept between turns, so MCP servers live on (computer use
+// keeps its window bindings, t330). Each wake is a turn on the saved thread; messages mid-turn steer it.
 const shortEv = (s) => (typeof s === 'string' ? s.slice(0, 6000) : '');
 // The ChatGPT app bundles a newer Codex CLI than ~/.local/bin; older CLIs reject current models on ChatGPT sign-in.
 const CODEX_APP_BIN = '/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex';
@@ -278,60 +278,93 @@ function capacityRetry(s) {
   r.capAt = Date.now() + min * 60000;
   setTimeout(() => { if (!r.proc && r.status === 'waiting') send(s.id, 'The model was at capacity and your last turn stopped. Carry on where you left off.', 'harness'); }, min * 60000);
 }
-function codexTurn(s, prompt) {
-  const r = R(s.id), thread = r.codexThread || s.resume, roots = [sqDir(s.id)];
+function codexServer(s) {
+  const r = R(s.id);
+  if (r.cx) return r.cx;
+  const roots = [sqDir(s.id)];
   // workspace-write keeps .git read-only; the repo's git dir must be a writable root or the squiggle can't commit.
   try { roots.push(execFileSync('git', ['-C', home(s.cwd), 'rev-parse', '--path-format=absolute', '--git-common-dir'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()); } catch {}
-  // First turn in a thread: Codex has no appended system prompt, so the squiggle's instructions lead the prompt.
-  if (!r.codexPrimed) prompt = `${systemPrompt(s)}\n\n---\n\n${prompt}`;
-  const opts = ['--json', '--skip-git-repo-check', '-m', s.model,
-    '-c', 'sandbox_mode="workspace-write"', '-c', 'approval_policy="never"',
+  const proc = spawn(codexBin(), ['app-server', '-c', 'sandbox_mode="workspace-write"', '-c', 'approval_policy="never"',
     // The agents CLI talks to this server over HTTP; the journal lives in the squiggle's folder.
-    '-c', 'sandbox_workspace_write.network_access=true', '-c', `sandbox_workspace_write.writable_roots=${JSON.stringify(roots)}`];
-  const args = thread ? ['exec', 'resume', ...opts, thread, '-'] : ['exec', ...opts, '-'];
-  const proc = spawn(codexBin(), args, { cwd: home(s.cwd), stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, AGENTS_ID: s.id } });
-  r.proc = proc; r.codexPrimed = true;
-  proc.stdin.end(prompt);
-  let buf = '', lastText = '', ended = false;
-  const end = (text, err, subtype) => { if (ended) return; ended = true; turnEnded(s, text, err, subtype); };
-  const cap = s.maxTurns ?? 40;
+    '-c', 'sandbox_workspace_write.network_access=true', '-c', `sandbox_workspace_write.writable_roots=${JSON.stringify(roots)}`],
+  { cwd: home(s.cwd), stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, AGENTS_ID: s.id } });
+  const cx = r.cx = { proc, n: 0, wait: new Map(), on: null };
+  cx.req = (method, params) => new Promise((res, rej) => { const id = ++cx.n; cx.wait.set(id, { res, rej }); proc.stdin.write(JSON.stringify({ id, method, params }) + '\n'); });
+  let buf = '';
   proc.stdout.on('data', (chunk) => {
-    buf += chunk;
-    let i;
+    buf += chunk; let i;
     while ((i = buf.indexOf('\n')) >= 0) {
       const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
-      let ev; try { ev = JSON.parse(line); } catch { continue; }
-      const it = ev.item || {};
-      if (ev.type === 'thread.started') { r.codexThread = ev.thread_id; saveState(); }
-      else if (ev.type === 'item.started' && it.type === 'command_execution') emit(s.id, { k: 'tool', tid: it.id, name: 'Bash', kind: 'cmd', text: shortEv(it.command) });
-      else if (ev.type === 'item.completed') {
-        if (it.type === 'agent_message' && it.text?.trim()) { lastText = it.text; emit(s.id, { k: 'say', text: it.text }); }
-        else if (it.type === 'command_execution') emit(s.id, { k: 'out', tid: it.id, text: shortEv(it.aggregated_output), err: it.exit_code !== 0, imgs: [] });
-        else if (it.type === 'file_change') for (const c of it.changes || []) emit(s.id, { k: 'tool', tid: `${it.id}-${c.path}`, name: 'Edit', kind: c.kind === 'add' ? 'write' : 'edit', file: c.path });
-        else if (it.type === 'todo_list') emit(s.id, { k: 'tool', tid: it.id, name: 'TodoWrite', kind: 'todo', items: (it.items || []).map((t) => ({ s: t.completed ? 'completed' : 'pending', c: t.text })) });
-        else if (it.type === 'web_search') emit(s.id, { k: 'tool', tid: it.id, name: 'WebSearch', kind: 'web', arg: shortEv(it.query) });
-        else if (it.type === 'mcp_tool_call') emit(s.id, { k: 'tool', tid: it.id, name: `${it.server}.${it.tool}`, kind: 'tool', arg: JSON.stringify(it.arguments ?? '').slice(0, 300) });
-        else if (it.type === 'error') emit(s.id, { k: 'log', text: shortEv(it.message) });
-        if (it.type !== 'reasoning' && ++r.turns >= cap) { end(lastText, true, 'error_max_turns'); proc.kill('SIGTERM'); }
-      } else if (ev.type === 'turn.completed') {
-        r.capTries = 0; const u = ev.usage || {}; r.usage = { in: (r.usage?.in || 0) + (u.input_tokens || 0), out: (r.usage?.out || 0) + (u.output_tokens || 0) };
-        emit(s.id, { k: 'log', text: `codex tokens: ${u.input_tokens || 0} in (${u.cached_input_tokens || 0} cached), ${u.output_tokens || 0} out` });
-        end(lastText, false);
-      } else if (ev.type === 'turn.failed' || ev.type === 'error') {
-        const msg = ev.error?.message || ev.message || 'codex failed';
-        emit(s.id, { k: 'log', text: shortEv(msg) });
-        if (/usage limit|rate limit|quota/i.test(msg)) { providerLimit('codex', msg); end(msg, true, 'provider_limit'); }
-        else if (/at capacity/i.test(msg) && !ended) { if ((r.capTries || 0) < 3) { capacityRetry(s); end(msg, true, 'capacity'); } else { r.capTries = 0; end(msg, true); } }
-        else if (ev.type === 'turn.failed') end(msg, true);
-      }
+      let m; try { m = JSON.parse(line); } catch { continue; }
+      if (m.id != null && !m.method) { const w = cx.wait.get(m.id); cx.wait.delete(m.id); if (w) m.error ? w.rej(new Error(m.error.message || 'codex error')) : w.res(m.result); }
+      else if (m.id != null) proc.stdin.write(JSON.stringify({ id: m.id, error: { code: -32601, message: 'not supported by squiggles' } }) + '\n');
+      else cx.on?.(m.method, m.params || {});
     }
   });
   proc.stderr.on('data', (d) => emit(s.id, { k: 'log', text: String(d).slice(0, 2000) }));
-  proc.on('exit', (code) => {
-    r.proc = null;
-    if (!ended && r.status === 'working') end(lastText, !!code || !lastText);
-    if (r.queue?.length) { const q = r.queue.splice(0); saveState(); send(s.id, q.join('\n\n'), 'harness', { replay: true }); }
+  proc.on('exit', () => {
+    if (r.cx === cx) r.cx = null;
+    for (const w of cx.wait.values()) w.rej(new Error('codex app-server exited'));
+    cx.on?.('exit', {});
   });
+  cx.ready = cx.req('initialize', { clientInfo: { name: 'squiggles', version: '1' } })
+    .then(() => proc.stdin.write(JSON.stringify({ method: 'initialized' }) + '\n'));
+  return cx;
+}
+async function codexTurn(s, prompt) {
+  const r = R(s.id), cx = codexServer(s), cap = s.maxTurns ?? 40;
+  let lastText = '', ended = false, turnId = null;
+  const end = (text, err, subtype) => {
+    if (ended) return; ended = true; cx.on = null; r.proc = null; turnEnded(s, text, err, subtype);
+    if (r.queue?.length) { const q = r.queue.splice(0); saveState(); send(s.id, q.join('\n\n'), 'harness', { replay: true }); }
+  };
+  // r.proc stands for the running turn: stop interrupts it, remove and shutdown end the server too.
+  const interrupt = () => { if (r.codexThread && turnId) cx.req('turn/interrupt', { threadId: r.codexThread, turnId }).catch(() => {}); };
+  r.proc = { kill: () => interrupt(), removeAllListeners() {}, steer: (text) => (turnId ? cx.req('turn/steer', { threadId: r.codexThread, expectedTurnId: turnId, input: [{ type: 'text', text }] }) : Promise.reject(new Error('no turn yet'))) };
+  cx.on = (method, p) => {
+    const it = p.item || {};
+    if (method === 'exit') return end(lastText || 'codex stopped', true);
+    if (method === 'item/started' && it.type === 'commandExecution') emit(s.id, { k: 'tool', tid: it.id, name: 'Bash', kind: 'cmd', text: shortEv(it.command) });
+    else if (method === 'item/completed') {
+      if (it.type === 'agentMessage' && it.text?.trim()) { lastText = it.text; emit(s.id, { k: 'say', text: it.text }); }
+      else if (it.type === 'commandExecution') emit(s.id, { k: 'out', tid: it.id, text: shortEv(it.aggregatedOutput), err: it.exitCode !== 0, imgs: [] });
+      else if (it.type === 'fileChange') for (const c of it.changes || []) emit(s.id, { k: 'tool', tid: `${it.id}-${c.path}`, name: 'Edit', kind: c.kind?.type === 'add' ? 'write' : 'edit', file: c.path });
+      else if (it.type === 'plan') emit(s.id, { k: 'tool', tid: it.id, name: 'TodoWrite', kind: 'todo', items: [{ s: 'pending', c: shortEv(it.text) }] });
+      else if (it.type === 'webSearch') emit(s.id, { k: 'tool', tid: it.id, name: 'WebSearch', kind: 'web', arg: shortEv(it.query) });
+      else if (it.type === 'mcpToolCall') emit(s.id, { k: 'tool', tid: it.id, name: `${it.server}.${it.tool}`, kind: 'tool', arg: JSON.stringify(it.arguments ?? '').slice(0, 300) });
+      if (!['reasoning', 'userMessage'].includes(it.type) && ++r.turns >= cap) { interrupt(); end(lastText, true, 'error_max_turns'); }
+    } else if (method === 'thread/tokenUsage/updated') {
+      const u = r.cxLast = p.tokenUsage?.last || {}; r.usage = { in: (r.usage?.in || 0) + (u.inputTokens || 0), out: (r.usage?.out || 0) + (u.outputTokens || 0) };
+    } else if (method === 'error' && !p.willRetry) emit(s.id, { k: 'log', text: shortEv(p.error?.message) });
+    else if (method === 'turn/completed') {
+      const t = p.turn || {};
+      if (t.status === 'completed') {
+        r.capTries = 0; const u = r.cxLast || {};
+        emit(s.id, { k: 'log', text: `codex tokens: ${u.inputTokens || 0} in (${u.cachedInputTokens || 0} cached), ${u.outputTokens || 0} out` });
+        return end(lastText, false);
+      }
+      if (t.status === 'interrupted') return end(lastText, true, 'interrupted');
+      const msg = t.error?.message || 'codex failed';
+      emit(s.id, { k: 'log', text: shortEv(msg) });
+      if (/usage limit|rate limit|quota/i.test(msg)) { providerLimit('codex', msg); end(msg, true, 'provider_limit'); }
+      else if (/at capacity/i.test(msg)) { if ((r.capTries || 0) < 3) { capacityRetry(s); end(msg, true, 'capacity'); } else { r.capTries = 0; end(msg, true); } }
+      else end(msg, true);
+    }
+  };
+  try {
+    await cx.ready;
+    if (!r.cxThread || r.cxThread !== cx) {
+      // First turn on this server: resume the saved thread, or start one with the squiggle's instructions leading the prompt.
+      const thread = r.codexThread || s.resume, opts = { cwd: home(s.cwd), model: s.model, sandbox: 'workspace-write', approvalPolicy: 'never' };
+      // excludeTurns: hydrating a long thread's full history takes minutes and gigabytes.
+      const res = thread ? await cx.req('thread/resume', { threadId: thread, excludeTurns: true, ...opts }) : await cx.req('thread/start', opts);
+      r.codexThread = res.thread.id; r.cxThread = cx; saveState();
+    }
+    if (!r.codexPrimed) prompt = `${systemPrompt(s)}\n\n---\n\n${prompt}`;
+    r.codexPrimed = true;
+    turnId = (await cx.req('turn/start', { threadId: r.codexThread, model: s.model, input: [{ type: 'text', text: prompt }] })).turn.id;
+    if (ended) interrupt();
+  } catch (e) { emit(s.id, { k: 'log', text: shortEv(e.message) }); end(e.message, true); }
 }
 
 // from 'owner' means a person on the page; human says which one (humans.json), and the squiggle reads 'From <name>: '.
@@ -350,7 +383,12 @@ function send(id, text, from = 'owner', { replay = false, human } = {}) {
   const content = who ? `From ${who.name}: ${text}` : text;
   if (providerOf(s)) {
     if (!replay) emit(id, { k: 'user', text, from, ...(who && { human: who.id }) });
-    if (r.proc) { (r.queue ||= []).push(content); saveState(); emit(id, { k: 'log', text: 'queued for the next turn' }); return; }
+    if (r.proc) {
+      // Mid-turn: steer the running turn; if it can't take input yet, the message waits for the next turn.
+      const queue = () => { (r.queue ||= []).push(content); saveState(); emit(id, { k: 'log', text: 'queued for the next turn' }); };
+      if (r.proc.steer) r.proc.steer(content).catch(queue); else queue();
+      return;
+    }
     r.lastWake = now(); r.turns = 0; r.board0 = ownNotes(id);
     setStatus(id, 'working', '');
     return codexTurn(s, content);
@@ -437,6 +475,7 @@ function turnEnded(s, text, isError, subtype) {
   const st = subtype === 'provider_limit' ? { status: 'idle', note: `${p} usage limit, wakes resume ${hhmm(plimit[p])}` }
     : subtype === 'capacity' ? { status: 'waiting', note: `model at capacity, retrying at ${hhmm(R(s.id).capAt)} (try ${R(s.id).capTries} of 3)` }
     : limited ? { status: 'idle', note: `session limit, wakes resume ${hhmm(limit.until)}` }
+    : subtype === 'interrupted' ? { status: 'idle', note: 'stopped' }
     : subtype === 'error_max_turns' ? { status: 'error', note: `hit the turn cap (${s.maxTurns ?? 40}); ${lastSaved(s)}; fresh process next wake` }
     : isError ? { status: 'error', note: 'turn failed' } : statusLine(text) || { status: 'idle', note: '' };
   R(s.id).lastEnd = now();
@@ -491,6 +530,7 @@ function removeSquiggle(id) {
   if (s.lead) throw new Error('the lead cannot be removed');
   const r = R(id);
   if (r.proc) { r.proc.removeAllListeners('exit'); r.proc.kill('SIGTERM'); }
+  if (r.cx) { r.cx.on = null; r.cx.proc.kill('SIGTERM'); }
   rt.delete(id); saveState();
   fs.mkdirSync(path.join(SQ, '.archive'), { recursive: true });
   fs.renameSync(sqDir(id), path.join(SQ, '.archive', `${id}-${Date.now()}`));
@@ -518,7 +558,7 @@ setTimeout(() => {
   for (const h of held) try { send(h.id, h.text, h.from, { replay: true, human: h.human }); } catch (e) { console.error('held', h.id, e.message); }
 }, 3000);
 function shutdown(code) {
-  for (const r of rt.values()) { if (r.proc) r.proc.kill('SIGTERM'); if (r.caff) r.caff.kill(); }
+  for (const r of rt.values()) { if (r.proc) r.proc.kill('SIGTERM'); if (r.cx) r.cx.proc.kill('SIGTERM'); if (r.caff) r.caff.kill(); }
   kokoro.shutdown(); saveState();
   setTimeout(() => process.exit(code), 300);
 }

@@ -28,6 +28,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - `look <id> <character|auto|shuffle>` sets a squiggle's character; looks take a generator (`cast:Puff`), and `room characters <generator>` sets the room default, saved in room.json.
 
 ### Changed
+- Codex squiggles run on a persistent `codex app-server`: MCP servers survive between turns, and messages sent mid-turn steer the running turn instead of waiting.
 - New installs default to port 4327 (was 4317). Existing rooms keep the port in their config.json.
 - Merge leaves your checkout alone: it merges where the base branch is checked out only after a conflict check, otherwise in a temp worktree.
 - Merges, send-backs, task adds and meeting adds record who did them.
