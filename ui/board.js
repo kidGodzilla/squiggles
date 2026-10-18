@@ -35,12 +35,14 @@ window.onBoard = () => loadBoard();
 // Areas (t977): ongoing responsibilities with no finish line sit in one strip above the columns, never in a tier.
 const isArea = (g) => g.kind === 'area';
 const openCount = (id) => B.tasks.filter((t) => t.goal === id && t.status !== 'done').length;
+// Areas strip shows short names: 'SEO: example.com' is SEO, 'Personal site: example.com' is example.com. The tooltip keeps the full title.
+const areaName = (t) => { const [a, b] = t.split(/:\s+/); t = b && a.length > 4 ? b : a; return t.includes('.') ? t : t[0].toUpperCase() + t.slice(1); };
 function renderGoals() {
   const q = B.gq.toLowerCase(), found = (g) => hit(q, g.title, g.note, ownerName(g.owner)); let shown = 0;
   const areas = allGoals().filter(isArea).sort((a, b) => openCount(b.id) - openCount(a.id)), aShown = areas.filter(found);
   $('#areas').hidden = !aShown.length;
   $('#areas').innerHTML = `<h3>Areas</h3>` + aShown.map((g, i) => { const n = openCount(g.id);
-    return `<button class="area" type="button" data-goal="${esc(g.id)}" title="${esc(g.title)}${g.owner ? `, ${esc(ownerName(g.owner))}` : ''}">${g.owner && S.sq[g.owner] ? face(g.owner, 'ar' + i + '_') : ''}<span class="an">${hl(g.title, q)}</span><span class="ac ${n ? '' : 'none'}">${n ? `${n} open` : 'Nothing open'}</span></button>`; }).join('');
+    return `<button class="area" type="button" data-goal="${esc(g.id)}" title="${esc(g.title)}${g.owner ? `, ${esc(ownerName(g.owner))}` : ''}">${g.owner && S.sq[g.owner] ? face(g.owner, 'ar' + i + '_') : ''}<span class="an">${hl(areaName(g.title), q)}</span><span class="ac ${n ? '' : 'none'}">${n ? `${n} open` : 'Nothing open'}</span></button>`; }).join('');
   $('#wbcols').innerHTML = Object.entries(TIER_NAMES).map(([tier, name]) => {
     const all = B.goals[tier].filter((g) => !isArea(g)), list = all.filter(found); shown += list.length;
     return `<div class="wbcol ${tier}" data-tier="${tier}"><h3>${name}<small>${all.length}</small></h3><div class="glist">
