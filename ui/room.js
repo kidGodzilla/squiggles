@@ -469,7 +469,7 @@ function openChat(id) {
   if (cw) { if (!cw.dataset.pages.split(' ').includes(page)) cw.dataset.pages += ' ' + page; cw.classList.remove('min'); front(cw); pinBottom(cw.querySelector('.msgs')); cw.querySelector('textarea').focus(); clearUnread(id); return cw; }
   const p = P(id), open = document.querySelectorAll('.cw').length, saved = winPos()[id];
   cw = document.createElement('div'); cw.className = 'cw' + (s.lead ? ' lead' : ''); cw.id = 'cw-' + id; cw.dataset.id = id; cw.dataset.pages = page;
-  cw.innerHTML = `<div class="chead"><div class="tile mini">${avatarSVG(p, undefined, 'cw' + p.gid + '_')}</div>
+  cw.innerHTML = `<div class="chead"><button class="cback" data-a="back">Back</button><div class="tile mini">${avatarSVG(p, undefined, 'cw' + p.gid + '_')}</div>
       <div class="who"><b>${esc(s.name)}</b><small></small></div>
       <button class="ib" data-a="clear" title="Clear chat" aria-label="Clear chat"><svg viewBox="0 0 16 16"><path d="M6 3.5h7.5v9H6L2 8z"/><path d="M8 6l3.5 4M11.5 6L8 10"/></svg></button><button class="ib" data-a="min" title="Minimize" aria-label="Minimize"><svg viewBox="0 0 16 16"><path d="M3.5 8h9"/></svg></button><button class="ib" data-a="close" title="Close" aria-label="Close"><svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></svg></button><button class="cclose" data-a="close">Close</button></div>
     <div class="msgs"><div class="empty">${s.lead ? 'Ask the lead anything. It runs the team and only brings you what needs you.' : `Talk to ${esc(s.name)} directly. It answers here and keeps working on its responsibility.`}</div></div>
@@ -600,6 +600,7 @@ function wireChat(cw, id) {
       clearTimeout(b._t); b.classList.remove('arm'); b.innerHTML = b.dataset.label; b.title = 'Clear chat';
       api(`/squiggles/${id}/clear`, {}); return;
     }
+    if (a === 'back') return setView('room');
     if (a === 'close') { saveWin(cw); cw.remove(); syncUrl(); }
     else if (a === 'min') cw.classList.toggle('min');
     else if ((head.downOn || e.target).closest('.tile.mini, .who b') && !cw.dragged && !cw.classList.contains('office')) oneOnOne(id); // t821
@@ -689,6 +690,7 @@ async function refreshMeta(id) {
   const relook = ['look', 'lookSeed'].some((k) => (S.sq[id][k] ?? '') !== (fresh[k] ?? ''));
   Object.assign(S.sq[id], fresh); const t = tileOf(id); if (relook) reskin(id);
   if (t) { t.querySelector('.tag b').textContent = fresh.name; t.querySelector('.tag span').textContent = fresh.role; }
+  if (B.view === 'settings' && !document.activeElement?.closest('#setSqs')) renderSettings(); // CLI set/look shows live (t897)
   const cw = document.getElementById('cw-' + id); if (cw) cw.querySelector('.chead b').textContent = fresh.name;
   paintTile(id);
 }
@@ -701,7 +703,7 @@ async function roomCommand(ev) {
     case 'volume': prefs.musicVol = Math.max(0, Math.min(1, +v || 0)); $('#musicVol').value = prefs.musicVol; break;
     case 'voices': prefs.voice = v !== 'off'; paintVoice(); break;
     case 'chatter': if (['quiet', 'normal', 'lively'].includes(v)) { prefs.chatter = v; $('#chatter').value = v; } break;
-    case 'view': if (['room', 'lead', 'meeting', 'team', 'calendar', 'goals', 'tasks', 'merge'].includes(v)) setView(v); else if (v === 'blocked' || v === 'rethink') openStuck(v); else if (v === '1on1' && S.sq[ev.id]) oneOnOne(ev.id); break;
+    case 'view': if (['room', 'lead', 'meeting', 'team', 'calendar', 'goals', 'tasks', 'merge', 'settings'].includes(v)) setView(v); else if (v === 'blocked' || v === 'rethink') openStuck(v); else if (v === '1on1' && S.sq[ev.id]) oneOnOne(ev.id); break;
     case 'chat': if (S.sq[ev.value]) { if (S.office && !S.officeIds.includes(ev.value)) setView('room'); discuss(ev.value, ev.text, false); } break;
     case 'lock': lock(); break;
     case 'reload': location.reload(); break;
@@ -711,7 +713,7 @@ async function roomCommand(ev) {
     case 'meeting': meetingNow(ev.value, true); break;
     case 'meetingSoon': meetingSoon(ev.value); break;
     case 'share': paintShare(ev.value); break;
-    case 'characters': roomGen(v); S.order.forEach(reskin); break;
+    case 'characters': roomGen(v); S.order.forEach(reskin); if (B.view === 'settings') renderSettings(); break;
   }
   savePrefs(); AUD.apply();
 }
@@ -732,7 +734,7 @@ async function load() {
   S.hist = {}; S.term = {}; S.todos = {};
   document.querySelectorAll('.cw .msgs').forEach((m) => (m.innerHTML = ''));
   S.order = list.sort((a, b) => (b.lead ? 1 : 0) - (a.lead ? 1 : 0) || String(a.created || '').localeCompare(String(b.created || ''))).map((s) => s.id);
-  renderStage();
+  renderStage(); if (B.view === 'settings' && typeof renderSettings === 'function') renderSettings();
   await Promise.all(S.order.map(async (id) => { for (const ev of await api(`/squiggles/${id}/events?n=${S.sq[id].lead ? 300 : 150}`)) apply(id, ev, false); }));
   for (const id of S.order) paintTile(id);
   window.onBoard?.();
@@ -874,12 +876,13 @@ $('#station').innerHTML = `<option value="off">Off</option>` + STATIONS.map(([v,
 $('#station').value = prefs.music ? prefs.station : 'off';
 $('#station').onchange = (e) => { const v = e.target.value; prefs.music = v !== 'off'; if (prefs.music) prefs.station = v; savePrefs(); AUD.apply(); };
 $('#musicVol').value = prefs.musicVol; $('#musicVol').oninput = (e) => { prefs.musicVol = +e.target.value; savePrefs(); AUD.apply(); };
-const paintVoice = () => { $('#voiceBtn').textContent = prefs.voice ? 'Voices on' : 'Voices off'; $('#voiceBtn').classList.toggle('on', prefs.voice); };
-paintVoice(); $('#voiceBtn').onclick = () => { prefs.voice = !prefs.voice; savePrefs(); paintVoice(); AUD.apply(); };
+const paintVoice = () => { $('#voiceOn').checked = !!prefs.voice; };
+paintVoice(); $('#voiceOn').onchange = (e) => { prefs.voice = e.target.checked; savePrefs(); AUD.apply(); };
 $('#chatter').value = prefs.chatter; $('#chatter').onchange = (e) => { prefs.chatter = e.target.value; savePrefs(); };
 // Share on tailnet (tailscale serve): the toggle and its link in More. CLI: share on|off|status.
 // Only Copy link shows (t837); the URL rides on the button. Hidden when tailnet sharing is off in config.
-function paintShare(st) { $('#shareOn').closest('label').hidden = !!st?.off; $('#shareOn').checked = !!st?.on; $('#shareCopy').hidden = !st?.on; $('#shareCopy').dataset.url = st?.url || ''; }
+// Tailnet sharing off in config: the Sharing card is hidden.
+function paintShare(st) { $('#shareOn').closest('.setcard').hidden = !!st?.off; $('#shareOn').checked = !!st?.on; $('#shareCopy').hidden = !st?.on; $('#shareCopy').dataset.url = st?.url || ''; }
 async function loadShare() { const r = await fetch('/api/share').then((x) => x.json()).catch(() => null); if (r && !r.error) paintShare(r); }
 // Copy the tailnet link (t149). The clipboard API needs a secure page (localhost or https); otherwise copy through a selection.
 $('#shareCopy').onclick = async (e) => {
@@ -906,6 +909,7 @@ async function openInbox() {
   $('#inboxBox').classList.add('on');
 }
 $('#inboxBtn').onclick = () => { closeMore(); openInbox(); };
+$('#settingsBtn').onclick = () => { closeMore(); setView('settings'); };
 $('#inboxBox').onclick = (e) => { if (e.target.id === 'inboxBox' || e.target.dataset.a === 'close') $('#inboxBox').classList.remove('on'); };
 const closeMore = () => { $('#morePanel').classList.remove('on'); $('#moreBtn').setAttribute('aria-expanded', 'false'); };
 $('#moreBtn').onclick = (e) => { e.stopPropagation(); const on = $('#morePanel').classList.toggle('on'); $('#moreBtn').setAttribute('aria-expanded', String(on)); };

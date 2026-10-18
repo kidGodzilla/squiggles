@@ -16,9 +16,19 @@ button { background: none; border: 0; cursor: pointer; padding: 0 }
 header { height: calc(52px + env(safe-area-inset-top)); flex: none; display: flex; align-items: center; gap: 10px; padding: env(safe-area-inset-top) max(14px, env(safe-area-inset-right)) 0 max(14px, env(safe-area-inset-left)); border-bottom: 1px solid var(--line) }
 header > *, #summary span, #summary button { flex: none; white-space: nowrap }
 #summary { min-width: 0; overflow: hidden }
+header { min-width: 0; overflow-x: clip } /* nothing in the top bar may widen the page (t892) */
+/* Tablet (t892): Room, Lead, Tasks, Merge, More; More drops Team, Calendar, Goals below it. Face-only me chip. */
+@media (min-width: 761px) and (max-width: 1100px) {
+  header .tabs { position: relative }
+  header .tabs .tmore { display: block }
+  header .tabs [data-view=team], header .tabs [data-view=calendar], header .tabs [data-view=goals] { display: none; position: absolute; z-index: 50; right: 0; width: 170px; height: 40px; padding: 0 14px; text-align: left; background: var(--panel2); border: 1px solid var(--line); box-shadow: 0 8px 24px rgba(0,0,0,.4) }
+  header .tabs.open [data-view=team], header .tabs.open [data-view=calendar], header .tabs.open [data-view=goals] { display: block }
+  header .tabs [data-view=team] { top: calc(100% + 6px) } header .tabs [data-view=calendar] { top: calc(100% + 50px) } header .tabs [data-view=goals] { top: calc(100% + 94px) }
+  .chip.me .nm { display: none } .chip.me { padding-right: 4px }
+}
 .more { position: relative }
-#moreBtn { display: flex; align-items: center; gap: 5px } #moreBtn svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.6 }
-#moreBtn[aria-expanded=true] svg { transform: rotate(180deg) }
+#moreBtn { display: grid; place-items: center; width: 36px; padding: 0 } #moreBtn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round }
+#moreBtn[aria-expanded=true] { color: var(--text); border-color: var(--accent) }
 .morep { display: none; position: absolute; right: 0; top: calc(100% + 8px); z-index: 50; width: 240px; flex-direction: column; align-items: stretch; gap: 8px; padding: 12px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line); box-shadow: 0 12px 32px rgba(0,0,0,.45) }
 .morep.on { display: flex }
 .morep #moreCount { font-size: 12px; color: var(--dim) }
@@ -51,7 +61,7 @@ header > *, #summary span, #summary button { flex: none; white-space: nowrap }
 .chip:hover { color: var(--text) } .chip.on { color: var(--text) } .chip.primary { background: var(--accent); color: #0d1020; border-color: transparent; font-weight: 600 }
 .ctl { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--dim) } .ctl[hidden] { display: none }
 .ctl select { height: 30px; border-radius: 9px; background: var(--panel2); border: 1px solid var(--line); padding: 0 8px }
-#musicVol { width: 80px; accent-color: var(--accent) }
+#musicVol { width: 80px; accent-color: var(--accent) } .setform #musicVol { width: 100% }
 
 /* ---------- layout ---------- */
 main { flex: 1; display: flex; min-height: 0 }
@@ -197,9 +207,9 @@ main { flex: 1; display: flex; min-height: 0 }
 .templates { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px } .templates button { padding: 5px 11px; border-radius: 99px; background: var(--panel2); border: 1px solid var(--line); font-size: 12.5px } .templates button:hover { border-color: var(--accent) }
 .feed { font-size: 12.5px; border: 1px solid var(--line); border-radius: 10px; max-height: 260px; overflow: auto } .feed div { padding: 6px 10px; border-bottom: 1px solid var(--line); white-space: pre-wrap; word-break: break-word } .feed code { font: 11.5px var(--mono); color: var(--dim) }
 .journal { white-space: pre-wrap; font-size: 12.5px; background: var(--bg); border-radius: 10px; padding: 10px 12px; max-height: 240px; overflow: auto }
-.joinbox { text-align: center; max-width: 680px; padding: 0 20px; box-sizing: border-box; width: 100% }
+.joinbox { text-align: center; width: 100%; max-width: 680px; padding: 0 20px; box-sizing: border-box }
 .joinbox h1 { font-size: 28px; margin: 18px 0 6px; letter-spacing: -.02em } .joinbox p { color: var(--dim); margin: 0 0 22px }
-#joinCast { display: flex; gap: 10px; justify-content: center } #joinCast .tile { flex: 0 1 120px; min-width: 0; height: auto; aspect-ratio: 4 / 3; cursor: default }
+#joinCast { display: flex; gap: 10px; justify-content: center } #joinCast .tile { flex: 0 1 120px; min-width: 0; height: auto; aspect-ratio: 4/3; cursor: default }
 .cta { background: var(--accent); color: #0d1020; font-weight: 700; padding: 12px 26px; border-radius: 99px; font-size: 15px } .cta:hover { filter: brightness(1.08) }
 #toasts { position: absolute; left: 14px; bottom: 14px; z-index: 6; display: flex; flex-direction: column; gap: 6px; pointer-events: none }
 .toast { background: rgba(27,29,39,.94); border: 1px solid var(--line); border-radius: 99px; padding: 5px 13px; font-size: 12.5px; animation: toast 3.4s ease forwards }
@@ -209,12 +219,12 @@ main { flex: 1; display: flex; min-height: 0 }
 /* ---------- tabs ---------- */
 .tabs { display: flex; gap: 2px; margin-left: 14px; padding: 3px; border-radius: 10px; background: var(--panel2); border: 1px solid var(--line) }
 .tabs button { height: 26px; padding: 0 14px; border-radius: 7px; color: var(--dim); font-size: 12.5px; font-weight: 600 }
+.tabs .tmore { display: none }
 .tabs button.on { background: var(--bg); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.3) }
 .bview { display: none; flex: 1; min-width: 0; min-height: 0; flex-direction: column; gap: 14px; padding: 14px 18px 18px; background: radial-gradient(ellipse at 50% -20%, #232838, var(--bg) 60%) }
-body.v-goals #room, body.v-tasks #room, body.v-merge #room, body.v-team #room, body.v-cal #room { display: none } body.v-goals #goalsView, body.v-tasks #tasksView, body.v-merge #mergeView, body.v-team #teamView, body.v-cal #calView { display: flex }
+body.v-goals #room, body.v-tasks #room, body.v-merge #room, body.v-team #room, body.v-cal #room, body.v-settings #room { display: none } body.v-goals #goalsView, body.v-tasks #tasksView, body.v-merge #mergeView, body.v-team #teamView, body.v-cal #calView, body.v-settings #setView { display: flex }
 .btool { flex: none; display: flex; align-items: center; gap: 8px; flex-wrap: wrap }
 .btool input, .btool select { height: 32px; border-radius: 9px; background: var(--panel2); border: 1px solid var(--line); padding: 0 10px; color: var(--text); outline: 0 }
-.tabs .tmore { display: none }
 .btool input { width: 240px } .btool select { max-width: 220px } .btool input:focus { border-color: var(--accent) }
 .btool #gcount, .btool #tcount { color: var(--dim); font-size: 12.5px }
 .seg { display: flex; padding: 2px; border-radius: 9px; background: var(--panel2); border: 1px solid var(--line) }
@@ -299,7 +309,7 @@ a.tlink { color: inherit; text-decoration: underline dotted; text-underline-offs
 .pop .row button:hover { border-color: var(--accent) } .pop .row .go { background: var(--accent); color: #0d1020; border-color: transparent; font-weight: 600 } .pop .row .bad { color: var(--red) }
 .pop .row button.cur { border-color: var(--accent); color: var(--accent) }
 /* each chat window lives on the page it was opened from */
-body:not(.v-goals):not(.v-tasks):not(.v-merge):not(.v-team):not(.v-cal) .cw:not([data-pages~=room]), body.v-cal .cw:not([data-pages~=calendar]), body.v-team .cw:not([data-pages~=team]), body.v-goals .cw:not([data-pages~=goals]), body.v-tasks .cw:not([data-pages~=tasks]), body.v-merge .cw:not([data-pages~=merge]) { display: none }
+body:not(.v-goals):not(.v-tasks):not(.v-merge):not(.v-team):not(.v-cal):not(.v-settings) .cw:not([data-pages~=room]), body.v-settings .cw, body.v-cal .cw:not([data-pages~=calendar]), body.v-team .cw:not([data-pages~=team]), body.v-goals .cw:not([data-pages~=goals]), body.v-tasks .cw:not([data-pages~=tasks]), body.v-merge .cw:not([data-pages~=merge]) { display: none }
 .btn.danger.arm { background: #b8332b; color: #fff; border-color: transparent }
 .note .np { margin: -4px 0 4px; font: 11px var(--sans); color: rgba(43,36,22,.62); white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
 .note .nb { display: inline-block; margin-top: 6px; padding: 1px 8px; border-radius: 6px; background: rgba(29,63,143,.12); font: 11.5px var(--sans); color: #1d3f8f; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
@@ -334,13 +344,8 @@ body.v-one #stage .tile { display: none }
 body.v-one #stage .tile.office { display: block; height: auto; aspect-ratio: 4 / 3; grid-column: span 1; grid-row: span 1 }
 body.v-one #present { display: none }
 body.v-one #chats .cw:not(.office) { display: none }
-body.v-one #chats .cw.office { display: flex; left: calc(min(36vw, 420px) + 24px) !important; top: calc(68px + var(--bh, 0px)) !important; right: 16px; bottom: 16px; width: auto !important; height: auto !important; min-width: 0; resize: none; animation: none }
+body.v-one #chats .cw.office { display: flex; left: calc(min(36vw, 420px) + 24px) !important; top: calc(68px + env(safe-area-inset-top) + var(--bh, 0px)) !important; right: 16px; bottom: 16px; width: auto !important; height: auto !important; min-width: 0; resize: none; animation: none }
 body.v-one .cw.office .ib[data-a=min], body.v-one .cw.office .ib[data-a=close] { display: none }
-#meetBar { display: none }
-body.v-meet #meetBar { display: flex; flex-direction: column; gap: 6px; position: fixed; left: calc(min(36vw, 420px) + 24px); right: 16px; top: calc(68px + var(--bh, 0px)); z-index: 5; padding: 10px 14px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line) }
-#meetBar p { margin: 0; white-space: pre-wrap; max-height: 6em; overflow: auto; color: var(--dim, inherit) }
-#meetBar .row { display: flex; flex-wrap: wrap; gap: 8px }
-body.v-meet #stage { grid-template-columns: 1fr 1fr }
 /* Phone (t311): a chat is fullscreen over the visual viewport (--vvt, --vvh from room.js), so Close stays visible with the keyboard up; no minimize, no drag. */
 .cclose { display: none }
 /* Phone (t152): was a bottom sheet, lifted above the keyboard (--kb, --vvh from visualViewport in room.js). 16px inputs stop iOS zooming on focus. */
@@ -352,6 +357,11 @@ body.v-meet #stage { grid-template-columns: 1fr 1fr }
   #chats .cw:not(.office) .cclose { display: block; min-height: 44px; padding: 0 14px; border-radius: 10px; font-weight: 600; color: var(--accent) }
   textarea, input, select { font-size: 16px }
 }
+#meetBar { display: none }
+body.v-meet #meetBar { display: flex; flex-direction: column; gap: 6px; position: fixed; left: calc(min(36vw, 420px) + 24px); right: 16px; top: calc(68px + env(safe-area-inset-top) + var(--bh, 0px)); z-index: 5; padding: 10px 14px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line) }
+#meetBar p { margin: 0; white-space: pre-wrap; max-height: 6em; overflow: auto; color: var(--dim, inherit) }
+#meetBar .row { display: flex; flex-wrap: wrap; gap: 8px }
+body.v-meet #stage { grid-template-columns: 1fr 1fr }
 body.v-meet #officeBack { display: none !important }
 /* Presenter turns: the presenter's chat is marked, and their shared screen widens the left column (layoutMeet matches these widths). */
 #meetTurn { align-self: center; font-weight: 600; margin-right: 4px }
@@ -359,7 +369,7 @@ body.v-meet .cw.presenting { border-color: var(--accent); box-shadow: 0 0 0 2px 
 body.v-meet.sharing #present.on { display: flex; align-self: flex-start; width: min(52vw, 820px); margin: 16px 0 0 16px; border-radius: 12px; border: 1px solid var(--line) }
 body.v-meet.sharing #stage { display: none } /* the presenter's camera is on their screen */
 @media (min-width: 761px) { body.v-meet.sharing #meetBar { left: calc(min(52vw, 820px) + 24px) } }
-@media (max-width: 760px) { body.v-meet #stage, body.v-meet.sharing #present.on { display: none } body.v-meet #meetBar { left: 16px; top: calc(112px + var(--bh, 0px)) } }
+@media (max-width: 760px) { body.v-meet #stage, body.v-meet.sharing #present.on { display: none } body.v-meet #meetBar { left: 16px; top: calc(112px + env(safe-area-inset-top) + var(--bh, 0px)) } }
 body.v-one.v-meet #chats .cw.office { left: var(--mx) !important; top: var(--my) !important; width: var(--mw) !important; height: var(--mh) !important; min-height: 0; right: auto; bottom: auto }
 #officeBack { display: none } body.v-one #officeBack { display: block; position: absolute; left: 24px; top: calc(24px + min(36vw, 420px) * .75 - 24px + 16px) }
 
@@ -451,16 +461,8 @@ body.v-lead #callBar { display: flex; flex-wrap: wrap; align-items: center; gap:
 #callUrl:focus, #callUntil:focus { border-color: var(--accent) }
 #callUntil { flex: none; width: 96px; height: 30px; border-radius: 8px; background: var(--panel2); border: 1px solid var(--line); padding: 0 8px; color: var(--text); outline: 0; color-scheme: dark }
 #callBar [hidden] { display: none } body.v-lead #callBar[hidden] { display: none }
-@media (max-width: 760px) { .corkcols { grid-template-columns: repeat(5, 220px); overflow-x: auto; scroll-snap-type: x mandatory } .corkcols .ccol { scroll-snap-align: start } }
-/* Goals on phone (t115): same one-scroll 220px columns as Tasks. */
-@media (max-width: 760px) { .wbcols { grid-template-columns: repeat(4, 220px); overflow-x: auto; scroll-snap-type: x mandatory } .wbcol { scroll-snap-align: start } .wbcol h3 { white-space: nowrap }
-  .g { flex-wrap: wrap; row-gap: 4px } .g .gt { flex-basis: calc(100% - 30px); overflow-wrap: anywhere } .g .gm { margin-left: 28px } }
-
-/* Calendar: a week, one column per day; phone stacks the days */
-.cal { flex: 1; min-height: 0; overflow: auto; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; align-content: start }
-.calday { display: flex; flex-direction: column; gap: 8px; min-height: 180px; padding: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px }
-/* Phone office (t153): a slim row under the header (small tile, Back; the Lead's call bar under it), chat full width below, lifted above the keyboard. --hh is the header's height (room.js). */
-@media (max-width: 760px) {
+/* Tablet portrait and phone office (t153, t892): a slim row under the header (small tile, Back; the Lead's call bar under it), chat full width below, lifted above the keyboard. --hh is the header's height (room.js). */
+@media (max-width: 1023px) {
   body.v-one:not(.v-meet) #stage { flex: none; width: auto; padding: 8px 12px; overflow: hidden }
   body.v-one:not(.v-meet) #stage .tile.office { width: 58px; border-radius: 10px }
   body.v-one:not(.v-meet) #stage .tile.office > :not(svg) { display: none }
@@ -471,6 +473,23 @@ body.v-lead #callBar { display: flex; flex-wrap: wrap; align-items: center; gap:
   body.v-one:not(.v-meet) #chats .cw.office { left: 0 !important; right: 0; top: calc(var(--hh, 89px) + var(--bh, 0px) + 60px) !important; bottom: max(var(--kb, 0px), var(--tabh, 0px)); border-radius: 18px 18px 0 0; padding-bottom: env(safe-area-inset-bottom) }
   body.v-one.v-lead:not(.v-meet) #chats .cw.office { top: calc(var(--hh, 89px) + var(--bh, 0px) + 130px) !important }
 }
+.cback { display: none }
+/* Phone (t892): no strip; the chat header's Back replaces it, and the Lead's call bar sits right under the header. */
+@media (max-width: 760px) {
+  body.v-one:not(.v-meet):not(.screen) #stage, body.v-one:not(.v-meet):not(.screen) #officeBack { display: none }
+  body.v-one:not(.v-meet):not(.screen) #chats .cw.office { top: calc(var(--hh, 89px) + var(--bh, 0px)) !important; border-radius: 0 }
+  body.v-lead:not(.screen) #callBar { top: calc(var(--hh, 89px) + var(--bh, 0px) + 8px) }
+  body.v-one.v-lead:not(.v-meet):not(.screen) #chats .cw.office { top: calc(var(--hh, 89px) + var(--bh, 0px) + 60px) !important }
+  body.v-one:not(.v-meet):not(.screen) .cw.office .cback { display: block; min-width: 44px; min-height: 44px; margin: -6px 0 -6px -6px; padding: 0 8px; border-radius: 10px; font-weight: 600; color: var(--accent) }
+}
+@media (max-width: 760px) { .corkcols { grid-template-columns: repeat(5, 220px); overflow-x: auto; scroll-snap-type: x mandatory } .corkcols .ccol { scroll-snap-align: start } }
+/* Goals on phone (t115): same one-scroll 220px columns as Tasks. */
+@media (max-width: 760px) { .wbcols { grid-template-columns: repeat(4, 220px); overflow-x: auto; scroll-snap-type: x mandatory } .wbcol { scroll-snap-align: start } .wbcol h3 { white-space: nowrap }
+  .g { flex-wrap: wrap; row-gap: 4px } .g .gt { flex-basis: calc(100% - 30px); overflow-wrap: anywhere } .g .gm { margin-left: 28px } }
+
+/* Calendar: a week, one column per day; phone stacks the days */
+.cal { flex: 1; min-height: 0; overflow: auto; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; align-content: start }
+.calday { display: flex; flex-direction: column; gap: 8px; min-height: 180px; padding: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px }
 .calday.today { border-color: var(--accent) } .calday.past { opacity: .6 }
 .calday h3 { display: flex; align-items: baseline; gap: 6px; margin: 0 0 2px; font-size: 13px } .calday h3 span { color: var(--dim); font-weight: 500 } .calday h3 em { margin-left: auto; font: 600 11px var(--sans); color: var(--accent) }
 .calm { display: flex; flex-direction: column; gap: 4px; padding: 9px 10px; text-align: left; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; color: var(--text) } .calm:hover { border-color: var(--accent) }
@@ -497,27 +516,6 @@ body.v-lead #callBar { display: flex; flex-wrap: wrap; align-items: center; gap:
   header .chip, #summary button { position: relative }
   header .chip::after, #summary button::after, .chatbtn::after, .editbtn::after { content: ''; position: absolute; left: 50%; top: 50%; width: max(100%, 44px); height: max(100%, 44px); transform: translate(-50%, -50%) }
 }
-/* Owner faces open a 1:1 (t627). */
-.mowner { padding: 0; border-radius: 6px; cursor: pointer } .mowner:hover .face, .nown:hover .face { outline: 2px solid var(--accent) }
-.nown { cursor: pointer }
-/* Relayed @mention replies name who answered (t657). */
-.m.lead .by { display: block; font-size: 12px; color: var(--dim); margin-bottom: 2px }
-.tabs .tcount { display: inline-block; min-width: 16px; margin-left: 4px; padding: 0 5px; border-radius: 99px; background: var(--accent); color: #0d1020; font-size: 11px; line-height: 16px; text-align: center } /* t352 */
-/* Speaker caption when their tile is off screen (t670) */
-#speakcap { display: none; position: fixed; z-index: 45; left: 50%; bottom: 24px; transform: translateX(-50%); width: min(560px, calc(100vw - 24px)); box-sizing: border-box; align-items: center; gap: 12px; padding: 10px 14px; background: rgba(16,18,27,.94); backdrop-filter: blur(8px); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 12px 36px rgba(0,0,0,.5); cursor: pointer; animation: fadein .2s }
-#speakcap.on { display: flex } #speakcap .tile.mini { width: 64px; height: 48px } #speakcap > div:last-child { min-width: 0 }
-#speakcap b { font-size: 13px } #speakcap p { margin: 2px 0 0; font-size: 13.5px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden }
-@media (max-width: 760px) { #speakcap { bottom: calc(var(--tabh) + 10px) } }
-/* @mentions (t677) */
-.mwrap { flex: 1; min-width: 0; display: grid } .mwrap > * { grid-area: 1 / 1 } .mwrap textarea { position: relative; width: 100%; box-sizing: border-box }
-.mmirror { padding: 5px 0; max-height: 140px; overflow: hidden; font: inherit; line-height: 1.45; white-space: pre-wrap; overflow-wrap: break-word; color: transparent; pointer-events: none }
-.mmirror .mention { color: transparent; background: color-mix(in srgb, var(--accent) 28%, transparent); border-radius: 4px; box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 28%, transparent) }
-.msgs .mention { color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, transparent); border-radius: 5px; padding: 0 3px; font-weight: 600 }
-.m.you .mention { color: inherit; background: rgba(255,255,255,.2) }
-#mentions { display: none; position: fixed; z-index: 60; max-height: 320px; overflow-y: auto; padding: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 14px 40px rgba(0,0,0,.5) } #mentions.on { display: block }
-#mentions .mo { display: flex; align-items: center; gap: 10px; padding: 5px 8px; border-radius: 8px; cursor: pointer } #mentions .mo.on, #mentions .mo:hover { background: var(--panel2) }
-#mentions .mf { flex: none; width: 32px; height: 24px; border-radius: 6px; overflow: hidden; display: grid; place-items: center } #mentions .mf svg { width: 100%; height: 100% }
-#mentions b { font-size: 13px } #mentions small { margin-left: auto; color: var(--dim); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0 }
 /* Meeting thread (t604): one shared chat for the whole meeting under the meeting bar; the presenter's lines are marked. */
 #meetThread { display: none }
 body.v-meet #meetThread { display: flex; flex-direction: column; position: fixed; left: calc(min(36vw, 420px) + 24px); right: 16px; top: var(--mtt, 200px); bottom: 16px; z-index: 14; background: rgba(24,26,34,.97); border: 1px solid var(--line); border-radius: 16px }
@@ -531,12 +529,17 @@ body.v-meet #meetThread { display: flex; flex-direction: column; position: fixed
 #meetThread .m.lead.pres { border-left: 3px solid var(--accent); padding: 6px 10px; background: rgba(138,164,255,.08); border-radius: 4px 10px 10px 4px }
 #meetThread .m.lead.pres .spk { color: var(--accent) }
 #meetThread .m.you .to { display: block; font-size: 11.5px; opacity: .7; margin-bottom: 2px }
+/* Owner faces open a 1:1 (t627). */
+.mowner { padding: 0; border-radius: 6px; cursor: pointer } .mowner:hover .face, .nown:hover .face { outline: 2px solid var(--accent) }
+.nown { cursor: pointer }
+/* Relayed @mention replies name who answered (t657). */
+.m.lead .by { display: block; font-size: 12px; color: var(--dim); margin-bottom: 2px }
 /* Shared screen beside a 1:1 (t664) */
 #pclose { display: none; flex: none; align-items: center; justify-content: center; width: 24px; height: 24px; border: 0; border-radius: 6px; background: none; color: #9aa0b4; font-size: 18px; cursor: pointer } #pclose:hover { background: #2a2d3d; color: #fff } #present.pinned #pclose { display: inline-flex } #present.pinned #pbadge { margin-left: auto }
 #present.pinned #pcam, #present.pinned #ptodo { display: none }
 #present.pinned #pbody { overflow: auto } .pwin.page #pbody { padding: 0; background: #fff } .pwin.page iframe { width: 100%; height: 100%; border: 0; display: block }
 body.v-one.screen:not(.v-meet) #stage { display: none }
-body.v-one.screen:not(.v-meet) #present.on { display: flex; position: fixed; z-index: 5; left: 16px; top: calc(68px + var(--bh, 0px)); right: calc(min(36vw, 460px) + 32px); bottom: 64px; height: auto; padding: 0; background: none; border: 0 }
+body.v-one.screen:not(.v-meet) #present.on { display: flex; position: fixed; z-index: 5; left: 16px; top: calc(68px + env(safe-area-inset-top) + var(--bh, 0px)); right: calc(min(36vw, 460px) + 32px); bottom: 64px; height: auto; padding: 0; background: none; border: 0 }
 body.v-one.screen:not(.v-meet) #present .pwin { flex: 1 }
 body.v-one.screen:not(.v-meet) #officeBack { position: fixed; left: 16px; top: auto; bottom: 16px }
 body.v-one.screen:not(.v-meet) #chats .cw.office { left: auto !important; width: min(36vw, 460px) !important }
@@ -561,6 +564,22 @@ body.v-one.screen:not(.v-meet) #chats .cw.office { left: auto !important; width:
 .dl2.del { background: rgba(248,81,73,.15) } .dl2.del code, .dl2.del s { color: #ffdcd7 } .dl2.del b { background: rgba(248,81,73,.2) }
 .dl2.dim code { color: #8b949e; font-style: italic } .dnone { padding: 14px; color: #8b949e }
 @media (max-width: 760px) { .dl2 b:first-child { display: none } .dl2 b { width: 32px } .dhunk { padding-left: 46px } }
+.tabs .tcount { display: inline-block; min-width: 16px; margin-left: 4px; padding: 0 5px; border-radius: 99px; background: var(--accent); color: #0d1020; font-size: 11px; line-height: 16px; text-align: center } /* t352 */
+/* Speaker caption when their tile is off screen (t670) */
+#speakcap { display: none; position: fixed; z-index: 45; left: 50%; bottom: 24px; transform: translateX(-50%); width: min(560px, calc(100vw - 24px)); box-sizing: border-box; align-items: center; gap: 12px; padding: 10px 14px; background: rgba(16,18,27,.94); backdrop-filter: blur(8px); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 12px 36px rgba(0,0,0,.5); cursor: pointer; animation: fadein .2s }
+#speakcap.on { display: flex } #speakcap .tile.mini { width: 64px; height: 48px } #speakcap > div:last-child { min-width: 0 }
+#speakcap b { font-size: 13px } #speakcap p { margin: 2px 0 0; font-size: 13.5px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden }
+@media (max-width: 760px) { #speakcap { bottom: calc(var(--tabh) + 10px) } }
+/* @mentions (t677) */
+.mwrap { flex: 1; min-width: 0; display: grid } .mwrap > * { grid-area: 1 / 1 } .mwrap textarea { position: relative; width: 100%; box-sizing: border-box }
+.mmirror { padding: 5px 0; max-height: 140px; overflow: hidden; font: inherit; line-height: 1.45; white-space: pre-wrap; overflow-wrap: break-word; color: transparent; pointer-events: none }
+.mmirror .mention { color: transparent; background: color-mix(in srgb, var(--accent) 28%, transparent); border-radius: 4px; box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 28%, transparent) }
+.msgs .mention { color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, transparent); border-radius: 5px; padding: 0 3px; font-weight: 600 }
+.m.you .mention { color: inherit; background: rgba(255,255,255,.2) }
+#mentions { display: none; position: fixed; z-index: 60; max-height: 320px; overflow-y: auto; padding: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 14px 40px rgba(0,0,0,.5) } #mentions.on { display: block }
+#mentions .mo { display: flex; align-items: center; gap: 10px; padding: 5px 8px; border-radius: 8px; cursor: pointer } #mentions .mo.on, #mentions .mo:hover { background: var(--panel2) }
+#mentions .mf { flex: none; width: 32px; height: 24px; border-radius: 6px; overflow: hidden; display: grid; place-items: center } #mentions .mf svg { width: 100%; height: 100% }
+#mentions b { font-size: 13px } #mentions small { margin-left: auto; color: var(--dim); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0 }
 
 /* Subagents (t4): temporary helper tiles pinned to the squiggle's tile while an Agent call runs */
 .subs { position: absolute; top: 7px; left: 7px; right: 80px; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; max-height: 58%; overflow: hidden; pointer-events: none; z-index: 1 }
@@ -583,3 +602,37 @@ body.v-one.screen:not(.v-meet) #chats .cw.office { left: auto !important; width:
 .m .mimgs:first-child { margin-top: 0 }
 .m .mimgs img { display: block; max-width: 220px; max-height: 180px; border-radius: 8px; object-fit: cover }
 @media (max-width: 760px) { .cw form .attach { min-height: 44px; width: 44px } }
+
+/* Settings (t836) */
+#setView { overflow: auto }
+.sets { width: 100%; max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px }
+.sets h1 { margin: 4px 0 0; font-size: 22px }
+.setcard { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 12px } .setcard[hidden] { display: none }
+.setcard h2 { margin: 0; font-size: 16px } .sethint { margin: 0; color: var(--dim); font-size: 13px }
+.setrow { display: flex; flex-wrap: wrap; align-items: center; gap: 10px } .setrow .sp { flex: 1 } #setNow { color: var(--dim); font-size: 13px }
+.setrow .ctl { display: flex; align-items: center; gap: 8px; font-size: 13px }
+.setgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px }
+.setsq { display: flex; flex-direction: column; gap: 8px; min-width: 0 }
+.setsq > .tile { height: auto; aspect-ratio: 4 / 3; cursor: default }
+.setsq .who { display: flex; align-items: center; gap: 8px; min-width: 0 } .setsq .who .tile.mini { cursor: default }
+.setsq .who > div:last-child { min-width: 0; flex: 1 } .setsq .who b { display: block; font-size: 14px } .setsq .who small { display: block; color: var(--dim); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.setsq .chip { align-self: flex-start }
+@media (max-width: 760px) { .setgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px } .setsq .chip { align-self: stretch } .setrow .chip.primary { width: 100% } }
+.setform { display: grid; grid-template-columns: 160px minmax(0, 360px); align-items: center; gap: 10px 14px; font-size: 13.5px }
+.setform > label { color: var(--dim) } .setform > span { display: flex; align-items: center; gap: 8px; min-height: 30px }
+.setform select { height: 34px; border-radius: 9px; background: var(--panel2); border: 1px solid var(--line); padding: 0 8px }
+.setform input[type=range] { width: 100%; accent-color: var(--accent) } .setform input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent) }
+@media (max-width: 760px) { .setform { grid-template-columns: 1fr; gap: 4px } .setform > label { margin-top: 8px } .setform select { height: 44px } }
+.sqtable { width: 100%; border-collapse: collapse; font-size: 13.5px } /* Squiggles card (t897) */
+.sqtable thead th { color: var(--dim); font-size: 12px; font-weight: 600; text-align: left; padding: 0 6px 6px }
+.sqtable td, .sqtable tbody th { padding: 8px 6px; border-top: 1px solid var(--line); text-align: left; font-weight: inherit }
+.sqname { display: flex; align-items: center; gap: 8px; min-width: 0 } .sqname b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.sqname .tile.mini { width: 30px; height: 30px; flex: none }
+.sqlab { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap }
+.sqf { display: flex; flex-direction: column; gap: 3px; min-width: 0 } .sqf select { width: 100%; height: 34px; border-radius: 9px; background: var(--panel2); border: 1px solid var(--line); padding: 0 8px; color: inherit }
+.sqpause { display: flex; align-items: center; gap: 6px } .sqpause input { width: 18px; height: 18px; accent-color: var(--accent) }
+@media (max-width: 900px) { .sqtable thead { display: none } .sqtable, .sqtable tbody { display: block } .sqtable tr { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 12px 0; border-top: 1px solid var(--line) }
+  .sqtable td, .sqtable tbody th { display: block; padding: 0; border: 0; min-width: 0 } .sqtable tbody th, .sqtable td:nth-child(2) { grid-column: 1 / -1 }
+  .sqlab { position: static; width: auto; height: auto; clip: auto; color: var(--dim); font-size: 12px } .sqpause .sqlab { color: inherit; font-size: 13.5px } .sqf select { height: 44px } .sqpause { min-height: 44px } }
+@media (max-width: 760px) { .sqtable td:nth-child(3), .sqtable td:nth-child(4) { grid-column: 1 / -1 } .sqtable td:last-child { align-self: end } } /* phone: long values stay whole (t897) */
+@media (pointer: coarse) { #moreBtn, .chip.me { min-width: 44px; height: 44px } .chip.me { justify-content: center } .morep .chip { min-height: 44px } .hm, #setPeople .chip, #pop .row button { min-height: 44px } } /* touch targets (t894, t895, t896) */

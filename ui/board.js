@@ -352,7 +352,7 @@ $('#mergeView').onclick = async (e) => {
 // ---------- Team: every squiggle, what it cares about and guards, how it runs ----------
 const charterLine = (c, label) => (String(c || '').match(new RegExp(label + ':\\s*([^\\n]+)', 'i')) || [])[1] || '';
 const cadence = (m) => (!m ? 'Only when asked' : m % 1440 === 0 ? (m === 1440 ? 'Daily' : `Every ${m / 1440} days`) : m % 60 === 0 ? `Every ${m / 60}h` : `Every ${m}m`);
-const modelName = (m) => ({ opus: 'Opus 5.5', sonnet: 'Sonnet 5.5', 'gpt-6.1-sol': 'Codex 6.1 Sol' })[m] || m || 'Opus 5.5';
+const modelName = (m) => ({ opus: 'Opus 5.5', sonnet: 'Sonnet 5.5', 'claude-opus-5-5': 'Opus 5.5', 'claude-sonnet-5-5': 'Sonnet 5.5', 'gpt-6.1-sol': 'Codex 6.1 Sol' })[m] || m || 'Opus 5.5';
 function renderTeam() {
   const q = ($('#teamq').value || '').trim().toLowerCase();
   const all = S.order.map((id) => S.sq[id]).filter(Boolean);
@@ -383,7 +383,9 @@ function humanFace(h) {
     : `<span class="hface" style="background:hsl(${hue} 45% 32%)">${esc(a || [...h.name][0]?.toUpperCase() || '?')}</span>`;
 }
 function renderPeople() {
-  $('#peopleList').innerHTML = `<h4>People</h4>` + B.humans.map((h) => `<button class="hm" data-human="${esc(h.id)}" title="Edit ${esc(h.name)}">${humanFace(h)}<b>${esc(h.name)}</b></button>`).join('');
+  const list = B.humans.map((h) => `<button class="hm" data-human="${esc(h.id)}" title="Edit ${esc(h.name)}">${humanFace(h)}<b>${esc(h.name)}</b></button>`).join('');
+  $('#peopleList').innerHTML = `<h4>People</h4>` + list;
+  $('#setPeople').innerHTML = list + `<button class="chip" data-human-add>+ Person</button>`;
 }
 function editHuman(anchor, id) {
   const h = id && B.humans.find((x) => x.id === id);
@@ -417,7 +419,7 @@ $('#meBtn').onclick = (e) => showPop(e.currentTarget, `<label>Who is using this 
 });
 loadHumans();
 $('#teamPerson').onclick = (e) => editHuman(e.currentTarget);
-$('#peopleList').onclick = (e) => { const b = e.target.closest('[data-human]'); if (b) editHuman(b, b.dataset.human); };
+$('#peopleList').onclick = $('#setPeople').onclick = (e) => { const b = e.target.closest('[data-human],[data-human-add]'); if (b) editHuman(b, b.dataset.human); };
 $('#teamq').oninput = renderTeam;
 $('#teamHire').onclick = () => openNew();
 $('#teamList').onclick = async (e) => {
@@ -537,7 +539,7 @@ function setView(v, who, nav) {
   const office = v === 'lead' || v === 'one' || v === 'meeting';
   if (v === 'lead') who = leadId() || who; if (v === 'one' && !who) v = 'room'; if (v === 'meeting') who = meetOrder();
   B.view = v; B.who = who; closePop(); paintMeetOn(); if (v !== 'merge' && B.diff) closeDiff(false);
-  document.body.classList.toggle('v-goals', v === 'goals'); document.body.classList.toggle('v-tasks', v === 'tasks'); document.body.classList.toggle('v-merge', v === 'merge'); document.body.classList.toggle('v-team', v === 'team'); document.body.classList.toggle('v-cal', v === 'calendar');
+  document.body.classList.toggle('v-goals', v === 'goals'); document.body.classList.toggle('v-tasks', v === 'tasks'); document.body.classList.toggle('v-merge', v === 'merge'); document.body.classList.toggle('v-team', v === 'team'); document.body.classList.toggle('v-settings', v === 'settings'); document.body.classList.toggle('v-cal', v === 'calendar');
   document.body.classList.toggle('v-one', office); document.body.classList.toggle('v-meet', v === 'meeting'); if (v !== 'meeting') document.body.classList.remove('sharing'); document.body.classList.toggle('v-lead', v === 'lead'); if (v === 'lead') loadCall(); setOffice(office ? who : '');
   document.querySelectorAll('.tabs button').forEach((b) => b.classList.toggle('on', b.dataset.view === v));
   $('.tabs .tmore').classList.toggle('on', ['team', 'calendar', 'goals'].includes(v)); moreTabs(false);
@@ -549,6 +551,7 @@ function setView(v, who, nav) {
   if (v === 'merge') loadMerges();
   if (v === 'team') { renderTeam(); loadHumans(); }
   if (v === 'calendar') loadCal();
+  if (v === 'settings') { if (typeof renderSettings === 'function') renderSettings(); loadHumans(); }
   // Entering an office puts the cursor in its chat (t188). Not on touch screens: it would pop the keyboard.
   if ((v === 'lead' || v === 'one') && matchMedia('(pointer: fine)').matches) requestAnimationFrame(() => document.querySelector(`#cw-${S.officeIds[0]} textarea`)?.focus());
 }
@@ -569,7 +572,7 @@ function viewUrl(v = B.view, who = B.who) {
 }
 // Opening, raising or closing a floating chat updates the URL in place, without a history step.
 function syncUrl() { const q = viewUrl(); if (location.search !== q) history.replaceState(null, '', location.pathname + q); }
-const VIEWS = ['room', 'lead', 'meeting', 'one', 'team', 'calendar', 'goals', 'tasks', 'merge'];
+const VIEWS = ['room', 'lead', 'meeting', 'one', 'team', 'calendar', 'goals', 'tasks', 'merge', 'settings'];
 function viewFromUrl(search, nav) {
   const q = new URLSearchParams(search), v = q.get('view');
   if (!VIEWS.includes(v)) return false;
@@ -587,7 +590,7 @@ window.addEventListener('popstate', () => {
 setTimeout(() => {
   if (viewFromUrl(URL0, 'replace')) return;
   let v = ''; try { v = localStorage.agentsView || ''; } catch {}
-  if (['goals', 'tasks', 'lead', 'merge', 'team', 'calendar'].includes(v)) setView(v, '', 'replace'); else if (v.startsWith('one:')) setView('one', v.slice(4), 'replace');
+  if (['goals', 'tasks', 'lead', 'merge', 'team', 'calendar', 'settings'].includes(v)) setView(v, '', 'replace'); else if (v.startsWith('one:')) setView('one', v.slice(4), 'replace');
 }, 0);
 loadBoard();
 document.querySelector('.brand').onclick = () => setView('room');

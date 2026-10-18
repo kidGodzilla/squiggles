@@ -22,20 +22,11 @@
   <div class="sp"></div>
   <button class="chip me" id="meBtn" hidden title="Who is using this browser"></button>
   <div class="more">
-    <button class="chip" id="moreBtn" aria-haspopup="true" aria-expanded="false" title="Radio, voices, lock and more">More<svg viewBox="0 0 12 12"><path d="M3 4.5 6 7.5 9 4.5"/></svg></button>
+    <button class="chip" id="moreBtn" aria-haspopup="true" aria-expanded="false" aria-label="Menu" title="Menu: settings, inbox, lock"><svg viewBox="0 0 16 16"><path d="M2.5 4h11M2.5 8h11M2.5 12h11"/></svg></button>
     <div id="morePanel" class="morep" role="menu">
       <div id="moreCount"></div>
-      <label class="ctl" title="Radio"><span>Radio</span>
-        <select id="station"></select>
-      </label>
-      <input id="musicVol" type="range" min="0" max="1" step="0.05" title="Music volume">
-      <button class="chip" id="voiceBtn" title="Voices on or off">Voices on</button>
-      <select class="chip" id="chatter" title="Idle chatter">
-        <option value="quiet">Quiet</option><option value="normal" selected>Some chatter</option><option value="lively">Lively</option>
-      </select>
       <button class="chip" id="lockBtn" title="Lock: back to the splash, sound off (the team keeps working)"><svg viewBox="0 0 16 16"><rect x="3.5" y="7" width="9" height="6.5" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg>Lock</button>
-      <label class="ctl share" title="Anyone on the tailnet can open the room"><span>Share on tailnet</span><input type="checkbox" id="shareOn"></label>
-      <button class="chip" id="shareCopy" hidden>Copy link</button>
+      <button class="chip" id="settingsBtn" title="Settings: characters and more">Settings</button>
       <button class="chip" id="inboxBtn" title="Notes dropped in ~/Agents/inbox for the lead">Inbox</button>
       <button class="chip primary" id="newBtn">New squiggle</button>
     </div>
@@ -85,6 +76,49 @@
     </div>
     <div class="cork"><div class="corkcols" id="corkcols"></div></div>
   </section>
+  <section id="setView" class="bview">
+    <div class="sets">
+      <h1>Settings</h1>
+      <section class="setcard">
+        <h2>Room</h2>
+        <p class="sethint">Sound in this browser. CLI: <code>room radio|volume|voices|chatter &lt;value&gt;</code>.</p>
+        <div class="setform">
+          <label for="station">Radio</label><select id="station"></select>
+          <label for="musicVol">Music volume</label><input id="musicVol" type="range" min="0" max="1" step="0.05">
+          <label for="voiceOn">Voices</label><span><input type="checkbox" id="voiceOn"> <label for="voiceOn">Read messages aloud</label></span>
+          <label for="chatter">Idle chatter</label><select id="chatter"><option value="quiet">Quiet</option><option value="normal" selected>Some chatter</option><option value="lively">Lively</option></select>
+        </div>
+      </section>
+      <section class="setcard">
+        <h2>Sharing</h2>
+        <p class="sethint">Anyone on the tailnet can open the room. CLI: <code>share on|off|status</code>.</p>
+        <div class="setform">
+          <label for="shareOn">Tailnet</label><span><input type="checkbox" id="shareOn"> <label for="shareOn">Share the room</label> <button class="chip" id="shareCopy" hidden>Copy link</button></span>
+        </div>
+      </section>
+      <section class="setcard">
+        <h2>People</h2>
+        <p class="sethint">Humans in the room. Select one to rename or remove. CLI: <code>human add|edit|remove</code>.</p>
+        <div class="people" id="setPeople"></div>
+      </section>
+      <section class="setcard">
+        <h2>Squiggles</h2>
+        <p class="sethint">Changes save as you make them. CLI: <code>set &lt;id&gt; model|effort|every|paused &lt;value&gt;</code>, <code>look &lt;id&gt; &lt;pack&gt;</code>.</p>
+        <div class="setsqs" id="setSqs"></div>
+      </section>
+      <section class="setcard">
+        <h2>Characters</h2>
+        <p class="sethint">Try a character pack on everyone, then use it for the room or for one squiggle. CLI: <code>room characters &lt;pack&gt;</code>, <code>look &lt;id&gt; &lt;pack&gt;</code>.</p>
+        <div class="setrow">
+          <label class="ctl"><span>Pack</span><select id="setGen"></select></label>
+          <label class="ctl"><input type="checkbox" id="setTalk"><span>Talking</span></label>
+          <span id="setNow"></span><span class="sp"></span>
+          <button class="chip primary" id="setRoom">Use for the room</button>
+        </div>
+        <div class="setgrid" id="setGrid"></div>
+      </section>
+    </div>
+  </section>
   <section id="mergeView" class="bview">
     <div class="btool"><span id="mcount"></span><span class="sp"></span><button class="chip" id="mmeet">Merge review now</button><button class="chip" id="mrefresh">Refresh</button></div>
     <div class="mq" id="mq"></div>
@@ -115,5 +149,6 @@
 <script src="/ui/gen/avataaars.js"></script>
 <script src="/ui/room.js"></script>
 <script src="/ui/board.js"></script>
+<script src="/ui/settings.js"></script>
 </body>
 </html>
