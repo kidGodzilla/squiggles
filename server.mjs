@@ -828,8 +828,13 @@ In flight (${open.length}): ${open.slice(0, 30).map((t) => `${t.id} ${t.status} 
 // Room-wide settings that outlive a page: { characters: <default generator> }.
 const ROOMCFG = path.join(DATA, 'room.json');
 const roomCfg = () => { try { return JSON.parse(fs.readFileSync(ROOMCFG, 'utf8')); } catch { return {}; } };
-// ui/cast.js in a sandbox, with the room's default generator applied.
-function castCtx() { const ctx = vm.createContext({}); vm.runInContext(readText(path.join(ROOT, 'ui', 'cast.js')), ctx); ctx.roomGen(roomCfg().characters || 'cast'); return ctx; }
+// ui/cast.js and the generators in ui/gen (parts before renderers) in a sandbox, with the room's default generator applied.
+function castCtx() {
+  const ctx = vm.createContext({}), gen = path.join(ROOT, 'ui', 'gen');
+  const files = fs.readdirSync(gen).filter((f) => f.endsWith('.js')).sort((a, b) => b.endsWith('-parts.js') - a.endsWith('-parts.js') || a.localeCompare(b));
+  for (const f of [path.join(ROOT, 'ui', 'cast.js'), ...files.map((f) => path.join(gen, f))]) vm.runInContext(readText(f), ctx);
+  ctx.roomGen(roomCfg().characters || 'cast'); return ctx;
+}
 function callFace(s) {
   try {
     const ctx = castCtx();
@@ -879,9 +884,9 @@ function body(req) {
 const json = (res, v, code = 200) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(v)); };
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.jpg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.wav': 'audio/wav', '.webmanifest': 'application/manifest+json' };
 function serveFile(res, file) {
-  if (!fs.existsSync(file)) return json(res, { error: 'not found' }, 404);
+  if (!fs.statSync(file, { throwIfNoEntry: false })?.isFile()) return json(res, { error: 'not found' }, 404);
   res.writeHead(200, { 'content-type': MIME[path.extname(file)] || 'application/octet-stream' });
-  fs.createReadStream(file).pipe(res);
+  fs.createReadStream(file).on('error', () => res.destroy()).pipe(res);
 }
 const view = (s) => {
   const { proc, caff, cx, cxThread, cxLast, sig, ...r } = R(s.id);
@@ -905,6 +910,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/') return serveFile(res, path.join(ROOT, 'ui', 'index.html'));
     // UI seam: <data>/local.css loads after room.css; empty when absent.
     if (url.pathname === '/local.css') { res.writeHead(200, { 'content-type': 'text/css' }); return res.end(readText(path.join(DATA, 'local.css'))); }
+    if (p[0] === 'ui' && p[1] === 'gen') return serveFile(res, path.join(ROOT, 'ui', 'gen', path.basename(p[2] || '')));
     if (p[0] === 'ui') return serveFile(res, path.join(ROOT, 'ui', path.basename(p[1] || '')));
     if (p[0] === 'media') return serveFile(res, path.join(MEDIA, path.basename(p[1] || '')));
     if (p[0] === 'files') return serveFile(res, path.join(FILES, path.basename(decodeURIComponent(p[1] || ''))));

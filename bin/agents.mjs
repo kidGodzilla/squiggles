@@ -200,10 +200,12 @@ const cmds = {
   look: async () => {
     if (a[1] === 'shuffle') return call(`/squiggles/${a[0]}/update`, { lookSeed: Math.floor(Math.random() * 1e9) });
     if (!a[1] || a[1] === 'auto') return call(`/squiggles/${a[0]}/update`, { look: '' });
-    const vm = await import('node:vm'), { readFileSync } = await import('node:fs'), ctx = vm.createContext({});
-    vm.runInContext(readFileSync(new URL('../ui/cast.js', import.meta.url), 'utf8'), ctx);
+    const vm = await import('node:vm'), { readFileSync, readdirSync } = await import('node:fs'), ctx = vm.createContext({}), gdir = new URL('../ui/gen/', import.meta.url);
+    const files = readdirSync(gdir).filter((f) => f.endsWith('.js')).sort((x, y) => y.endsWith('-parts.js') - x.endsWith('-parts.js') || x.localeCompare(y));
+    for (const u of [new URL('../ui/cast.js', import.meta.url), ...files.map((f) => new URL(f, gdir))]) vm.runInContext(readFileSync(u, 'utf8'), ctx);
     const { gen, opts } = ctx.parseLook(a[1]), G = ctx.GENS[gen], want = a[1].split(':')[0].toLowerCase();
     const given = a[1].includes(':') ? a[1].slice(a[1].indexOf(':') + 1).split(',').filter(Boolean).length : 0;
+    if (G && gen === want && Object.keys(opts).length < given) return `unknown option. ${gen} takes a bare ${Object.keys(G.options)[0]} or k=v with k one of: ${Object.keys(G.options).join(', ')}. Values: ${Object.entries(G.options).map(([k, v]) => `${k}: ${v.join(' ')}`).join('; ')}`;
     if (!G || (gen !== want && !opts.character) || Object.keys(opts).length < given) return `unknown look. generators: ${Object.keys(ctx.GENS).join(', ')}; cast characters: ${ctx.LOOKS.join(', ')}`;
     const first = Object.keys(G.options)[0], ks = Object.keys(opts);
     const o = ks.length === 1 && ks[0] === first ? opts[first] : ks.map((k) => `${k}=${opts[k]}`).join(',');

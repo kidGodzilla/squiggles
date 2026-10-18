@@ -3,7 +3,7 @@
 // static renders (o given: { m: 0|1|2, working, done }) draw one state, for files like the call face.
 // ui/cast-preview.html shows the whole cast for testing.
 // Only these names are global (var, so Node's vm sees them too); everything else stays inside, clear of room.js and board.js.
-var { hash, PAL, mix, avatarSVG, persona, LOOKS, GENS, parseLook, roomGen } = (() => {
+var { hash, PAL, mix, avatarSVG, persona, LOOKS, GENS, parseLook, roomGen, KIT } = (() => {
 const hash = (s) => { let h = 2166136261; for (const c of s) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return h >>> 0; };
 const PAL = ['#ff7a6b', '#ffb347', '#ffd84a', '#4fd1a5', '#4cc3ff', '#7c8cff', '#b583ff', '#ff7eb6'];
 const hexRGB = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
@@ -222,22 +222,29 @@ const LOOKS = CHARS.map((c) => c.name);
 
 function castSVG(p, o, uid = '') {   // uid keeps SVG ids unique per instance: duplicate ids make gradients vanish when the first copy is hidden
   MODE = o ? { working: !!o.working, done: !!o.done, speaking: o.m > 0, mopen: o.m === 2 } : null; FACE = p.face;
-  const c = CHARS[p.char], room = ROOMS[p.room], fit = FIT[c.name], u = uid + 'a';
+  const c = CHARS[p.char], fit = FIT[c.name], u = uid + 'a';
   const art = c.svg(u), cut = art.indexOf('<g class="face">'), body = cut < 0 ? art : art.slice(0, cut), rest = cut < 0 ? '' : art.slice(cut);
   const hue = p.hue ? `<filter id="${u}h"><feColorMatrix type="hueRotate" values="${p.hue}"/></filter>` : '';
-  const paw = p.hue ? mix(PAW[c.name], '#888888', .1) : PAW[c.name], d0 = -((hash(p.id) % 45) / 10);
+  const paw = p.hue ? mix(PAW[c.name], '#888888', .1) : PAW[c.name];
+  const fig = `<g transform="translate(50 64) scale(${c.scale || 1.2}) translate(-50 -64)">
+      <g${p.hue ? ` filter="url(#${u}h)"` : ''}>${body}</g>${rest}${p.acc ? ACCS[p.acc](fit, p.accCol) : ''}</g>`;
+  const out = scene(p, o, u, fig, { paw, defs: hue, float: c.float });
+  MODE = null; return out;
+}
+// The room around a figure, shared by every generator: backdrop, desk, decor, and the laptop, hands and sparks state layers.
+// fig is drawn inside <g class="fig">; MODE must already be set (static renders) or null (live).
+function scene(p, o, u, fig, { paw, defs = '', float = false }) {
+  const room = ROOMS[p.room], d0 = -((hash(p.id) % 45) / 10);
   const laptop = `<rect x="35" y="49" width="30" height="15" rx="2.6" fill="#e7eaf3"/><rect x="35" y="49" width="30" height="2" rx="1" fill="#fff" opacity=".7"/>${star(57.5, 56, 2.6, '#ffb347')}<circle cx="43" cy="58.5" r="2" fill="#7c8cff"/>`;
   const hands = `<ellipse class="hand l" cx="40.5" cy="49.4" rx="3.2" ry="2.3" fill="${paw}"/><ellipse class="hand r" cx="59.5" cy="49.4" rx="3.2" ry="2.3" fill="${paw}"/>`;
   const sparks = `${star(20, 22, 3, '#ffe58a')}${star(80, 18, 2.4, '#ff9bc2')}${star(74, 40, 1.8, '#9be7ff')}<g opacity=".9"><rect x="26" y="12" width="2.2" height="1.2" rx=".4" fill="#5fd6a0" transform="rotate(30 27 12.6)"/><rect x="66" y="10" width="2.2" height="1.2" rx=".4" fill="#ffb347" transform="rotate(-20 67 10.6)"/><rect x="30" y="38" width="2" height="1.1" rx=".4" fill="#7c8cff" transform="rotate(50 31 38.5)"/></g>`;
-  const out = `<svg viewBox="0 0 100 75" preserveAspectRatio="xMidYMid slice"${o ? ' xmlns="http://www.w3.org/2000/svg" width="400" height="300"' : ''}>
-    <defs>${g(u + 't', room.table[0], room.table[1])}${hue}</defs>${room.svg(u + 'r')}
-    <g class="fig${c.float ? ' float' : ''}" style="--d:${d0}s"><g transform="translate(50 64) scale(${c.scale || 1.2}) translate(-50 -64)">
-      <g${p.hue ? ` filter="url(#${u}h)"` : ''}>${body}</g>${rest}${p.acc ? ACCS[p.acc](fit, p.accCol) : ''}</g></g>
+  return `<svg viewBox="0 0 100 75" preserveAspectRatio="xMidYMid slice"${o ? ' xmlns="http://www.w3.org/2000/svg" width="400" height="300"' : ''}>
+    <defs>${g(u + 't', room.table[0], room.table[1])}${defs}</defs>${room.svg(u + 'r')}
+    <g class="fig${float ? ' float' : ''}" style="--d:${d0}s">${fig}</g>
     <path d="M-2 75V63Q50 57 102 63V75Z" fill="url(#${u}t)"/><path d="M-2 63Q50 57 102 63" fill="none" stroke="#fff" stroke-width=".8" opacity=".45"/>
     <ellipse cx="50" cy="64.5" rx="17" ry="1.6" fill="#000" opacity=".12"/>${p.decor ? DECOR[p.decor]() : ''}
     ${V('laptop', MODE && MODE.working, laptop)}${V('hands', MODE && MODE.working, hands)}${V('sparks', MODE && MODE.done, `<g class="sparks">${sparks}</g>`)}
   </svg>`;
-  MODE = null; return out;
 }
 
 // The cast's persona. opts.character (a name) and s.lookSeed (any number) can be set per squiggle; otherwise both come from its id.
@@ -279,5 +286,12 @@ function parseLook(look) {
 }
 function persona(s) { const { gen, opts } = parseLook(s.look); return { ...GENS[gen].persona(s, opts), gen, opts }; }
 const avatarSVG = (p, o, uid = '') => (GENS[p.gen] || GENS.cast).render(p, o, uid);
-return { hash, PAL, mix, avatarSVG, persona, LOOKS, GENS, parseLook, roomGen };
+// What generator files (ui/gen/*.js) build on: the shared room scene, state layers and a seeded random.
+const KIT = {
+  hash, mix, scene, V: (cls, show, html) => V(cls, show, html), rooms: ROOMS.length, decor: Object.keys(DECOR),
+  mode: (o) => { MODE = o ? { working: !!o.working, done: !!o.done, speaking: o.m > 0, mopen: o.m === 2 } : null; return MODE; },
+  rng: (seed) => { let v = (seed >>> 0) || 1; return () => { v ^= v << 13; v >>>= 0; v ^= v >>> 17; v ^= v << 5; v >>>= 0; return v / 4294967296; }; },
+  seed: (s) => (s.lookSeed != null && s.lookSeed !== '' ? Number(s.lookSeed) : hash(s.id)),
+};
+return { hash, PAL, mix, avatarSVG, persona, LOOKS, GENS, parseLook, roomGen, KIT };
 })();
