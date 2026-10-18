@@ -2,7 +2,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 
 const today = () => new Date().toISOString().slice(0, 10);
 const TIERS = ['active', 'hold', 'todo', 'done'];
@@ -31,6 +32,19 @@ function githubOf(repo) {
   return m ? `https://github.com/${m[1]}/${m[2]}` : '';
 }
 const git = (repo, args, opts = {}) => execFileSync('git', ['-C', expand(repo), ...args], { stdio: 'pipe', encoding: 'utf8', maxBuffer: 32 << 20, env: { ...process.env, GIT_EDITOR: 'true', GIT_TERMINAL_PROMPT: '0' }, ...opts }).trim();
+// Async git for the merge listing (t961): sync git per review branch froze the server for 17 s.
+const pexec = promisify(execFile);
+const gitA = async (repo, args) => (await pexec('git', ['-C', expand(repo), ...args], { encoding: 'utf8', maxBuffer: 32 << 20, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } })).stdout.trim();
+const okA = (p) => p.then(() => true, () => false);
+async function baseOfA(repo) {
+  try { return (await gitA(repo, ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'])).replace(/^origin\//, ''); } catch {}
+  for (const b of ['main', 'master']) if (await okA(gitA(repo, ['rev-parse', '--verify', '--quiet', `refs/heads/${b}`]))) return b;
+  throw new Error(`no main or master branch in ${repo}`);
+}
+// One lookup per repo per listing: many review branches share a repo.
+const memo = () => { const m = new Map(); return (k, f) => (m.has(k) ? m : m.set(k, f())).get(k); };
+// At most n at a time, results in order.
+async function pool(items, n, f) { const out = []; let i = 0; await Promise.all(Array.from({ length: n }, async () => { while (i < items.length) { const k = i++; out[k] = await f(items[k]); } })); return out; }
 // The branch a gated repo merges into: origin's default branch, else main, else master.
 function baseOf(repo) {
   try { return git(repo, ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD']).replace(/^origin\//, ''); } catch {}
@@ -265,25 +279,25 @@ export function createBoard(root, onChange) {
 
   // ---------- merge queue: review tasks of gated goals ----------
   const goalOf = (id) => (id ? TIERS.flatMap((x) => goals()[x]).find((g) => g.id === id) : null);
-  function mergeInfo(task) {
+  async function mergeInfo(task, q) {
     const goal = goalOf(task.goal), reviewed = task.reviewed || task.confirmed, age = daysSince(reviewed);
     const r = { id: task.id, title: task.title, goal: task.goal, goalTitle: goal?.title || '', owner: task.owner || '', repo: task.repo || '', branch: task.branch || '',
       result: task.note || '', needs: task.needs || [], reviewed, age, stale: age >= 7 };
     if (!task.branch) return { ...r, error: 'no branch on the task' };
     if (!task.repo) return { ...r, error: 'no repo on the task: set it with task edit <id> branch repo:branch' };
     try {
-      if (!hasBranch(task.repo, task.branch)) throw new Error(`branch ${task.branch} is gone from ${task.repo}`);
-      const base = baseOf(task.repo);
-      r.base = base; r.head = git(task.repo, ['rev-parse', '--abbrev-ref', 'HEAD']);
-      r.ahead = Number(git(task.repo, ['rev-list', '--count', `${base}..${task.branch}`]));
-      r.behind = Number(git(task.repo, ['rev-list', '--count', `${task.branch}..${base}`]));
-      r.dirty = git(task.repo, ['status', '--porcelain']).split('\n').filter(Boolean).length;
-      r.log = git(task.repo, ['log', '--format=%h %s', `${base}..${task.branch}`]).split('\n').filter(Boolean);
+      if (!(await okA(gitA(task.repo, ['rev-parse', '--verify', '--quiet', `refs/heads/${task.branch}`])))) throw new Error(`branch ${task.branch} is gone from ${task.repo}`);
+      const base = await q(`base ${task.repo}`, () => baseOfA(task.repo));
+      r.base = base; r.head = await q(`head ${task.repo}`, () => gitA(task.repo, ['rev-parse', '--abbrev-ref', 'HEAD']));
+      r.ahead = Number(await gitA(task.repo, ['rev-list', '--count', `${base}..${task.branch}`]));
+      r.behind = Number(await gitA(task.repo, ['rev-list', '--count', `${task.branch}..${base}`]));
+      r.dirty = await q(`dirty ${task.repo}`, async () => (await gitA(task.repo, ['status', '--porcelain'])).split('\n').filter(Boolean).length);
+      r.log = (await gitA(task.repo, ['log', '--format=%h %s', `${base}..${task.branch}`])).split('\n').filter(Boolean);
       // Links, never a push: GitHub Desktop opens any local branch; the compare page only when origin already has it (as of the last fetch).
       const gh = githubOf(task.repo);
       if (gh) {
         r.desktop = `x-github-client://openRepo/${gh}?branch=${encodeURIComponent(task.branch)}`;
-        let onRemote = false; try { git(task.repo, ['rev-parse', '--verify', '--quiet', `refs/remotes/origin/${task.branch}`]); onRemote = true; } catch {}
+        const onRemote = await okA(gitA(task.repo, ['rev-parse', '--verify', '--quiet', `refs/remotes/origin/${task.branch}`]));
         if (onRemote) r.compare = `${gh}/compare/${base.replace(/^origin\//, '')}...${task.branch.split('/').map(encodeURIComponent).join('/')}`;
       }
     } catch (e) { r.error = String(e.message || e).split('\n')[0]; }
@@ -291,46 +305,50 @@ export function createBoard(root, onChange) {
   }
   const inQueue = () => tasks().filter((t) => t.status === 'review' && (goalOf(t.goal)?.merge || 'gated') === 'gated');
   // Why a review branch no longer needs the Merge tab, or '' if it still does. Never touches the branch.
-  function mergedOutside(task) {
+  async function mergedOutside(task, q) {
     if (!task.repo || !task.branch || !fs.existsSync(expand(task.repo))) return '';
     try {
-      if (!hasBranch(task.repo, task.branch)) return 'branch gone';
-      const base = baseOf(task.repo);
+      if (!(await okA(gitA(task.repo, ['rev-parse', '--verify', '--quiet', `refs/heads/${task.branch}`])))) return 'branch gone';
+      const base = await q(`base ${task.repo}`, () => baseOfA(task.repo));
       // A branch nobody committed to sits on base too; only a moved branch can have been merged.
-      const reflog = git(task.repo, ['reflog', 'show', '--format=%H', `refs/heads/${task.branch}`]).split('\n').filter(Boolean);
+      const reflog = (await gitA(task.repo, ['reflog', 'show', '--format=%H', `refs/heads/${task.branch}`])).split('\n').filter(Boolean);
       if (reflog.length === 1) return '';
       for (const b of [base, `origin/${base}`]) {
-        try { git(task.repo, ['rev-parse', '--verify', '--quiet', b]); } catch { continue; }
-        try { git(task.repo, ['merge-base', '--is-ancestor', task.branch, b]); return `merged outside into ${b}`; } catch {}
-        const cherry = git(task.repo, ['cherry', b, task.branch]).split('\n').filter(Boolean);
+        if (!(await q(`has ${task.repo} ${b}`, () => okA(gitA(task.repo, ['rev-parse', '--verify', '--quiet', b]))))) continue;
+        if (await okA(gitA(task.repo, ['merge-base', '--is-ancestor', task.branch, b]))) return `merged outside into ${b}`;
+        const cherry = (await gitA(task.repo, ['cherry', b, task.branch])).split('\n').filter(Boolean);
         if (cherry.length && cherry.every((l) => l.startsWith('-'))) return `merged outside into ${b} (same patches)`;
       }
     } catch {}
     return '';
   }
   // Close review tasks whose branch was merged (or deleted) outside the Merge tab.
-  function mergeSweep() {
-    const closed = inQueue().map((t) => ({ id: t.id, why: mergedOutside(t) })).filter((x) => x.why);
+  async function mergeSweep(q = memo()) {
+    const closed = (await pool(inQueue(), 6, async (t) => ({ id: t.id, why: await mergedOutside(t, q) }))).filter((x) => x.why);
     if (!closed.length) return closed;
     const t = tasks();
     for (const c of closed) {
-      const x = t.find((k) => k.id === c.id), w = dropWorktrees(x.repo, x.branch, x.worktrees || []);
+      const x = t.find((k) => k.id === c.id);
+      if (x?.status !== 'review') { c.why = ''; continue; } // moved while git ran
+      const w = dropWorktrees(x.repo, x.branch, x.worktrees || []);
       x.worktrees = (x.worktrees || []).filter((p) => w.kept.includes(p)); if (!x.worktrees.length) delete x.worktrees;
       if (w.removed.length) c.worktrees = w.removed;
       const why = c.why + (w.kept.length ? `; worktree with uncommitted work kept: ${w.kept.join(', ')}` : '');
       x.status = 'done'; x.finished = today(); x.confirmed = today(); x.note = `${why}${x.note ? ` — ${x.note}` : ''}`;
     }
-    saveTasks(t); return closed;
+    saveTasks(t); return closed.filter((c) => c.why);
   }
-  const merges = () => { mergeSweep(); return inQueue().map(mergeInfo); };
+  // Concurrent callers share one listing; git runs off the event loop, 6 branches at a time.
+  let listing = null;
+  const merges = () => listing ||= (async () => { const q = memo(); await mergeSweep(q); return pool(inQueue(), 6, (t) => mergeInfo(t, q)); })().finally(() => { listing = null; });
   function mergeTask(id) {
     const t = tasks().find((x) => x.id === id);
     if (!t) throw new Error(`no task ${id}`);
     if (t.status !== 'review') throw new Error(`${id} is ${t.status}, not in review`);
     return t;
   }
-  function mergeDiff(id) {
-    const r = mergeInfo(mergeTask(id));
+  async function mergeDiff(id) {
+    const r = await mergeInfo(mergeTask(id), memo());
     if (r.error) throw new Error(r.error);
     return { ...r, stat: git(r.repo, ['diff', '--stat', `${r.base}...${r.branch}`]), diff: git(r.repo, ['diff', `${r.base}...${r.branch}`]) };
   }
@@ -339,8 +357,8 @@ export function createBoard(root, onChange) {
   // uncommitted work; git itself refuses if a dirty file would be overwritten. Otherwise merge in a temp worktree on the base.
   // Fast-forward when possible, a merge commit otherwise. A conflict is reported: send it back.
   // by: who merged or sent back (t142), a human id from the page or a squiggle id from the CLI.
-  function merge(id, by) {
-    const task = mergeTask(id), r = mergeInfo(task);
+  async function merge(id, by) {
+    const task = mergeTask(id), r = await mergeInfo(task, memo());
     if (r.error) throw new Error(r.error);
     if (r.head === r.branch) throw new Error(`${r.repo} has ${r.branch} checked out: switch it away first`);
     const wts = git(r.repo, ['worktree', 'list', '--porcelain']).split(/\n\n+/);

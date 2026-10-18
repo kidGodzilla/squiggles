@@ -444,10 +444,10 @@ function relayMentions(id, text, from, human) {
 // diff <task> from the merge queue, url <http(s) page> in a frame, file <path> (text, or an image), off.
 const SCREEN_MAX = 400000, IMG = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp' };
 const liveScreen = new Map();
-function screen(id, { kind, arg, by } = {}) {
+async function screen(id, { kind, arg, by } = {}) {
   let ev;
   if (kind === 'off') ev = { k: 'screen', kind: 'off' };
-  else if (kind === 'diff') { const d = board.mergeDiff(String(arg || '')); ev = { k: 'screen', kind, title: `${d.id} · ${path.basename(d.repo)}:${d.branch}`, stat: d.stat, text: d.diff.slice(0, SCREEN_MAX), cut: d.diff.length > SCREEN_MAX }; }
+  else if (kind === 'diff') { const d = await board.mergeDiff(String(arg || '')); ev = { k: 'screen', kind, title: `${d.id} · ${path.basename(d.repo)}:${d.branch}`, stat: d.stat, text: d.diff.slice(0, SCREEN_MAX), cut: d.diff.length > SCREEN_MAX }; }
   else if (kind === 'url') { const u = new URL(String(arg || '')); if (!/^https?:$/.test(u.protocol)) throw new Error('url must be http or https'); ev = { k: 'screen', kind, title: u.href, url: u.href }; }
   else if (kind === 'file') {
     const f = path.resolve(home(String(arg || ''))), ext = path.extname(f).toLowerCase(), st = fs.statSync(f);
@@ -646,10 +646,10 @@ function meetNow({ attendees, presenters, topic = '', agenda, minutes = 30, by =
   return startMeeting({ id: `now-${s.getTime().toString(36)}`, title: t || 'Meet now', agenda: agenda ?? t, attendees: ids, presenters: pres.length ? pres : ids, start: local(s), end: local(e) }, by);
 }
 // Merge review now (t599): squiggles with branches in review present them, urgent or prod first, then security, then most commits and oldest; at most 5.
-function mergeMeeting(by = 'owner') {
+async function mergeMeeting(by = 'owner') {
   const hot = (x) => /\burgent\b|\bprod\b|outage|hotfix/i.test(x.title), sec = (x) => x.owner === 'security' || /secur|vuln|cve|secret/i.test(x.title);
   const per = {};
-  for (const x of board.merges()) if (x.owner && loadSquiggle(x.owner)) (per[x.owner] = per[x.owner] || []).push(x);
+  for (const x of await board.merges()) if (x.owner && loadSquiggle(x.owner)) (per[x.owner] = per[x.owner] || []).push(x);
   const score = (xs) => [xs.some(hot) ? 1 : 0, xs.some(sec) ? 1 : 0, xs.reduce((n, x) => n + (x.ahead || 0), 0), Math.max(...xs.map((x) => x.age || 0))];
   const ids = Object.keys(per).sort((a, b) => { const A = score(per[a]), B = score(per[b]); for (let i = 0; i < 4; i++) if (A[i] !== B[i]) return B[i] - A[i]; return 0; }).slice(0, 5);
   if (!ids.length) throw new Error('nothing is in review');
@@ -991,7 +991,7 @@ const server = http.createServer(async (req, res) => {
       if (b.op === 'end') return json(res, endMeeting());
       if (b.op === 'next') return json(res, nextTurn());
       if (b.op === 'now') return json(res, meetNow(b));
-      if (b.op === 'merges') return json(res, mergeMeeting(b.by));
+      if (b.op === 'merges') return json(res, await mergeMeeting(b.by));
       if (b.op === 'start') {
         // Start now, ahead of time: today's (or the next) occurrence, keeping its length.
         const m = meetings.all().find((x) => x.id === b.id); if (!m) throw new Error(`no meeting ${b.id}`);
@@ -1003,15 +1003,15 @@ const server = http.createServer(async (req, res) => {
       }
       return json(res, meetings.op(b));
     }
-    if (url.pathname === '/api/merges' && req.method === 'GET') return json(res, board.merges());
+    if (url.pathname === '/api/merges' && req.method === 'GET') return json(res, await board.merges());
     if (url.pathname === '/api/worktrees' && req.method === 'GET') return json(res, board.worktrees());
     if (url.pathname === '/api/worktrees' && req.method === 'POST') return json(res, { note: board.orphanNotes(), worktrees: board.worktrees() });
-    if (p[1] === 'merges' && p[2] && p[3] === 'diff') return json(res, board.mergeDiff(p[2]));
+    if (p[1] === 'merges' && p[2] && p[3] === 'diff') return json(res, await board.mergeDiff(p[2]));
     if (url.pathname === '/api/merges' && req.method === 'POST') {
       const b = await body(req, res);
-      if (b.op === 'merge') return json(res, board.merge(b.id, b.by));
+      if (b.op === 'merge') return json(res, await board.merge(b.id, b.by));
       if (b.op === 'back') return json(res, board.mergeBack(b.id, b.note, b.by));
-      if (b.op === 'refresh') { const closed = board.mergeSweep(); return json(res, { closed, merges: board.merges() }); }
+      if (b.op === 'refresh') { const closed = await board.mergeSweep(); return json(res, { closed, merges: await board.merges() }); }
       return json(res, { error: 'op must be merge, back or refresh' }, 400);
     }
     if (p[0] === 'api' && p[1] === 'squiggles' && p[2]) {
@@ -1026,7 +1026,7 @@ const server = http.createServer(async (req, res) => {
         case 'wake': return json(res, wake(id, b.why || 'asked'));
         case 'stop': stop(id); return json(res, 'ok');
         case 'clear': return json(res, clearChat(id));
-        case 'screen': return json(res, screen(id, b));
+        case 'screen': return json(res, await screen(id, b));
         case 'remove': return json(res, removeSquiggle(id));
         case 'update': {
           const { charter, ...meta } = b;
