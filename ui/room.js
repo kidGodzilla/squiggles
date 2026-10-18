@@ -18,7 +18,7 @@ const savePrefs = () => { try { localStorage.agentsPrefs = JSON.stringify(prefs)
 
 const S = {
   sq: {}, order: [], term: {}, todos: {}, run: {}, speakers: new Set(), present: null, pin: {}, vis: {}, focus: null, office: '', officeIds: [], meeting: null,
-  queue: [], level: {}, hist: {}, unread: {}, spokeAt: performance.now(), fill: 0, joined: false, lastFill: '',
+  queue: [], level: {}, hist: {}, unread: {}, spokeAt: performance.now(), fill: 0, joined: false, lastFill: '', forUser: {},
 };
 const P = (id) => persona(S.sq[id]);
 
@@ -77,11 +77,12 @@ const plain = (t) => String(t || '').replace(/```[\s\S]*?```/g, ' ').replace(/`(
 const firstSentences = (t, n = 1, max = 200) => { const s = plain(t).match(/[^.!?]+[.!?]*/g) || []; let out = s.slice(0, n).join(' ').trim(); return out.length > max ? out.slice(0, max).replace(/\s\S*$/, '') + '…' : out; };
 const estMs = (t) => Math.min(9000, 900 + t.length * 45);
 
-function say(id, text, { label = '', priority = false } = {}) {
+// cap: the bottom caption is only for words meant for the user (t976); idle chatter and squiggle-to-squiggle talk stay on the tile.
+function say(id, text, { label = '', priority = false, cap = false } = {}) {
   if (!text || !S.sq[id]) return;
   if (S.office && !S.officeIds.includes(id)) return;
   if (!priority) { const others = S.queue.filter((q) => !q.priority); if (others.length >= 3) S.queue.splice(S.queue.indexOf(others[0]), 1); }
-  S.queue.push({ id, text, label, priority });
+  S.queue.push({ id, text, label, priority, cap });
   pumpSpeech();
 }
 let speaking = false;
@@ -90,7 +91,7 @@ async function pumpSpeech() {
   const q = S.queue.shift(); if (!q) return;
   speaking = true;
   try {
-    startTalk(q.id, q.text, q.label);
+    startTalk(q.id, q.text, q.label, q.cap);
     if (prefs.voice && AUD.ctx) await speakAudio(q.id, q.text).catch(() => sleep(estMs(q.text)));
     else await sleep(estMs(q.text));
   } finally {
@@ -111,10 +112,10 @@ async function speakAudio(id, text) {
 }
 const mouths = new Map();
 function setMouth(svgRoot, ry, rx) { const m = svgRoot && svgRoot.querySelector('.mouthE'); if (m) { m.setAttribute('ry', ry); m.setAttribute('rx', rx); } }
-function startTalk(id, text, label) {
+function startTalk(id, text, label, cap) {
   const t = tileOf(id); if (!t) return;
   if (S.present && S.present !== id && presenter() !== S.present) hidePresent();
-  S.speakers.add(id); AUD.duck(true); setFocus(id); showSpeaker(id, t, text);
+  S.speakers.add(id); AUD.duck(true); setFocus(id); showSpeaker(id, t, text, cap);
   for (const el of [t, ...camsOf(id)]) el.classList.add('speaking');
   t.querySelector('.bubble').innerHTML = (label ? `<small>${esc(label)}</small> ` : '') + esc(text); linkTasks(t.querySelector('.bubble'));
   if (S.present === id) $('#pcap').textContent = text;
@@ -141,10 +142,10 @@ function onScreen(el) {
   const r = el.getBoundingClientRect(), top = $('header').offsetHeight, bottom = innerHeight - (PHONE.matches ? parseFloat(getComputedStyle(document.body).paddingBottom) || 0 : 0);
   return r.width > 40 && r.height > 30 && Math.min(r.bottom, bottom) - Math.max(r.top, top) > r.height * 0.6;
 }
-function showSpeaker(id, t, text) {
+function showSpeaker(id, t, text, forUser) {
   const cap = $('#speakcap'), room = !document.body.matches('.v-goals,.v-tasks,.v-merge,.v-team,.v-cal');
   if (room && !S.office && !onScreen(t) && Date.now() - stageTouched > 5000) t.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-  else if (!onScreen(t) && !(S.present === id && $('#present').classList.contains('on'))) {
+  else if (forUser && !onScreen(t) && !(S.present === id && $('#present').classList.contains('on'))) {
     const s = S.sq[id];
     cap.innerHTML = `<div class="tile mini">${avatarSVG(P(id), undefined, 'sc_')}</div><div><b>${esc(s.name)}</b><p>${esc(text)}</p></div><button class="capx" type="button" title="Dismiss" aria-label="Dismiss">×</button>`;
     if (!(cap.classList.contains('on') && cap.dataset.id === id)) capT0 = Date.now();
@@ -654,6 +655,7 @@ const ACT = { cmd: (e) => e.note || 'running a command', read: (e) => `reading $
 function apply(id, ev, live) {
   const s = S.sq[id]; if (!s) return;
   chatEvent(id, ev, live);
+  if (ev.k === 'user') S.forUser[id] = ev.from === 'owner';   // this turn answers a person
   switch (ev.k) {
     case 'tool':
       pushTool(id, ev); setTicker(id, S.term[id].slice(-1)[0]);
@@ -674,7 +676,7 @@ function apply(id, ev, live) {
       paintSubs(id); break;
     case 'say':
       // A presenter is heard in full (their 60-second summary); everyone else by their first sentence or two.
-      if (live && !HANDLED.test(ev.text.replace(/^\s*(DONE|IDLE):.*$/gim, '').trim())) say(id, presenter() === id ? firstSentences(ev.text, 40, 1400) : firstSentences(ev.text, s.lead ? 2 : 1, s.lead ? 260 : 180), { priority: s.lead || presenter() === id }); break;
+      if (live && !HANDLED.test(ev.text.replace(/^\s*(DONE|IDLE):.*$/gim, '').trim())) say(id, presenter() === id ? firstSentences(ev.text, 40, 1400) : firstSentences(ev.text, s.lead ? 2 : 1, s.lead ? 260 : 180), { priority: s.lead || presenter() === id, cap: S.forUser[id] || presenter() === id || /^\s*(BLOCKED|RETHINK):/m.test(ev.text) }); break;
     case 'screen':
       if (ev.kind === 'off' || ev.gone) delete S.pin[id]; else S.pin[id] = ev;   // gone: content not kept past a restart (t854)
       if (!ev.gone && (ev.kind === 'image' || ev.kind === 'url')) seen(id, ev.kind === 'url' ? { view: 'page', title: ev.title, url: ev.url } : { view: 'image', title: ev.title, imgs: [ev.url] }, ev.ts);
