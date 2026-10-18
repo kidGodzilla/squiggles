@@ -1,5 +1,6 @@
 // Local calendar reader (t785): reads what macOS Calendar shows (iCloud, Google, Exchange) through EventKit. Read-only.
-// calendar-reader status | allow | calendars | events [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--calendar <name>]
+// calendar-reader status | allow | calendars | events [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--calendar <name>] [--notes]
+// Location and notes are written by whoever sent the invite (t925): left out unless --notes, then under "untrusted".
 // Prints JSON. Only `allow` asks for access; everything else fails with a clear error instead of prompting.
 import EventKit
 import Foundation
@@ -76,16 +77,20 @@ case "events":
     cals = cals.filter { $0.title.caseInsensitiveCompare(name) == .orderedSame || $0.calendarIdentifier == name }
     if cals.isEmpty { fail("No calendar named \(name). See `agents.mjs calendar list`.") }
   }
+  let notes = args.contains("--notes")
+  func who(_ p: EKParticipant) -> String { p.name ?? p.url.absoluteString.replacingOccurrences(of: "mailto:", with: "") }
   let evs = store.events(matching: store.predicateForEvents(withStart: start, end: end, calendars: cals))
     .sorted { $0.startDate < $1.startDate }
   out([
     "from": iso.string(from: start), "to": iso.string(from: end),
     "calendars": cals.map(calInfo),
     "events": evs.map { e -> [String: Any] in
-      ["title": e.title ?? "", "start": iso.string(from: e.startDate), "end": iso.string(from: e.endDate), "allDay": e.isAllDay,
-       "location": e.location ?? "", "calendar": e.calendar.title, "calendarId": e.calendar.calendarIdentifier]
+      var r: [String: Any] = ["title": e.title ?? "", "start": iso.string(from: e.startDate), "end": iso.string(from: e.endDate), "allDay": e.isAllDay,
+       "calendar": e.calendar.title, "calendarId": e.calendar.calendarIdentifier, "attendees": (e.attendees ?? []).map(who)]
+      if notes { r["untrusted"] = ["location": e.location ?? "", "notes": String((e.notes ?? "").prefix(4000))] }
+      return r
     },
   ])
 default:
-  fail("usage: calendar-reader status | allow | calendars | events [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--calendar <name>]")
+  fail("usage: calendar-reader status | allow | calendars | events [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--calendar <name>] [--notes]")
 }
