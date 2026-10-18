@@ -3,7 +3,7 @@
 // static renders (o given: { m: 0|1|2, working, done }) draw one state, for files like the call face.
 // ui/cast-preview.html shows the whole cast for testing.
 // Only these names are global (var, so Node's vm sees them too); everything else stays inside, clear of room.js and board.js.
-var { hash, PAL, mix, avatarSVG, persona, LOOKS, GENS, parseLook, roomGen, KIT } = (() => {
+var { hash, PAL, mix, avatarSVG, persona, LOOKS, GENS, hasGen, parseLook, roomGen, KIT } = (() => {
 const hash = (s) => { let h = 2166136261; for (const c of s) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return h >>> 0; };
 const PAL = ['#ff7a6b', '#ffb347', '#ffd84a', '#4fd1a5', '#4cc3ff', '#7c8cff', '#b583ff', '#ff7eb6'];
 const hexRGB = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
@@ -294,5 +294,5 @@ const KIT = {
   rng: (seed) => { let v = (seed >>> 0) || 1; return () => { v ^= v << 13; v >>>= 0; v ^= v >>> 17; v ^= v << 5; v >>>= 0; return v / 4294967296; }; },
   seed: (s) => (s.lookSeed != null && s.lookSeed !== '' ? Number(s.lookSeed) : hash(s.id)),
 };
-return { hash, PAL, mix, avatarSVG, persona, LOOKS, GENS, parseLook, roomGen, KIT };
+return { hash, PAL, mix, avatarSVG, persona, LOOKS, GENS, hasGen, parseLook, roomGen, KIT };
 })();
