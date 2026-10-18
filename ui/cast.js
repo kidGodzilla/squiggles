@@ -270,22 +270,23 @@ const GENS = {
 // look is '<generator>[:<options>]', options 'value' (the first option) or 'k=v,k=v'. A bare cast name ('Puff') is the cast.
 // No look, or an unknown generator, means the room default.
 let DEF = 'cast';
-const roomGen = (g) => { if (g !== undefined) DEF = GENS[g] ? g : 'cast'; return DEF; };
+const hasGen = (g) => typeof g === 'string' && Object.hasOwn(GENS, g); // own keys only: 'constructor' or '__proto__' is no generator (t878)
+const roomGen = (g) => { if (g !== undefined) DEF = hasGen(g) ? g : 'cast'; return DEF; };
 function parseLook(look) {
   const str = String(look || '').trim(); if (!str) return { gen: DEF, opts: {} };
   const i = str.indexOf(':'), head = i < 0 ? str : str.slice(0, i), rest = i < 0 ? '' : str.slice(i + 1);
   const id = head.toLowerCase();
-  if (!GENS[id]) { const c = LOOKS.find((n) => n.toLowerCase() === id); return c ? { gen: 'cast', opts: { character: c } } : { gen: DEF, opts: {} }; }
+  if (!hasGen(id)) { const c = LOOKS.find((n) => n.toLowerCase() === id); return c ? { gen: 'cast', opts: { character: c } } : { gen: DEF, opts: {} }; }
   const G = GENS[id], keys = Object.keys(G.options), opts = {};
   for (const part of rest.split(',').filter(Boolean)) {
     const [k, v] = part.includes('=') ? part.split('=') : [keys[0], part];
-    const vals = G.options[k]; if (!vals) continue;
+    const vals = Object.hasOwn(G.options, k) ? G.options[k] : null; if (!vals) continue;
     const hit = vals.find((x) => String(x).toLowerCase() === String(v).toLowerCase()); if (hit != null) opts[k] = hit;
   }
   return { gen: id, opts };
 }
 function persona(s) { const { gen, opts } = parseLook(s.look); return { ...GENS[gen].persona(s, opts), gen, opts }; }
-const avatarSVG = (p, o, uid = '') => (GENS[p.gen] || GENS.cast).render(p, o, uid);
+const avatarSVG = (p, o, uid = '') => (hasGen(p.gen) ? GENS[p.gen] : GENS.cast).render(p, o, uid);
 // What generator files (ui/gen/*.js) build on: the shared room scene, state layers and a seeded random.
 const KIT = {
   hash, mix, scene, V: (cls, show, html) => V(cls, show, html), rooms: ROOMS.length, decor: Object.keys(DECOR),

@@ -2,7 +2,7 @@
 const SET = { gen: '', talk: 0 };
 function renderSettings() {
   const room = roomGen(), sel = $('#setGen');
-  if (!SET.gen || !GENS[SET.gen]) SET.gen = room;
+  if (!hasGen(SET.gen)) SET.gen = room;
   sel.innerHTML = Object.values(GENS).map((g) => `<option value="${g.id}"${g.id === SET.gen ? ' selected' : ''}>${esc(g.name)}</option>`).join('');
   $('#setNow').textContent = `The room uses ${GENS[room].name}.`;
   $('#setRoom').disabled = SET.gen === room; $('#setRoom').textContent = SET.gen === room ? `${GENS[room].name} is the room's pack` : `Use ${GENS[SET.gen].name} for the room`;

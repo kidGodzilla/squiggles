@@ -55,6 +55,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - The scheduler staggers wakes per provider, 2 minutes apart (was 10 minutes across all).
 
 ### Fixed
+- `look <id> constructor` (or `__proto__`) no longer breaks the room; unknown looks fall back to the default.
 - A server started with `node server.mjs` comes back after `restart`.
 - Changing a squiggle's model, browser, permission mode, effort or folder takes effect on its next turn.
 - The roster survives a half-written `squiggle.json` or a failed fetch.
