@@ -95,7 +95,7 @@ function saveState() {
   const out = {};
   for (const [id, { proc, caff, cx, cxThread, cxLast, sig, subs, ...r }] of rt) out[id] = r;
   if (persisted['*limit']) { const { timer, ...l } = persisted['*limit']; out['*limit'] = l; }
-  for (const k of ['*meeting', '*started', '*held', '*warned', '*plimit']) if (persisted[k]) out[k] = persisted[k];
+  for (const k of ['*meeting', '*started', '*held', '*warned']) if (persisted[k]) out[k] = persisted[k];
   fs.writeFileSync(STATE, JSON.stringify(out, null, 2));
 }
 
@@ -271,17 +271,7 @@ function launch(s) {
 // Whitelist in code, not in squiggle.json: the model picks the provider, anything unlisted runs on Claude (modelFor).
 const PROVIDERS = { codex: ['gpt-6.1-sol'] };
 const providerOf = (s) => (CONFIG.codex && Object.keys(PROVIDERS).find((p) => PROVIDERS[p].includes(s.model))) || '';
-// Each provider has its own usage limit; hitting one pauses only its squiggles' wakes.
-const plimit = persisted['*plimit'] ||= {};
-function providerLimit(p, msg) {
-  const t = /\bin\s+(?=\d)(?:(\d+)\s*h\w*\s*)?(?:(\d+)\s*m\w*)?/i.exec(msg), at = parseReset(`session limit resets ${/\bat\s+(\d{1,2}(?::\d{2})?\s*[ap]m)/i.exec(msg)?.[1] || ''}`);
-  // Codex weekly limits name a date: "try again at Oct 22nd, 2026 1:59 PM".
-  const day = /\bat\s+([a-z]{3,9}\s+\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})\s+(\d{1,2}:\d{2}\s*[ap]m)/i.exec(msg), dated = day ? Date.parse(`${day[1]}, ${day[2]} ${day[3]}`) || 0 : 0;
-  const until = dated || at || Date.now() + ((Number(t?.[1]) || 0) * 60 + (Number(t?.[2]) || 0) || 60) * 60000;
-  plimit[p] = until + 5 * 60000; saveState();
-  inbox.push(`[Harness · LIMIT] ${p} usage limit hit; its squiggles' wakes paused until ${hhmm(plimit[p])}.`);
-  return plimit[p];
-}
+// A provider usage limit holds nothing (t971): the turn just ends and the next wake tries again; limits often reset early.
 // Codex: one `codex app-server` per squiggle, kept between turns, so MCP servers live on (computer use
 // keeps its window bindings, t330). Each wake is a turn on the saved thread; messages mid-turn steer it.
 const shortEv = (s) => (typeof s === 'string' ? s.slice(0, 6000) : '');
@@ -362,7 +352,7 @@ async function codexTurn(s, prompt, images = []) {
       if (t.status === 'interrupted') return end(lastText, true, 'interrupted');
       const msg = t.error?.message || 'codex failed';
       emit(s.id, { k: 'log', text: shortEv(msg) });
-      if (/usage limit|rate limit|quota/i.test(msg)) { providerLimit('codex', msg); end(msg, true, 'provider_limit'); }
+      if (/usage limit|rate limit|quota/i.test(msg)) end(msg, true, 'provider_limit');
       else if (/at capacity/i.test(msg)) { if ((r.capTries || 0) < 3) { capacityRetry(s); end(msg, true, 'capacity'); } else { r.capTries = 0; end(msg, true); } }
       else end(msg, true);
     }
@@ -479,7 +469,7 @@ function screen(id, { kind, arg, by } = {}) {
 
 function wake(id, why = 'scheduled') {
   const s = loadSquiggle(id);
-  if (!s || R(id).status === 'working' || plimit[providerOf(s)] > Date.now()) return false;
+  if (!s || R(id).status === 'working') return false;
   let news = []; try { news = board.suggestionNews(id); } catch {}
   send(id, `Wake (${why}), ${new Date().toLocaleString()}. Read your charter and the end of your journal, decide the single most valuable thing to do now, do it, verify it, append a dated journal entry, then end with a status line. You have ${s.maxTurns ?? 40} turns this wake; journal findings as you confirm them.${news.length ? `\n\nYour suggestions, decided by the lead:\n${news.map((x) => `- ${x}`).join('\n')}` : ''}`, 'harness');
   return true;
@@ -505,7 +495,7 @@ const inbox = [];
 function turnEnded(s, text, isError, subtype) {
   const p = providerOf(s), reset = !p && parseReset(text); if (reset) limitHit(reset);
   const limited = !p && limit.until > Date.now() && (reset || isError);
-  const st = subtype === 'provider_limit' ? { status: 'idle', note: `${p} usage limit, wakes resume ${hhmm(plimit[p])}` }
+  const st = subtype === 'provider_limit' ? { status: 'idle', note: `${p} usage limit; next wake tries again` }
     : subtype === 'capacity' ? { status: 'waiting', note: `model at capacity, retrying at ${hhmm(R(s.id).capAt)} (try ${R(s.id).capTries} of 3)` }
     : limited ? { status: 'idle', note: `session limit, wakes resume ${hhmm(limit.until)}` }
     : subtype === 'interrupted' ? { status: 'idle', note: 'stopped' }

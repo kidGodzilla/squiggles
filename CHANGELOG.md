@@ -39,6 +39,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - `look <id> <character|auto|shuffle>` sets a squiggle's character; looks take a generator (`cast:Puff`), and `room characters <generator>` sets the room default, saved in room.json.
 
 ### Changed
+- A Codex usage limit no longer pauses wakes: the turn ends and the next wake tries again. `limit` shows the day as well as the time.
 - The bottom speaker caption shows only replies to you, blockers and presentations, not idle chatter.
 - The speaker caption has × to dismiss it, and moves to the top when it would cover the field you're typing in.
 - A goal owner's face opens a chat asking about that goal.

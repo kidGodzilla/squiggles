@@ -189,7 +189,10 @@ const cmds = {
     const { unread, read } = await call('/inbox'), t = (f) => new Date(f.mtime).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
     return [`unread: ${unread.length ? '' : 'none'}`, ...unread.map((f) => `  ${f.name}  ${t(f)}`), `read: ${read.length ? '' : 'none'}`, ...read.slice(0, 20).map((f) => `  ${f.name}  ${t(f)}`)].join('\n');
   },
-  limit: async () => { const l = await call('/limit'); return l.until ? `session limit: scheduled wakes paused until ${new Date(l.until).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : 'no session limit in effect'; },
+  limit: async () => {
+    const l = await call('/limit'), t = (x) => new Date(x).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' });
+    return l.until ? `session limit: scheduled wakes paused until ${t(l.until)}` : 'no session limit in effect';
+  },
   remove: () => call(`/squiggles/${a[0]}/remove`, {}),
   // room radio <fip|fipjazz|...|off> | room volume <0-1> | room voices on|off | room chatter quiet|normal|lively | room characters <generator> | room view room|lead|meeting|team|calendar|goals|tasks|merge|settings | room view blocked|rethink | room view 1on1 <id> | room view settings [room|characters|squiggles|people|sharing|defaults|security] | room chat <id> ["<draft>"] | room lock
   // room passcode set <code>|clear|status|local on|off (t913): optional lock-screen passcode; this CLI always gets through.
