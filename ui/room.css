@@ -286,7 +286,7 @@ mark { background: rgba(245,192,74,.45); color: inherit; border-radius: 3px; pad
 .note.dragging { opacity: .3 }
 .note .nt { word-break: break-word } .note .nn, .note .nb, .note .np { overflow-wrap: anywhere }
 .note .nf { display: flex; align-items: center; gap: 6px; margin-top: 10px; font: 11.5px var(--sans); color: rgba(43,36,22,.72) }
-.note .nf .face { width: 26px; height: 20px; border-radius: 5px }
+.note .nf .face { width: 26px; height: 20px; border-radius: 5px } .note .nf .nown { order: 3 } .note .nf:not(:has(.ng)) .nown { margin-left: auto }
 .note .nf .ng { margin-left: auto; padding: 1px 7px; border-radius: 99px; background: rgba(0,0,0,.08); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 110px }
 .note .nn { margin-top: 6px; font: 12px/1.35 var(--sans); color: rgba(43,36,22,.75) }
 .note.stale { opacity: .62; filter: saturate(.55); border-radius: 2px 2px 3px 30px / 2px 2px 3px 14px }
@@ -324,8 +324,8 @@ body:not(.v-goals):not(.v-tasks):not(.v-merge):not(.v-team):not(.v-cal):not(.v-s
 .pile { position: relative; width: 100%; max-width: 230px; padding: 12px 13px 11px; cursor: pointer; background: var(--c, #fff27a); color: #2b2416; border-radius: 3px;
   box-shadow: 4px 4px 0 -1px color-mix(in srgb, var(--c, #fff27a) 82%, #000), 8px 8px 0 -2px color-mix(in srgb, var(--c, #fff27a) 70%, #000), 0 12px 18px -8px rgba(0,0,0,.55); transform: rotate(-.6deg); transition: transform .18s var(--ease) }
 .pile:hover { transform: rotate(0) translateY(-2px) }
-.pile .ph { display: flex; align-items: center; gap: 7px; margin-bottom: 6px; font: 12px var(--sans) } .pile .ph b { font-size: 13px } .pile .ph span { margin-left: auto; color: rgba(43,36,22,.7) }
-.pile .ph .face { width: 26px; height: 20px; border-radius: 5px }
+.pile .ph { display: flex; align-items: center; gap: 7px; margin-bottom: 6px; font: 12px var(--sans) } .pile .ph b { font-size: 13px } .pile .ph > span:last-child { margin-left: auto; color: rgba(43,36,22,.7) }
+.pile .ph .face { width: 26px; height: 20px; border-radius: 5px } .pile .ph .face { order: 3 } /* avatars sit at the right in every Tasks view (t930) */
 .pile .pt { font: 14px/1.25 var(--hand); padding: 3px 0; border-top: 1px dashed rgba(43,36,22,.22); white-space: nowrap; overflow: hidden; text-overflow: ellipsis } .pile .pt.more { font: 11.5px var(--sans); color: rgba(43,36,22,.7) }
 #ttidy.on { color: var(--text); border-color: var(--accent) }
 #lockBtn { display: flex; align-items: center; gap: 6px } #lockBtn svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round }
@@ -533,7 +533,8 @@ body.v-meet #meetThread { display: flex; flex-direction: column; position: fixed
 #meetThread .m.you .to { display: block; font-size: 11.5px; opacity: .7; margin-bottom: 2px }
 /* Owner faces open a 1:1 (t627). */
 .mowner { padding: 0; border-radius: 6px; cursor: pointer } .mowner:hover .face, .nown:hover .face { outline: 2px solid var(--accent) }
-.nown { cursor: pointer }
+.nown { display: inline-flex; cursor: pointer } /* the face inside keeps its box size */
+@media (pointer: coarse) { .g .nown { display: grid; place-items: center; min-width: 44px; min-height: 44px; margin: -10px -7px } } /* goal owner face is a 44px target (t927) */
 /* Relayed @mention replies name who answered (t657). */
 .m.lead .by { display: block; font-size: 12px; color: var(--dim); margin-bottom: 2px }
 /* Shared screen beside a 1:1 (t664) */
@@ -569,9 +570,10 @@ body.v-one.screen:not(.v-meet) #chats .cw.office { left: auto !important; width:
 .tabs .tcount { display: inline-block; min-width: 16px; margin-left: 4px; padding: 0 5px; border-radius: 99px; background: var(--accent); color: #0d1020; font-size: 11px; line-height: 16px; text-align: center } /* t352 */
 /* Speaker caption when their tile is off screen (t670) */
 #speakcap { display: none; position: fixed; z-index: 45; left: 50%; bottom: 24px; transform: translateX(-50%); width: min(560px, calc(100vw - 24px)); box-sizing: border-box; align-items: center; gap: 12px; padding: 10px 14px; background: rgba(16,18,27,.94); backdrop-filter: blur(8px); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 12px 36px rgba(0,0,0,.5); cursor: pointer; animation: fadein .2s }
-#speakcap.on { display: flex } #speakcap .tile.mini { width: 64px; height: 48px } #speakcap > div:last-child { min-width: 0 }
+#speakcap.on { display: flex } #speakcap .capx { flex: none; align-self: flex-start; width: 28px; height: 28px; margin: -4px -6px 0 auto; border: 0; border-radius: 8px; background: none; color: var(--dim); font-size: 18px; line-height: 1; cursor: pointer } #speakcap .capx:hover { background: var(--panel2); color: var(--text) } @media (pointer: coarse) { #speakcap .capx { width: 44px; height: 44px; margin: -10px -12px -10px auto } } #speakcap .tile.mini { width: 64px; height: 48px } #speakcap > div:nth-child(2) { min-width: 0; flex: 1 }
 #speakcap b { font-size: 13px } #speakcap p { margin: 2px 0 0; font-size: 13.5px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden }
 @media (max-width: 760px) { #speakcap { bottom: calc(var(--tabh) + 10px) } }
+#speakcap.top { top: calc(var(--hh, 60px) + 12px); bottom: auto } /* moved off a focused field (t931) */
 /* @mentions (t677) */
 .mwrap { flex: 1; min-width: 0; display: grid } .mwrap > * { grid-area: 1 / 1 } .mwrap textarea { position: relative; width: 100%; box-sizing: border-box }
 .mmirror { padding: 5px 0; max-height: 140px; overflow: hidden; font: inherit; line-height: 1.45; white-space: pre-wrap; overflow-wrap: break-word; color: transparent; pointer-events: none }

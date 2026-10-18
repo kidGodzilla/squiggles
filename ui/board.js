@@ -42,7 +42,7 @@ function renderGoals() {
         const open = B.tasks.filter((t) => t.goal === g.id && t.status !== 'done').length;
         return `<div class="g ${stale ? 'stale' : ''}" draggable="true" data-goal="${esc(g.id)}">
           <span class="gt">${hl(g.title, q)}${g.note ? `<span class="gn">${hl(g.note, q)}</span>` : ''}${open ? `<span class="gn">${open} open note${open > 1 ? 's' : ''}</span>` : ''}</span>
-          <span class="gm">${tier === 'done' ? '' : `<span class="gmerge ${g.merge}" title="${g.merge === 'open' ? 'Open: commits go to main' : 'Gated: a branch per task, merged from the Merge tab'}">${g.merge === 'open' ? 'Open' : 'Gated'}</span>`}${face(g.owner, 'gf' + hash(g.id) + '_')}${ago(g.last_confirmed)}</span></div>`;
+          <span class="gm">${tier === 'done' ? '' : `<span class="gmerge ${g.merge}" title="${g.merge === 'open' ? 'Open: commits go to main' : 'Gated: a branch per task, merged from the Merge tab'}">${g.merge === 'open' ? 'Open' : 'Gated'}</span>`}${g.owner && S.sq[g.owner] ? `<span class="nown" data-owner="${esc(g.owner)}" title="Ask ${esc(ownerName(g.owner))} about this goal">${face(g.owner, 'gf' + hash(g.id) + '_')}</span>` : ''}${ago(g.last_confirmed)}</span></div>`;
       }).join('')}
       ${tier !== 'done' ? `<button class="addg" data-addgoal="${tier}">+ add a goal</button>` : ''}</div></div>`;
   }).join('');
@@ -145,7 +145,10 @@ for (const v of ['#goalsView', '#tasksView']) {
     const add = e.target.closest('[data-addgoal]'); if (add) return addGoal(add);
     if (e.target.closest('[data-addnote]')) return addNote();
     const pile = e.target.closest('[data-pile]'); if (pile) { B.towner = pile.dataset.pile; renderTasks(); return; }
-    const o = e.target.closest('[data-owner]'); if (o) { const t = B.tasks.find((x) => x.id === o.closest('[data-task]')?.dataset.task); return discuss(o.dataset.owner, t ? `About ${t.id}${t.branch ? ` (${t.branch})` : ''}: ` : ''); }
+    const o = e.target.closest('[data-owner]'); if (o) {
+      const t = B.tasks.find((x) => x.id === o.closest('[data-task]')?.dataset.task), g = goalById(o.closest('[data-goal]')?.dataset.goal);
+      return discuss(o.dataset.owner, t ? `About ${t.id}${t.branch ? ` (${t.branch})` : ''}: ` : g ? `About the goal "${g.title}": ` : '');
+    }
     const n = e.target.closest('[data-task]'); if (n && !n.querySelector('textarea')) return editTask(n);
     const g = e.target.closest('.g[data-goal]'); if (g) return editGoal(g);
     if (!e.target.closest('input,select,.seg')) closePop();

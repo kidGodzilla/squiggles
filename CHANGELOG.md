@@ -38,6 +38,9 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - `look <id> <character|auto|shuffle>` sets a squiggle's character; looks take a generator (`cast:Puff`), and `room characters <generator>` sets the room default, saved in room.json.
 
 ### Changed
+- The speaker caption has × to dismiss it, and moves to the top when it would cover the field you're typing in.
+- A goal owner's face opens a chat asking about that goal.
+- Owner faces sit at the right of task piles and notes.
 - The speaker caption lingers 4 to 12 seconds after the words end, and stays while hovered or touched.
 - Sound controls (radio, volume, voices, chatter) are back in the Menu, kept in sync with Settings.
 - The header More is now a Menu icon (Lock, Settings, Inbox, New squiggle). Tablet 1:1 docks the chat instead of floating it; phone has Back in the chat header.

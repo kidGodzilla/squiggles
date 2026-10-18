@@ -146,10 +146,13 @@ function showSpeaker(id, t, text) {
   if (room && !S.office && !onScreen(t) && Date.now() - stageTouched > 5000) t.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   else if (!onScreen(t) && !(S.present === id && $('#present').classList.contains('on'))) {
     const s = S.sq[id];
-    cap.innerHTML = `<div class="tile mini">${avatarSVG(P(id), undefined, 'sc_')}</div><div><b>${esc(s.name)}</b><p>${esc(text)}</p></div>`;
+    cap.innerHTML = `<div class="tile mini">${avatarSVG(P(id), undefined, 'sc_')}</div><div><b>${esc(s.name)}</b><p>${esc(text)}</p></div><button class="capx" type="button" title="Dismiss" aria-label="Dismiss">×</button>`;
     if (!(cap.classList.contains('on') && cap.dataset.id === id)) capT0 = Date.now();
     clearTimeout(capT); capT = 0;
-    cap.dataset.id = id; cap.classList.add('on'); cap.onclick = () => { capHide(); S.office ? openChat(id) : oneOnOne(id); };
+    cap.dataset.id = id; cap.classList.add('on');
+    // Never over the field being typed in (t931): if the caption would cover it, it moves to the top.
+    const f = document.activeElement, fr = f?.matches?.('textarea,input,[contenteditable]') && f.getBoundingClientRect();
+    cap.classList.remove('top'); if (fr) { const cr = cap.getBoundingClientRect(); if (fr.bottom > cr.top && fr.top < cr.bottom) cap.classList.add('top'); } cap.onclick = (e) => { capHide(); if (!e.target.closest('.capx')) S.office ? openChat(id) : oneOnOne(id); };
   }
 }
 // After the words end the caption lingers as long again (4 to 12 s) so there's time to click it (t926);
