@@ -13,6 +13,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Shared screen reads regular files only, capped in size, and its content isn't saved to the transcript.
 
 ### Added
+- Areas: a goal can be an ongoing area (`goal kind <id> area`), shown in a strip above the Goals columns; areas never go to Done or get a "still on?".
 - `calendar [from] [to] [calendar]` reads this Mac's calendars (iCloud, Google, Exchange) through EventKit, read-only; `calendar allow` asks macOS once. Needs Xcode command line tools.
 - Settings tabs: Room, Characters, Squiggles, People, Sharing, Defaults, Security; `?tab=` and `room view settings <tab>` open one.
 - Team defaults: model, effort and wake cadence new squiggles start with, set in Settings or `defaults [model|effort|every <value>]`. Fable and models below Sonnet 5.5 are refused.

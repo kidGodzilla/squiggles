@@ -32,21 +32,29 @@ async function loadBoard() {
 window.onBoard = () => loadBoard();
 
 // ---------- Goals: the whiteboard ----------
+// Areas (t977): ongoing responsibilities with no finish line sit in one strip above the columns, never in a tier.
+const isArea = (g) => g.kind === 'area';
+const openCount = (id) => B.tasks.filter((t) => t.goal === id && t.status !== 'done').length;
 function renderGoals() {
-  const q = B.gq.toLowerCase(); let shown = 0;
+  const q = B.gq.toLowerCase(), found = (g) => hit(q, g.title, g.note, ownerName(g.owner)); let shown = 0;
+  const areas = allGoals().filter(isArea).sort((a, b) => openCount(b.id) - openCount(a.id)), aShown = areas.filter(found);
+  $('#areas').hidden = !aShown.length;
+  $('#areas').innerHTML = `<h3>Areas</h3>` + aShown.map((g, i) => { const n = openCount(g.id);
+    return `<button class="area" type="button" data-goal="${esc(g.id)}" title="${esc(g.title)}${g.owner ? `, ${esc(ownerName(g.owner))}` : ''}">${g.owner && S.sq[g.owner] ? face(g.owner, 'ar' + i + '_') : ''}<span class="an">${hl(g.title, q)}</span><span class="ac ${n ? '' : 'none'}">${n ? `${n} open` : 'Nothing open'}</span></button>`; }).join('');
   $('#wbcols').innerHTML = Object.entries(TIER_NAMES).map(([tier, name]) => {
-    const list = B.goals[tier].filter((g) => hit(q, g.title, g.note, ownerName(g.owner))); shown += list.length;
-    return `<div class="wbcol ${tier}" data-tier="${tier}"><h3>${name}<small>${B.goals[tier].length}</small></h3><div class="glist">
+    const all = B.goals[tier].filter((g) => !isArea(g)), list = all.filter(found); shown += list.length;
+    return `<div class="wbcol ${tier}" data-tier="${tier}"><h3>${name}<small>${all.length}</small></h3><div class="glist">
       ${list.map((g) => {
         const stale = tier === 'active' && daysSince(g.last_confirmed) >= STALE_DAYS;
-        const open = B.tasks.filter((t) => t.goal === g.id && t.status !== 'done').length;
+        const open = openCount(g.id);
         return `<div class="g ${stale ? 'stale' : ''}" draggable="true" data-goal="${esc(g.id)}">
           <span class="gt">${hl(g.title, q)}${g.note ? `<span class="gn">${hl(g.note, q)}</span>` : ''}${open ? `<span class="gn">${open} open note${open > 1 ? 's' : ''}</span>` : ''}</span>
           <span class="gm">${tier === 'done' ? '' : `<span class="gmerge ${g.merge}" title="${g.merge === 'open' ? 'Open: commits go to main' : 'Gated: a branch per task, merged from the Merge tab'}">${g.merge === 'open' ? 'Open' : 'Gated'}</span>`}${g.owner && S.sq[g.owner] ? `<span class="nown" data-owner="${esc(g.owner)}" title="Ask ${esc(ownerName(g.owner))} about this goal">${face(g.owner, 'gf' + hash(g.id) + '_')}</span>` : ''}${ago(g.last_confirmed)}</span></div>`;
       }).join('')}
       ${tier !== 'done' ? `<button class="addg" data-addgoal="${tier}">+ add a goal</button>` : ''}</div></div>`;
   }).join('');
-  $('#gcount').textContent = q ? `${shown} of ${allGoals().length}` : `${allGoals().length} goals`;
+  const goals = allGoals().length - areas.length, both = `${goals} goal${goals === 1 ? '' : 's'}${areas.length ? `, ${areas.length} area${areas.length === 1 ? '' : 's'}` : ''}`;
+  $('#gcount').textContent = q ? `${shown + aShown.length} of ${both}` : both;
 }
 
 // ---------- Tasks: the cork board ----------
@@ -150,12 +158,12 @@ for (const v of ['#goalsView', '#tasksView']) {
       return discuss(o.dataset.owner, t ? `About ${t.id}${t.branch ? ` (${t.branch})` : ''}: ` : g ? `About the goal "${g.title}": ` : '');
     }
     const n = e.target.closest('[data-task]'); if (n && !n.querySelector('textarea')) return editTask(n);
-    const g = e.target.closest('.g[data-goal]'); if (g) return editGoal(g);
+    const g = e.target.closest('.g[data-goal],.area[data-goal]'); if (g) return editGoal(g);
     if (!e.target.closest('input,select,.seg')) closePop();
   });
 }
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePop(); });
-document.addEventListener('mousedown', (e) => { if (!e.target.closest('#pop,[data-task],.g,.tlink')) closePop(); });
+document.addEventListener('mousedown', (e) => { if (!e.target.closest('#pop,[data-task],.g,.area,.tlink')) closePop(); });
 
 function addGoal(btn) {
   const tier = btn.dataset.addgoal, input = document.createElement('input');
@@ -191,17 +199,20 @@ function showPop(anchor, html, wire) {
 function closePop() { $('#pop').classList.remove('on', 'tpop-on'); }
 function editGoal(el) {
   const g = goalById(el.dataset.goal); if (!g) return;
-  const open = B.tasks.filter((t) => t.goal === g.id && t.status !== 'done').length;
-  showPop(el, `<label>Goal</label><input id="pgT" value="${esc(g.title)}">
+  const open = openCount(g.id), area = isArea(g);
+  showPop(el, `<label>${area ? 'Area' : 'Goal'}</label><input id="pgT" value="${esc(g.title)}">
+    <label>Kind</label><div class="seg" id="pgK"><button type="button" data-k="goal" class="${area ? '' : 'on'}">Goal</button><button type="button" data-k="area" class="${area ? 'on' : ''}">Area</button></div>
+    <div class="khint">${area ? 'Areas have no finish line, so they never go to Done or get a "still on?".' : 'Goals finish. Make it an area if it never will.'}</div>
     <label>Owner</label><select id="pgO">${ownerOptions(g.owner)}</select>
     <label>Note</label><textarea id="pgN" class="grow" rows="6" placeholder="Optional">${esc(g.note || '')}</textarea>
     <label>Repos (space separated)</label><input id="pgR" value="${esc((g.repos || []).join(' '))}" placeholder="~/project">
     <label>Merge policy</label><select id="pgM"><option value="gated" ${g.merge !== 'open' ? 'selected' : ''}>Gated: branch per task, you merge</option><option value="open" ${g.merge === 'open' ? 'selected' : ''}>Open: commits go to main</option></select>
-    <div class="row"><button class="go" data-a="save">Save</button><button data-a="confirm">Still on</button><button data-a="notes">Its notes (${open})</button></div>
-    <div class="row"><button data-a="done">Mark done</button><button data-a="chat">${g.owner ? 'Chat with owner' : 'Ask the lead'}</button><button class="bad" data-a="drop">Erase</button></div>`, (pop) => {
+    <div class="row"><button class="go" data-a="save">Save</button>${area ? '' : '<button data-a="confirm">Still on</button>'}<button data-a="notes">Its notes (${open})</button></div>
+    <div class="row">${area ? '' : '<button data-a="done">Mark done</button>'}<button data-a="chat">${g.owner ? 'Chat with owner' : 'Ask the lead'}</button><button class="bad" data-a="drop">Erase</button></div>`, (pop) => {
     pop.onclick = async (e) => {
+      const k = e.target.closest('[data-k]'); if (k) { pop.querySelectorAll('[data-k]').forEach((b) => b.classList.toggle('on', b === k)); return; }
       const a = e.target.dataset.a; if (!a) return;
-      if (a === 'save') await api('/goals', { op: 'edit', id: g.id, title: pop.querySelector('#pgT').value.trim() || g.title, owner: pop.querySelector('#pgO').value, note: pop.querySelector('#pgN').value.trim(), repos: pop.querySelector('#pgR').value.trim(), merge: pop.querySelector('#pgM').value });
+      if (a === 'save') await api('/goals', { op: 'edit', id: g.id, title: pop.querySelector('#pgT').value.trim() || g.title, owner: pop.querySelector('#pgO').value, note: pop.querySelector('#pgN').value.trim(), repos: pop.querySelector('#pgR').value.trim(), merge: pop.querySelector('#pgM').value, kind: pop.querySelector('#pgK .on').dataset.k });
       if (a === 'confirm') { await api('/goals', { op: 'confirm', id: g.id }); toast(`Confirmed: ${g.title}`); }
       if (a === 'done') { await api('/goals', { op: 'move', id: g.id, tier: 'done' }); AUD.ding(); }
       if (a === 'drop') await api('/goals', { op: 'drop', id: g.id });

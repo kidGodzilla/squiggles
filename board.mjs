@@ -94,15 +94,17 @@ export function createBoard(root, onChange) {
   let timer;
   for (const f of [GOALS, TASKS]) {
     if (!fs.existsSync(f)) f === TASKS ? saveTasks([]) : saveGoals(goals());
-    fs.watch(f, () => { clearTimeout(timer); timer = setTimeout(onChange, 120); });
+    fs.watch(f, { persistent: false }, () => { clearTimeout(timer); timer = setTimeout(onChange, 120); });
   }
 
   function findGoal(g, id) {
     for (const t of TIERS) { const i = g[t].findIndex((x) => x.id === id); if (i >= 0) return { tier: t, i, goal: g[t][i] }; }
     throw new Error(`no goal ${id}`);
   }
-  function goalOp({ op, id, title, tier, owner, note, index, repos, merge }) {
+  function goalOp({ op, id, title, tier, owner, note, index, repos, merge, kind }) {
     const g = goals();
+    // An area (t977) is an ongoing responsibility with no finish line; a goal finishes.
+    if (kind !== undefined && !['goal', 'area'].includes(kind)) throw new Error('kind must be goal or area');
     if (merge !== undefined && !MERGE.includes(merge)) throw new Error(`merge must be one of ${MERGE.join(', ')}`);
     if (op === 'add') {
       if (!title) throw new Error('a goal needs a title');
@@ -123,6 +125,7 @@ export function createBoard(root, onChange) {
       if (note !== undefined) { if (note) f.goal.note = note; else delete f.goal.note; }
       if (repos !== undefined) { const r = (Array.isArray(repos) ? repos : String(repos).split(/[\s,]+/)).filter(Boolean); if (r.length) f.goal.repos = r; else delete f.goal.repos; }
       if (merge !== undefined) f.goal.merge = merge;
+      if (kind !== undefined) { if (kind === 'area') f.goal.kind = 'area'; else delete f.goal.kind; }
     } else throw new Error(`unknown goal op ${op}`);
     saveGoals(g); return f.goal;
   }

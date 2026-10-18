@@ -56,10 +56,12 @@ const cmds = {
     : (await call(`/squiggles/${a[0]}/update`, { charter: a[1] }), `${a[0]}'s responsibility updated`),
   goals: async () => {
     const g = (await call('/board')).goals;
-    return ['active', 'hold', 'todo', 'done'].map((t) => `${t.toUpperCase()}\n` + (g[t] || []).map((x) =>
-      `  ${x.id}  ${x.title}${x.owner ? `  (owner ${x.owner})` : ''}${x.repos ? `  repos ${x.repos.join(' ')}` : ''}  merge ${x.merge}  confirmed ${x.last_confirmed}${x.note ? `  — ${x.note}` : ''}`).join('\n')).join('\n');
+    const line = (x) => `  ${x.id}  ${x.title}${x.owner ? `  (owner ${x.owner})` : ''}${x.repos ? `  repos ${x.repos.join(' ')}` : ''}  merge ${x.merge}  confirmed ${x.last_confirmed}${x.note ? `  — ${x.note}` : ''}`;
+    const all = ['active', 'hold', 'todo', 'done'].flatMap((t) => g[t] || []), areas = all.filter((x) => x.kind === 'area');
+    return ['active', 'hold', 'todo', 'done'].map((t) => `${t.toUpperCase()}\n` + (g[t] || []).filter((x) => x.kind !== 'area').map(line).join('\n'))
+      .concat(areas.length ? [`AREAS (ongoing, no finish line)\n${areas.map(line).join('\n')}`] : []).join('\n');
   },
-  // goal add <title> [tier] [repos...] | goal repos <id> <repo...> | goal merge <id> gated|open | goal move <id> <active|hold|todo|done> | goal confirm <id> | goal owner <id> <squiggle> | goal edit <id> <title> | goal note <id> <text> | goal drop <id>
+  // goal add <title> [tier] [repos...] | goal repos <id> <repo...> | goal merge <id> gated|open | goal move <id> <active|hold|todo|done> | goal confirm <id> | goal owner <id> <squiggle> | goal edit <id> <title> | goal note <id> <text> | goal kind <id> area|goal | goal drop <id>
   goal: () => {
     const [op, x, y] = a;
     if (op === 'add') return call('/goals', { op, title: x, tier: y, repos: a.slice(3) });
@@ -68,6 +70,7 @@ const cmds = {
     if (op === 'note') return call('/goals', { op: 'edit', id: x, note: y || '' });
     if (op === 'repos') return call('/goals', { op: 'edit', id: x, repos: a.slice(2) });
     if (op === 'merge') return call('/goals', { op: 'edit', id: x, merge: y });
+    if (op === 'kind') return call('/goals', { op: 'edit', id: x, kind: y });
     if (op === 'edit') return call('/goals', { op, id: x, title: y });
     return call('/goals', { op, id: x });
   },
@@ -255,7 +258,7 @@ const cmds = {
 };
 
 if (!cmds[cmd]) {
-  console.log('usage: agents.mjs list | team | wake <id> [why] | tell <id> <text> [--image <path>] | stop <id> | clear <id> | remove <id> | room radio|volume|voices|chatter|characters|view|chat <value> | room passcode set <code>|clear|status|local on|off | room view 1on1 <id> | room view settings [room|characters|squiggles|people|sharing|defaults|security] | room view blocked|rethink | room lock | room reload | call <teams-url> [until <time>] | call status | call leave | restart | upgrade | limit | inbox | screen diff <task>|url <url>|file <path>|off [--as <id>] | share on|off|status | defaults [model|effort|every <value>] | calendar [from] [to] [calendar] [--notes] [--json] | calendar list|status|allow | humans | human add "<name>" [avatar] | human edit <id> name|avatar <value> | human remove <id> | tail <id> [n] | journal <id> | charter <id> [new text] | rename <id> <name> [role] | create <id> <name> <role> <cwd> <every> <charter> | set <id> <field> <value> | look <id> [<generator>[:<options>]|character|auto|shuffle] | goals | goal add|move|confirm|owner|note|repos|merge|edit|drop ... | tasks [goal|owner] | task add|move|confirm|edit|needs|drop ... | task needs <id> add "<text>"|done|undo|drop <n>|clear | task move <id> review [repo:]<branch> ["<test result>"] | meetings [days] [from YYYY-MM-DD] | meeting add "<title>" "<when>" <id,id> [once|daily|weekdays|weekly] ["<agenda>"] | meeting edit <id> <field> <value> | meeting cancel <id> [date] | meeting start <id> | meeting next | meeting end | meeting now | meet now <id,id> ["topic"] [--presenters <id,id>] | meet merges | merges [refresh] | worktrees [check] | task worktree <id> [repo] | suggest "<one line>" [evidence] | suggestions [all] | suggestion accept <id> <goal> <owner> | suggestion decline <id> "<why>" | merge <task> | merge diff <task> | merge back <task> "<note>"');
+  console.log('usage: agents.mjs list | team | wake <id> [why] | tell <id> <text> [--image <path>] | stop <id> | clear <id> | remove <id> | room radio|volume|voices|chatter|characters|view|chat <value> | room passcode set <code>|clear|status|local on|off | room view 1on1 <id> | room view settings [room|characters|squiggles|people|sharing|defaults|security] | room view blocked|rethink | room lock | room reload | call <teams-url> [until <time>] | call status | call leave | restart | upgrade | limit | inbox | screen diff <task>|url <url>|file <path>|off [--as <id>] | share on|off|status | defaults [model|effort|every <value>] | calendar [from] [to] [calendar] [--notes] [--json] | calendar list|status|allow | humans | human add "<name>" [avatar] | human edit <id> name|avatar <value> | human remove <id> | tail <id> [n] | journal <id> | charter <id> [new text] | rename <id> <name> [role] | create <id> <name> <role> <cwd> <every> <charter> | set <id> <field> <value> | look <id> [<generator>[:<options>]|character|auto|shuffle] | goals | goal add|move|confirm|owner|note|repos|merge|kind|edit|drop ... | tasks [goal|owner] | task add|move|confirm|edit|needs|drop ... | task needs <id> add "<text>"|done|undo|drop <n>|clear | task move <id> review [repo:]<branch> ["<test result>"] | meetings [days] [from YYYY-MM-DD] | meeting add "<title>" "<when>" <id,id> [once|daily|weekdays|weekly] ["<agenda>"] | meeting edit <id> <field> <value> | meeting cancel <id> [date] | meeting start <id> | meeting next | meeting end | meeting now | meet now <id,id> ["topic"] [--presenters <id,id>] | meet merges | merges [refresh] | worktrees [check] | task worktree <id> [repo] | suggest "<one line>" [evidence] | suggestions [all] | suggestion accept <id> <goal> <owner> | suggestion decline <id> "<why>" | merge <task> | merge diff <task> | merge back <task> "<note>"');
   process.exit(1);
 }
 try {
