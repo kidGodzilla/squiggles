@@ -86,10 +86,9 @@ function createSquiggle({ id, name, role, cwd, charter, every, permissionMode = 
 const rt = new Map();
 const persisted = JSON.parse(readText(STATE, '{}'));
 const R = (id) => {
-  if (!rt.has(id)) rt.set(id, { status: 'idle', ...(persisted[id] || {}), proc: null });
-  const r = rt.get(id);
-  if (r.status === 'working' && !r.proc) r.status = 'idle';
-  return r;
+  // A turn saved as working died with the old server. Only on load: mid-send a Codex turn is working before r.proc exists (t972).
+  if (!rt.has(id)) { const p = { status: 'idle', ...(persisted[id] || {}), proc: null }; if (p.status === 'working') p.status = 'idle'; rt.set(id, p); }
+  return rt.get(id);
 };
 function saveState() {
   const out = {};

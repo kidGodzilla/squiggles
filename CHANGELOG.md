@@ -58,6 +58,9 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - More > Share shows Copy link only, not the URL text.
 - The lead's "Handled." replies fold with the reports they answer into one line that opens to list them.
 
+### Fixed
+- Codex squiggles no longer show idle mid-turn, so wakes aren't sent into a running turn.
+
 ## 0.1.1
 
 ### Security
