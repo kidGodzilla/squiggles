@@ -13,20 +13,35 @@ function renderSettings() {
       <div class="who"><div class="tile mini">${avatarSVG(p, undefined, 'sm' + p.gid + '_')}</div><div><b>${esc(s.name)}</b><small>${mine ? `Uses ${esc(GENS[SET.gen].name)}` : `Uses ${esc(GENS[P(id).gen].name)}`}</small></div></div>
       <button class="chip" data-use="${id}"${mine && own ? ' disabled' : ''}>Use for ${esc(s.name)}</button></div>`;
   }).join('');
-  setTalk(); renderSetSqs();
+  setTalk(); renderSetSqs(); renderDefaults();
 }
 // Squiggles card (t897): model, effort, cadence, paused and pack per squiggle; each change posts to /update, like the CLI's set and look.
+// Option lists shared by the Squiggles and Team defaults cards. A value outside the list (set from the CLI) is kept and shown.
+const withCur = (l, cur) => (cur != null && cur !== '' && !l.includes(cur) ? [...l, cur] : l), opt = (v, cur, label) => `<option value="${v}"${String(cur ?? '') === String(v) ? ' selected' : ''}>${esc(label)}</option>`;
+const cap = (m) => ({ xhigh: 'Extra high' })[m] || m[0].toUpperCase() + m.slice(1);
+const every = (m) => (!m ? 'Only when asked' : m % 1440 === 0 ? (m === 1440 ? 'Daily' : `Every ${m / 1440} days`) : m % 60 === 0 ? (m === 60 ? 'Hourly' : `Every ${m / 60} hours`) : `Every ${m} min`);
+const modelOpts = (cur) => withCur(['', 'opus', 'sonnet', 'gpt-6.1-sol'], cur).map((m) => opt(m, cur, m ? modelName(m) : 'Default (Opus 5.5)')).join('');
+const effortOpts = (cur, lead) => withCur(['', 'low', 'medium', 'high', 'xhigh', 'max'], cur).map((m) => opt(m, cur, m ? cap(m) : lead ? 'Default' : 'Medium (default)')).join('');
+const everyOpts = (cur) => withCur([0, 15, 30, 60, 180, 360, 720, 1440], cur || 0).sort((x, y) => x - y).map((m) => opt(m, cur || 0, every(m))).join('');
+// Team defaults card (t898): what a new squiggle starts with. CLI: defaults.
+async function renderDefaults() {
+  const d = await api('/defaults'); if (!d || d.error) return;
+  $('#defModel').innerHTML = modelOpts(d.model); $('#defEffort').innerHTML = effortOpts(d.effort); $('#defEvery').innerHTML = everyOpts(d.every);
+}
+$('#setDefaults').onchange = async (e) => {
+  const f = e.target.dataset.f; if (!f) return;
+  const r = await api('/defaults', { [f]: f === 'every' ? Number(e.target.value) : e.target.value });
+  if (!r || r.error) return toast(r?.error || 'Not saved');
+  toast('Saved team defaults');
+};
 function renderSetSqs() {
-  const withCur = (l, cur) => (cur != null && cur !== '' && !l.includes(cur) ? [...l, cur] : l), opt = (v, cur, label) => `<option value="${v}"${String(cur ?? '') === String(v) ? ' selected' : ''}>${esc(label)}</option>`;
-  const cap = (m) => ({ xhigh: 'Extra high' })[m] || m[0].toUpperCase() + m.slice(1);
-  const every = (m) => (!m ? 'Only when asked' : m % 1440 === 0 ? (m === 1440 ? 'Daily' : `Every ${m / 1440} days`) : m % 60 === 0 ? (m === 60 ? 'Hourly' : `Every ${m / 60} hours`) : `Every ${m} min`);
   const cell = (label, html) => `<td><label class="sqf"><span class="sqlab">${label}</span>${html}</label></td>`;
   $('#setSqs').innerHTML = `<table class="sqtable"><thead><tr><th scope="col">Squiggle</th><th scope="col">Model</th><th scope="col">Effort</th><th scope="col">Wakes</th><th scope="col">Pack</th><th scope="col">Paused</th></tr></thead><tbody>` + S.order.map((id) => {
     const s = S.sq[id], own = s.look ? parseLook(s.look).gen : '';
     return `<tr data-sq="${id}"><th scope="row"><span class="sqname"><span class="tile mini">${avatarSVG(P(id), undefined, 'sq' + P(id).gid + '_')}</span><b>${esc(s.name)}</b></span></th>
-      ${cell('Model', `<select data-f="model">${withCur(['', 'opus', 'sonnet', 'gpt-6.1-sol'], s.model).map((m) => opt(m, s.model, m ? modelName(m) : 'Default (Opus 5.5)')).join('')}</select>`)}
-      ${cell('Effort', `<select data-f="effort">${withCur(['', 'low', 'medium', 'high', 'xhigh', 'max'], s.effort).map((m) => opt(m, s.effort, m ? cap(m) : s.lead ? 'Default' : 'Medium (default)')).join('')}</select>`)}
-      ${cell('Wakes', `<select data-f="every">${withCur([0, 15, 30, 60, 180, 360, 720, 1440], s.every || 0).sort((x, y) => x - y).map((m) => opt(m, s.every || 0, every(m))).join('')}</select>`)}
+      ${cell('Model', `<select data-f="model">${modelOpts(s.model)}</select>`)}
+      ${cell('Effort', `<select data-f="effort">${effortOpts(s.effort, s.lead)}</select>`)}
+      ${cell('Wakes', `<select data-f="every">${everyOpts(s.every)}</select>`)}
       ${cell('Pack', `<select data-f="look">${opt('', own, 'Room pack')}${Object.values(GENS).map((g) => opt(g.id, own, g.name)).join('')}</select>`)}
       <td><label class="sqpause"><input data-f="paused" type="checkbox"${s.paused ? ' checked' : ''}><span class="sqlab">Paused</span></label></td></tr>`;
   }).join('') + '</tbody></table>';

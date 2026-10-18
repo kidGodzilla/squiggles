@@ -699,6 +699,7 @@ async function roomCommand(ev) {
   if (ev.k === 'removed') { document.getElementById('cw-' + ev.id)?.remove(); await load(); return; }
   const v = String(ev.value ?? '').toLowerCase();
   switch (ev.action) {
+    case 'defaults': if (B.view === 'settings' && !document.activeElement?.closest('#setDefaults')) renderDefaults(); return; // t898
     case 'radio': prefs.music = v !== 'off'; if (prefs.music && STATIONS.some(([s]) => s === v)) prefs.station = v; $('#station').value = prefs.music ? prefs.station : 'off'; break;
     case 'volume': prefs.musicVol = Math.max(0, Math.min(1, +v || 0)); $('#musicVol').value = prefs.musicVol; break;
     case 'voices': prefs.voice = v !== 'off'; paintVoice(); break;
@@ -864,6 +865,7 @@ function openNew() {
     $('#newSq').classList.remove('on'); await load(); AUD.join(); toast(`${r.name} joined the room`);
   };
   $('#newSq').classList.add('on'); $('#nName').focus();
+  api('/defaults').then((d) => { if (d && !d.error) $('#nEvery').value = d.every; }); // team default cadence (t898)
 }
 for (const o of ['#sheet', '#newSq']) $(o).addEventListener('click', (e) => { if (e.target === $(o)) $(o).classList.remove('on'); });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { $('#sheet').classList.remove('on'); $('#newSq').classList.remove('on'); $('#inboxBox').classList.remove('on'); } });

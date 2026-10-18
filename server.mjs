@@ -9,6 +9,7 @@ import path from 'node:path';
 import os from 'node:os';
 import vm from 'node:vm';
 import { createBoard } from './board.mjs';
+import { modelFor as pickModel, DEFAULT_MODELS } from './models.mjs';
 import { createMeetings, local, markPast, meetingNotes, parseWhen } from './meetings.mjs';
 import { createInbox } from './inbox.mjs';
 import { createHumans } from './humans.mjs';
@@ -57,10 +58,21 @@ function saveSquiggle(s) {
   fs.mkdirSync(sqDir(id), { recursive: true });
   fs.writeFileSync(path.join(sqDir(id), 'squiggle.json'), JSON.stringify(meta, null, 2) + '\n');
 }
-function createSquiggle({ id, name, role, cwd, charter, every = 60, permissionMode = 'auto', model }) {
+// Team defaults (t898): model, effort and cadence a new squiggle starts with; room.json `defaults`, set from Settings or `defaults`.
+const DEFAULT_OPTS = { model: DEFAULT_MODELS, effort: ['', 'low', 'medium', 'high', 'xhigh', 'max'] };
+const teamDefaults = () => ({ model: '', effort: '', every: 60, ...(roomCfg().defaults || {}) });
+function setDefaults(b) {
+  const d = teamDefaults(), bad = Object.keys(b).filter((k) => !['model', 'effort', 'every'].includes(k));
+  if (bad.length) throw new Error(`defaults: model, effort or every (not ${bad.join(', ')})`);
+  for (const k of ['model', 'effort']) if (b[k] != null) { const v = String(b[k]); if (!DEFAULT_OPTS[k].includes(v)) throw new Error(`${k}: one of ${DEFAULT_OPTS[k].map((x) => x || 'default').join(', ')}`); d[k] = v; }
+  if (b.every != null) { const v = b.every === '' ? NaN : Number(b.every); if (!Number.isInteger(v) || v < 0) throw new Error('every: whole minutes, 0 = only when asked'); d.every = v; }
+  fs.writeFileSync(ROOMCFG, JSON.stringify({ ...roomCfg(), defaults: d }, null, 2) + '\n'); return d;
+}
+function createSquiggle({ id, name, role, cwd, charter, every, permissionMode = 'auto', model }) {
   id = String(id || name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
   if (!id || fs.existsSync(sqDir(id))) throw new Error('name taken or empty');
-  saveSquiggle({ id, name, role, cwd: cwd || '~', every: Number(every) || 0, permissionMode, model, paused: false, created: now() });
+  const d = teamDefaults();
+  saveSquiggle({ id, name, role, cwd: cwd || '~', every: every == null || every === '' ? d.every : Number(every) || 0, permissionMode, model: model || d.model || undefined, effort: d.effort || undefined, paused: false, created: now() });
   fs.writeFileSync(path.join(sqDir(id), 'charter.md'), (charter || role || '').trim() + '\n');
   fs.writeFileSync(path.join(sqDir(id), 'journal.md'), `# ${name} journal\n`);
   return loadSquiggle(id);
@@ -182,7 +194,7 @@ function systemPrompt(s) {
 }
 // Always pass a model: unset would inherit the CLI default, which may be Fable; squiggles never run on Fable.
 // Sonnet is the floor (Haiku has no auto mode); Opus is the default and the ceiling. config.model sets the default.
-const modelFor = (s) => (/haiku|sonnet/i.test(s.model || CONFIG.model || '') ? 'claude-sonnet-5-5' : 'claude-opus-5-5');
+const modelFor = (s) => pickModel(s, CONFIG.model);
 // Settings baked into a process's flags. A change ends the idle process before the next turn; --resume keeps the session.
 const launchSig = (s) => JSON.stringify([!!s.chrome, modelFor(s), s.permissionMode, s.autocompact, s.maxTurns, s.effort, s.cwd]);
 function launch(s) {
@@ -949,6 +961,10 @@ const server = http.createServer(async (req, res) => {
       }
       broadcast('*room', { k: 'room', ...b }); return json(res, 'ok');
     }
+    if (url.pathname === '/api/defaults' && req.method === 'POST') {
+      const d = setDefaults(await body(req)); broadcast('*room', { k: 'room', action: 'defaults' }); return json(res, d);
+    }
+    if (url.pathname === '/api/defaults') return json(res, teamDefaults());
     if (url.pathname === '/api/room') return json(res, roomCfg());
     if (url.pathname === '/api/board') return json(res, { goals: board.goals(), tasks: board.tasks() });
     if (url.pathname === '/api/goals' && req.method === 'POST') return json(res, board.goalOp(await body(req)));

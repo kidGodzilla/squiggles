@@ -102,6 +102,15 @@
         <div class="people" id="setPeople"></div>
       </section>
       <section class="setcard">
+        <h2>Team defaults</h2>
+        <p class="sethint">What a new squiggle starts with. CLI: <code>defaults [model|effort|every &lt;value&gt;]</code>.</p>
+        <div class="setform" id="setDefaults">
+          <label for="defModel">Model</label><select id="defModel" data-f="model"></select>
+          <label for="defEffort">Effort</label><select id="defEffort" data-f="effort"></select>
+          <label for="defEvery">Wakes</label><select id="defEvery" data-f="every"></select>
+        </div>
+      </section>
+      <section class="setcard">
         <h2>Squiggles</h2>
         <p class="sethint">Changes save as you make them. CLI: <code>set &lt;id&gt; model|effort|every|paused &lt;value&gt;</code>, <code>look &lt;id&gt; &lt;pack&gt;</code>.</p>
         <div class="setsqs" id="setSqs"></div>
