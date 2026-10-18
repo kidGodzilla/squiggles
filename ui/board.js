@@ -566,18 +566,21 @@ function viewUrl(v = B.view, who = B.who) {
   if (v === 'tasks') { if (B.tq) p.set('q', B.tq); if (B.tgoal) p.set('goal', B.tgoal); if (B.towner) p.set('owner', B.towner); if (B.tshow !== 'open') p.set('show', B.tshow); }
   // Merge diff and calendar week: week only when it isn't this week.
   if (v === 'merge' && B.diff) p.set('diff', B.diff);
+  if (v === 'settings' && B.stab && B.stab !== 'room') p.set('tab', B.stab);
   if (v === 'calendar' && ymd(B.week) !== ymd(mondayOf(new Date()))) p.set('week', ymd(B.week));
   const c = chatParam(v || 'room'); if (c) p.set('chat', c);
   const s = p.toString(); return s ? '?' + s : '';
 }
 // Opening, raising or closing a floating chat updates the URL in place, without a history step.
 function syncUrl() { const q = viewUrl(); if (location.search !== q) history.replaceState(null, '', location.pathname + q); }
+const SET_TABS = ['room', 'characters', 'squiggles', 'people', 'sharing', 'defaults', 'security'], setTab = (t) => (SET_TABS.includes(t) ? t : 'room');
 const VIEWS = ['room', 'lead', 'meeting', 'one', 'team', 'calendar', 'goals', 'tasks', 'merge', 'settings'];
 function viewFromUrl(search, nav) {
   const q = new URLSearchParams(search), v = q.get('view');
   if (!VIEWS.includes(v)) return false;
   if (v === 'goals') $('#gq').value = B.gq = q.get('q') || '';
   if (v === 'tasks') { $('#tq').value = B.tq = q.get('q') || ''; B.tgoal = q.get('goal') || ''; B.towner = q.get('owner') || ''; B.tshow = ['open', 'all', 'stale', 'suggest'].includes(q.get('show')) ? q.get('show') : 'open'; }
+  if (v === 'settings') B.stab = setTab(q.get('tab'));
   if (v === 'calendar') { const w = /^(\d{4})-(\d\d)-(\d\d)$/.exec(q.get('week') || ''); B.week = mondayOf(w ? new Date(+w[1], w[2] - 1, +w[3]) : new Date()); }
   const d = v === 'merge' && q.get('diff'); if (!d) closeDiff(false);
   setView(v, q.get('with') || '', nav); if (d) openDiff(d); return true;

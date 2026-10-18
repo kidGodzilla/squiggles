@@ -191,8 +191,18 @@ const cmds = {
   },
   limit: async () => { const l = await call('/limit'); return l.until ? `session limit: scheduled wakes paused until ${new Date(l.until).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : 'no session limit in effect'; },
   remove: () => call(`/squiggles/${a[0]}/remove`, {}),
-  // room radio <fip|fipjazz|...|off> | room volume <0-1> | room voices on|off | room chatter quiet|normal|lively | room characters <generator> | room view room|lead|meeting|team|calendar|goals|tasks|merge|settings | room view blocked|rethink | room view 1on1 <id> | room chat <id> ["<draft>"] | room lock
-  room: () => call('/room', { action: a[0], value: a[1], ...(a[0] === 'chat' ? (a[2] ? { text: a.slice(2).join(' ') } : {}) : a[2] ? { id: a[2] } : {}) }),
+  // room radio <fip|fipjazz|...|off> | room volume <0-1> | room voices on|off | room chatter quiet|normal|lively | room characters <generator> | room view room|lead|meeting|team|calendar|goals|tasks|merge|settings | room view blocked|rethink | room view 1on1 <id> | room view settings [room|characters|squiggles|people|sharing|defaults|security] | room chat <id> ["<draft>"] | room lock
+  // room passcode set <code>|clear|status|local on|off (t913): optional lock-screen passcode; this CLI always gets through.
+  room: async () => {
+    if (a[0] === 'passcode') {
+      const op = a[1] || 'status', b = op === 'set' ? { op, code: a[2] } : op === 'local' ? { op, on: a[2] === 'on' } : { op };
+      if (op === 'set' && !a[2]) throw new Error('room passcode set <code>');
+      if (op === 'local' && !['on', 'off'].includes(a[2])) throw new Error('room passcode local on|off');
+      const r = op === 'status' ? await call('/passcode') : await call('/passcode', b);
+      return r.set ? `passcode on${r.localSkips ? ', this Mac skips it' : ''}` : 'passcode off';
+    }
+    return call('/room', { action: a[0], value: a[1], ...(a[0] === 'chat' ? (a[2] ? { text: a.slice(2).join(' ') } : {}) : a[2] ? { id: a[2] } : {}) });
+  },
   // defaults [model|effort|every <value>] (t898): what a new squiggle starts with. 'default' clears model or effort.
   defaults: () => {
     if (!a[0]) return call('/defaults');
@@ -224,7 +234,7 @@ const cmds = {
 };
 
 if (!cmds[cmd]) {
-  console.log('usage: agents.mjs list | team | wake <id> [why] | tell <id> <text> [--image <path>] | stop <id> | clear <id> | remove <id> | room radio|volume|voices|chatter|characters|view|chat <value> | room view 1on1 <id> | room view blocked|rethink | room lock | room reload | call <teams-url> [until <time>] | call status | call leave | restart | upgrade | limit | inbox | screen diff <task>|url <url>|file <path>|off [--as <id>] | share on|off|status | defaults [model|effort|every <value>] | humans | human add "<name>" [avatar] | human edit <id> name|avatar <value> | human remove <id> | tail <id> [n] | journal <id> | charter <id> [new text] | rename <id> <name> [role] | create <id> <name> <role> <cwd> <every> <charter> | set <id> <field> <value> | look <id> [<generator>[:<options>]|character|auto|shuffle] | goals | goal add|move|confirm|owner|note|repos|merge|edit|drop ... | tasks [goal|owner] | task add|move|confirm|edit|needs|drop ... | task needs <id> add "<text>"|done|undo|drop <n>|clear | task move <id> review [repo:]<branch> ["<test result>"] | meetings [days] [from YYYY-MM-DD] | meeting add "<title>" "<when>" <id,id> [once|daily|weekdays|weekly] ["<agenda>"] | meeting edit <id> <field> <value> | meeting cancel <id> [date] | meeting start <id> | meeting next | meeting end | meeting now | meet now <id,id> ["topic"] [--presenters <id,id>] | meet merges | merges [refresh] | worktrees [check] | task worktree <id> [repo] | suggest "<one line>" [evidence] | suggestions [all] | suggestion accept <id> <goal> <owner> | suggestion decline <id> "<why>" | merge <task> | merge diff <task> | merge back <task> "<note>"');
+  console.log('usage: agents.mjs list | team | wake <id> [why] | tell <id> <text> [--image <path>] | stop <id> | clear <id> | remove <id> | room radio|volume|voices|chatter|characters|view|chat <value> | room passcode set <code>|clear|status|local on|off | room view 1on1 <id> | room view settings [room|characters|squiggles|people|sharing|defaults|security] | room view blocked|rethink | room lock | room reload | call <teams-url> [until <time>] | call status | call leave | restart | upgrade | limit | inbox | screen diff <task>|url <url>|file <path>|off [--as <id>] | share on|off|status | defaults [model|effort|every <value>] | humans | human add "<name>" [avatar] | human edit <id> name|avatar <value> | human remove <id> | tail <id> [n] | journal <id> | charter <id> [new text] | rename <id> <name> [role] | create <id> <name> <role> <cwd> <every> <charter> | set <id> <field> <value> | look <id> [<generator>[:<options>]|character|auto|shuffle] | goals | goal add|move|confirm|owner|note|repos|merge|edit|drop ... | tasks [goal|owner] | task add|move|confirm|edit|needs|drop ... | task needs <id> add "<text>"|done|undo|drop <n>|clear | task move <id> review [repo:]<branch> ["<test result>"] | meetings [days] [from YYYY-MM-DD] | meeting add "<title>" "<when>" <id,id> [once|daily|weekdays|weekly] ["<agenda>"] | meeting edit <id> <field> <value> | meeting cancel <id> [date] | meeting start <id> | meeting next | meeting end | meeting now | meet now <id,id> ["topic"] [--presenters <id,id>] | meet merges | merges [refresh] | worktrees [check] | task worktree <id> [repo] | suggest "<one line>" [evidence] | suggestions [all] | suggestion accept <id> <goal> <owner> | suggestion decline <id> "<why>" | merge <task> | merge diff <task> | merge back <task> "<note>"');
   process.exit(1);
 }
 try {

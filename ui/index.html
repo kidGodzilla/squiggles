@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#111218">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="apple-mobile-web-app-title" content="Squiggles">
 <link rel="manifest" href="/ui/manifest.webmanifest">
 <link rel="apple-touch-icon" href="/ui/icon-180.png">
@@ -85,7 +85,8 @@
   <section id="setView" class="bview">
     <div class="sets">
       <h1>Settings</h1>
-      <section class="setcard">
+      <nav class="settabs" role="tablist" aria-label="Settings"><button type="button" role="tab" data-stab="room">Room</button><button type="button" role="tab" data-stab="characters">Characters</button><button type="button" role="tab" data-stab="squiggles">Squiggles</button><button type="button" role="tab" data-stab="people">People</button><button type="button" role="tab" data-stab="sharing">Sharing</button><button type="button" role="tab" data-stab="defaults">Defaults</button><button type="button" role="tab" data-stab="security">Security</button></nav>
+      <section class="setcard" role="tabpanel" data-stab="room">
         <h2>Room</h2>
         <p class="sethint">Sound in this browser. CLI: <code>room radio|volume|voices|chatter &lt;value&gt;</code>.</p>
         <div class="setform">
@@ -95,19 +96,28 @@
           <label for="chatter">Idle chatter</label><select id="chatter" data-snd="chatter"><option value="quiet">Quiet</option><option value="normal" selected>Some chatter</option><option value="lively">Lively</option></select>
         </div>
       </section>
-      <section class="setcard">
+      <section class="setcard" role="tabpanel" data-stab="sharing">
         <h2>Sharing</h2>
         <p class="sethint">Anyone on the tailnet can open the room. CLI: <code>share on|off|status</code>.</p>
         <div class="setform">
           <label for="shareOn">Tailnet</label><span><input type="checkbox" id="shareOn"> <label for="shareOn">Share the room</label> <button class="chip" id="shareCopy" hidden>Copy link</button></span>
         </div>
       </section>
-      <section class="setcard">
+      <section class="setcard" id="setPass" role="tabpanel" data-stab="security">
+        <h2>Passcode</h2>
+        <p class="sethint">The lock screen asks for it: snoop protection for a shared iPad, not a vault. CLI: <code>room passcode set &lt;code&gt;|clear|local on|off</code>.</p>
+        <p id="passNow"></p>
+        <div class="setform">
+          <label for="passNew">Passcode</label><span><input type="password" id="passNew" autocomplete="new-password" placeholder="4 or more characters"> <button class="chip" id="passSet">Set</button> <button class="chip" id="passClear" hidden>Turn off</button></span>
+          <label for="passLocal">This Mac</label><span><input type="checkbox" id="passLocal"> <label for="passLocal">Skip it in this Mac's browser</label></span>
+        </div>
+      </section>
+      <section class="setcard" role="tabpanel" data-stab="people">
         <h2>People</h2>
         <p class="sethint">Humans in the room. Select one to rename or remove. CLI: <code>human add|edit|remove</code>.</p>
         <div class="people" id="setPeople"></div>
       </section>
-      <section class="setcard">
+      <section class="setcard" role="tabpanel" data-stab="defaults">
         <h2>Team defaults</h2>
         <p class="sethint">What a new squiggle starts with. CLI: <code>defaults [model|effort|every &lt;value&gt;]</code>.</p>
         <div class="setform" id="setDefaults">
@@ -116,12 +126,12 @@
           <label for="defEvery">Wakes</label><select id="defEvery" data-f="every"></select>
         </div>
       </section>
-      <section class="setcard">
+      <section class="setcard" role="tabpanel" data-stab="squiggles">
         <h2>Squiggles</h2>
         <p class="sethint">Changes save as you make them. CLI: <code>set &lt;id&gt; model|effort|every|paused &lt;value&gt;</code>, <code>look &lt;id&gt; &lt;pack&gt;</code>.</p>
         <div class="setsqs" id="setSqs"></div>
       </section>
-      <section class="setcard">
+      <section class="setcard" role="tabpanel" data-stab="characters">
         <h2>Characters</h2>
         <p class="sethint">Try a character pack on everyone, then use it for the room or for one squiggle. CLI: <code>room characters &lt;pack&gt;</code>, <code>look &lt;id&gt; &lt;pack&gt;</code>.</p>
         <div class="setrow">
@@ -154,6 +164,7 @@
     <p>Join to hear them. Sound, voices and radio start when you do.</p>
     <p class="locked" id="lockNote"></p>
     <div id="joinWho" hidden><p>Who are you?</p><div class="who"></div></div>
+    <form id="passForm" hidden><input type="password" id="passIn" autocomplete="current-password" aria-label="Passcode" placeholder="Passcode"><button class="cta">Unlock</button><p id="passErr" role="alert"></p></form>
     <button class="cta" id="joinBtn">Join the room</button>
   </div>
 </div>

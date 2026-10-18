@@ -7,7 +7,11 @@ const base = (f) => String(f || '').split('/').pop();
 // The URL the page opened with: views restore from it after the room has loaded (t348).
 const URL0 = location.search;
 const fmtDur = (ms) => (ms < 1000 ? `${Math.round(ms)}ms` : ms < 60000 ? `${(ms / 1000).toFixed(1)}s` : `${Math.floor(ms / 60000)}m${Math.round((ms % 60000) / 1000)}s`);
-const api = (p, body) => fetch('/api' + p, body === undefined ? {} : { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then((r) => r.json());
+// Room passcode (t913): PASS mirrors /api/passcode. A 401 after unlocking means the session ended elsewhere: reload to the lock screen.
+const PASS = { set: false, ok: true };
+const api = async (p, body) => (p === '/passcode' || await GATE, fetch('/api' + p, body === undefined ? {} : { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then((r) => { if (r.status === 401 && PASS.set && PASS.ok) location.reload(); return r.json(); }));
+// Every api() call waits here until the passcode gate opens (at once when there is none).
+const GATE = passGate();
 
 const prefs = Object.assign({ voice: true, music: true, station: 'fip', musicVol: 0.3, chatter: 'normal' }, (() => { try { return JSON.parse(localStorage.agentsPrefs || '{}'); } catch { return {}; } })());
 const savePrefs = () => { try { localStorage.agentsPrefs = JSON.stringify(prefs); } catch {} };
@@ -704,7 +708,7 @@ async function roomCommand(ev) {
     case 'volume': prefs.musicVol = Math.max(0, Math.min(1, +v || 0)); paintSound(); break;
     case 'voices': prefs.voice = v !== 'off'; paintSound(); break;
     case 'chatter': if (['quiet', 'normal', 'lively'].includes(v)) { prefs.chatter = v; paintSound(); } break;
-    case 'view': if (['room', 'lead', 'meeting', 'team', 'calendar', 'goals', 'tasks', 'merge', 'settings'].includes(v)) setView(v); else if (v === 'blocked' || v === 'rethink') openStuck(v); else if (v === '1on1' && S.sq[ev.id]) oneOnOne(ev.id); break;
+    case 'view': if (v === 'settings' && ev.id) B.stab = setTab(String(ev.id).toLowerCase()); if (['room', 'lead', 'meeting', 'team', 'calendar', 'goals', 'tasks', 'merge', 'settings'].includes(v)) setView(v); else if (v === 'blocked' || v === 'rethink') openStuck(v); else if (v === '1on1' && S.sq[ev.id]) oneOnOne(ev.id); break;
     case 'chat': if (S.sq[ev.value]) { if (S.office && !S.officeIds.includes(ev.value)) setView('room'); discuss(ev.value, ev.text, false); } break;
     case 'lock': lock(); break;
     case 'reload': location.reload(); break;
@@ -1057,6 +1061,7 @@ function renderJoinCast() { $('#joinCast').innerHTML = S.order.slice(0, 5).map((
 // Lock: back to the splash with all sound stopped. The team keeps working; joining again picks up where it was.
 function lock(why = '') {
   if (!S.joined) return;
+  if (PASS.set) { fetch('/api/passcode', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"op":"lock"}' }).finally(() => location.reload()); return; }
   S.joined = false; S.queue.length = 0;
   for (const id of [...S.speakers]) stopTalk(id);
   if (AUD.ctx) AUD.ctx.suspend();
@@ -1081,6 +1086,19 @@ $('#joinBtn').onclick = () => {
 };
 document.addEventListener('keydown', (e) => { if (e.key === '/' && S.joined && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) { e.preventDefault(); const l = leadId(); if (l) openChat(l); } });
 
-load().then(() => { listen(); loadMeeting(); loadShare(); fetch('/api/config').then((x) => x.json()).then((c) => { $('#callBar').hidden = !c.call; }).catch(() => {});
+// With a passcode set and no session, the splash asks for it; unlocking reloads into the room.
+async function passGate() {
+  Object.assign(PASS, await fetch('/api/passcode').then((r) => r.json()).catch(() => ({})));
+  if (!PASS.set || PASS.ok) return;
+  $('#joinBtn').hidden = true; $('#passForm').hidden = false; $('#lockNote').textContent = 'Enter the passcode.'; $('#passIn').focus();
+  $('#passForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const r = await fetch('/api/passcode', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ op: 'unlock', code: $('#passIn').value }) }).then((x) => x.json()).catch(() => ({ error: 'no connection' }));
+    if (r.error) { $('#passErr').textContent = r.error[0].toUpperCase() + r.error.slice(1) + '.'; $('#passIn').select(); return; }
+    location.reload();
+  };
+  await new Promise(() => {});
+}
+GATE.then(() => load()).then(() => { listen(); loadMeeting(); loadShare(); fetch('/api/config').then((x) => x.json()).then((c) => { $('#callBar').hidden = !c.call; }).catch(() => {});
   // A view restored before the room loaded (URL or last view) gets its office now.
   if (B.view === 'lead') setOffice(leadId()); else if (B.view === 'one') { if (S.sq[B.who]) setOffice(B.who); else setView('room', '', 'replace'); } else if (S.office) setOffice(S.officeIds); });

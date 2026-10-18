@@ -638,3 +638,21 @@ body.v-one.screen:not(.v-meet) #chats .cw.office { left: auto !important; width:
   .sqlab { position: static; width: auto; height: auto; clip: auto; color: var(--dim); font-size: 12px } .sqpause .sqlab { color: inherit; font-size: 13.5px } .sqf select { height: 44px } .sqpause { min-height: 44px } }
 @media (max-width: 760px) { .sqtable td:nth-child(3), .sqtable td:nth-child(4) { grid-column: 1 / -1 } .sqtable td:last-child { align-self: end } } /* phone: long values stay whole (t897) */
 @media (pointer: coarse) { #moreBtn, .chip.me { min-width: 44px; height: 44px } .chip.me { justify-content: center } .morep .chip, .msnd .ctl, .msnd select { min-height: 44px } .hm, #setPeople .chip, #pop .row button { min-height: 44px } } /* touch targets (t894, t895, t896) */
+
+/* Passcode on the lock screen (t913) */
+#passForm { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 8px }
+#passForm[hidden] { display: none }
+#passIn { min-height: 44px; width: 200px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); color: var(--text); font: inherit; font-size: 16px }
+#passErr { flex-basis: 100%; margin: 0; min-height: 1.2em; color: var(--bad, #ff8a8a); font-size: 13px }
+#passNew { min-height: 32px; width: 180px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--text); font: inherit }
+@media (pointer: coarse) { #passNew, #passSet, #passClear { min-height: 44px } }
+#passNew { flex: 1; min-width: 0 } #setPass .setform > span { min-width: 0 } #setPass .setform > span > .chip { flex: none; white-space: nowrap } /* Turn off stays one line (Iris, t913) */
+@media (pointer: coarse) { .setform select, .setrow select { height: 44px } } /* Iris, t898 */
+/* Settings tabs (t917) */
+.settabs { display: flex; gap: 4px; margin: 0 0 16px; padding: 4px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); overflow-x: auto; scrollbar-width: none; width: max-content; max-width: 100% }
+.settabs::-webkit-scrollbar { display: none }
+.settabs button { flex: none; padding: 7px 14px; border-radius: 7px; color: var(--dim); font-size: 13px; font-weight: 600; white-space: nowrap }
+.settabs button:hover { color: var(--text) }
+.settabs button[aria-selected=true] { background: var(--bg); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.3) }
+.setcard[hidden] { display: none }
+@media (pointer: coarse) { .settabs button { min-height: 44px } }

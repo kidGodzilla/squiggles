@@ -17,6 +17,7 @@ import { dataDir, loadConfig } from './config.mjs';
 import { migrate } from './migrate.mjs';
 import { createSchedule } from './schedule.mjs';
 import { makeGuard, tailnetName } from './guard.mjs';
+import { makePasscode } from './passcode.mjs';
 
 const home = (p) => String(p || '').replace(/^~(?=\/|$)/, os.homedir());
 // Code (ROOT) is written by git only; the room lives in DATA. See docs/upgrading.md.
@@ -919,6 +920,8 @@ function tailEvents(id, n = 400) {
 // Tailnet sharing off: only the local names are allowed, and tailscale is never asked.
 const tailnet = CONFIG.tailnet ? tailnetName(TS) : { get: () => '', seen: () => {} };
 const refuse = makeGuard(PORT, tailnet.get);
+// Optional room passcode (t913): the page and its files always load (the lock screen asks); everything else needs it.
+const pass = makePasscode({ read: () => roomCfg().passcode, write: (v) => { const c = roomCfg(); if (v) c.passcode = v; else delete c.passcode; fs.writeFileSync(ROOMCFG, JSON.stringify(c, null, 2) + '\n'); } });
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   const p = url.pathname.split('/').filter(Boolean);
@@ -926,6 +929,11 @@ const server = http.createServer(async (req, res) => {
   const why = refuse(req);
   if (why) { res.writeHead(403, { 'content-type': 'text/plain' }); return res.end(`refused: ${why}`); }
   try {
+    if (url.pathname === '/api/passcode') {
+      if (req.method === 'GET') return json(res, pass.status(req));
+      try { const r = pass.op(req, await body(req)); if (r.cookie) res.setHeader('set-cookie', r.cookie); return json(res, r.body); } catch (e) { return json(res, { error: e.message }, e.code || 400); }
+    }
+    if (!(url.pathname === '/' || p[0] === 'ui') && !pass.ok(req)) return json(res, { error: 'locked' }, 401);
     if (url.pathname === '/') return serveFile(res, path.join(ROOT, 'ui', 'index.html'), UI_CSP);
     // UI seam: <data>/local.css loads after room.css; empty when absent.
     if (url.pathname === '/local.css') { res.writeHead(200, { 'content-type': 'text/css' }); return res.end(readText(path.join(DATA, 'local.css'))); }
@@ -972,7 +980,7 @@ const server = http.createServer(async (req, res) => {
       const d = setDefaults(await body(req)); broadcast('*room', { k: 'room', action: 'defaults' }); return json(res, d);
     }
     if (url.pathname === '/api/defaults') return json(res, teamDefaults());
-    if (url.pathname === '/api/room') return json(res, roomCfg());
+    if (url.pathname === '/api/room') { const { passcode, ...c } = roomCfg(); return json(res, c); } // never the passcode hash (t913)
     if (url.pathname === '/api/board') return json(res, { goals: board.goals(), tasks: board.tasks() });
     if (url.pathname === '/api/goals' && req.method === 'POST') return json(res, board.goalOp(await body(req)));
     if (url.pathname === '/api/tasks' && req.method === 'POST') {

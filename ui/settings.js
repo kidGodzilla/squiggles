@@ -1,6 +1,19 @@
 // Settings view (t836). CLI: room view settings. Characters: try a pack on everyone at tile and mini size, then use it for the room or one squiggle.
 const SET = { gen: '', talk: 0 };
+// Settings tabs (t917): one card group per tab; ?view=settings&tab=<x>, CLI room view settings <tab>.
+function paintSetTab() {
+  if (!SET_TABS.includes(B.stab)) B.stab = 'room';
+  document.querySelectorAll('.settabs [data-stab]').forEach((b) => { const on = b.dataset.stab === B.stab; b.setAttribute('aria-selected', on); b.tabIndex = on ? 0 : -1; });
+  document.querySelectorAll('.setcard[data-stab]').forEach((c) => { c.hidden = c.dataset.stab !== B.stab; });
+  $(`.settabs [data-stab="${B.stab}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+}
+$('.settabs').onclick = (e) => { const t = e.target.closest('[data-stab]'); if (!t || t.dataset.stab === B.stab) return; B.stab = t.dataset.stab; paintSetTab(); syncUrl(); };
+$('.settabs').onkeydown = (e) => {
+  const d = { ArrowRight: 1, ArrowLeft: -1 }[e.key]; if (!d) return;
+  B.stab = SET_TABS[(SET_TABS.indexOf(B.stab) + d + SET_TABS.length) % SET_TABS.length]; paintSetTab(); syncUrl(); $(`.settabs [data-stab="${B.stab}"]`).focus();
+};
 function renderSettings() {
+  paintSetTab();
   const room = roomGen(), sel = $('#setGen');
   if (!hasGen(SET.gen)) SET.gen = room;
   sel.innerHTML = Object.values(GENS).map((g) => `<option value="${esc(g.id)}"${g.id === SET.gen ? ' selected' : ''}>${esc(g.name)}</option>`).join('');
@@ -13,7 +26,7 @@ function renderSettings() {
       <div class="who"><div class="tile mini">${avatarSVG(p, undefined, 'sm' + p.gid + '_')}</div><div><b>${esc(s.name)}</b><small>${mine ? `Uses ${esc(GENS[SET.gen].name)}` : `Uses ${esc(GENS[P(id).gen].name)}`}</small></div></div>
       <button class="chip" data-use="${id}"${mine && own ? ' disabled' : ''}>Use for ${esc(s.name)}</button></div>`;
   }).join('');
-  setTalk(); renderSetSqs(); renderDefaults();
+  setTalk(); renderSetSqs(); renderDefaults(); renderPass();
 }
 // Squiggles card (t897): model, effort, cadence, paused and pack per squiggle; each change posts to /update, like the CLI's set and look.
 // Option lists shared by the Squiggles and Team defaults cards. A value outside the list (set from the CLI) is kept and shown.
@@ -23,6 +36,19 @@ const every = (m) => (!m ? 'Only when asked' : m % 1440 === 0 ? (m === 1440 ? 'D
 const modelOpts = (cur) => withCur(['', 'opus', 'sonnet', 'gpt-6.1-sol'], cur).map((m) => opt(m, cur, m ? modelName(m) : 'Default (Opus 5.5)')).join('');
 const effortOpts = (cur, lead) => withCur(['', 'low', 'medium', 'high', 'xhigh', 'max'], cur).map((m) => opt(m, cur, m ? cap(m) : lead ? 'Default' : 'Medium (default)')).join('');
 const everyOpts = (cur) => withCur([0, 15, 30, 60, 180, 360, 720, 1440], cur || 0).sort((x, y) => x - y).map((m) => opt(m, cur || 0, every(m))).join('');
+// Passcode card (t913). CLI: room passcode.
+async function renderPass() {
+  const r = await api('/passcode'); if (!r || r.error) return;
+  Object.assign(PASS, r);
+  $('#passNow').textContent = r.set ? `On.${r.localSkips ? " This Mac's browser skips it." : ''}` : 'Off. Anyone who can open the room gets in.';
+  $('#passSet').textContent = r.set ? 'Change' : 'Set'; $('#passClear').hidden = !r.set;
+  $('#passLocal').checked = !!r.localSkips; $('#passLocal').disabled = !r.set;
+}
+const passOp = async (b, done) => { const r = await api('/passcode', b); if (!r || r.error) return toast(r?.error || 'Not saved'); toast(done); renderPass(); };
+$('#passSet').onclick = () => { const code = $('#passNew').value; $('#passNew').value = ''; passOp({ op: 'set', code }, 'Passcode set'); };
+$('#passNew').onkeydown = (e) => { if (e.key === 'Enter') $('#passSet').click(); };
+$('#passClear').onclick = () => passOp({ op: 'clear' }, 'Passcode off');
+$('#passLocal').onchange = (e) => passOp({ op: 'local', on: e.target.checked }, e.target.checked ? "This Mac's browser skips the passcode" : "This Mac's browser asks too");
 // Team defaults card (t898): what a new squiggle starts with. CLI: defaults.
 async function renderDefaults() {
   const d = await api('/defaults'); if (!d || d.error) return;
@@ -31,7 +57,7 @@ async function renderDefaults() {
 $('#setDefaults').onchange = async (e) => {
   const f = e.target.dataset.f; if (!f) return;
   const r = await api('/defaults', { [f]: f === 'every' ? Number(e.target.value) : e.target.value });
-  if (!r || r.error) return toast(r?.error || 'Not saved');
+  if (!r || r.error) { renderDefaults(); return toast(r?.error || 'Not saved'); } // put the select back
   toast('Saved team defaults');
 };
 function renderSetSqs() {

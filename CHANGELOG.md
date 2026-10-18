@@ -5,11 +5,13 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 ## 0.1.2 (unreleased)
 
 ### Security
+- Optional room passcode (Settings > Security or `room passcode set <code>|clear|status|local on|off`): browsers unlock with it; HttpOnly session cookie, scrypt hash, rate-limited. GET /api/room no longer returns it.
 - Content-Security-Policy: the UI runs only its own scripts and can't be framed; chat files, media and speech are sandboxed; nosniff on all of them.
 - Settings escapes option values, and squiggle model and effort accept only allowed values.
 - Shared screen reads regular files only, capped in size, and its content isn't saved to the transcript.
 
 ### Added
+- Settings tabs: Room, Characters, Squiggles, People, Sharing, Defaults, Security; `?tab=` and `room view settings <tab>` open one.
 - Team defaults: model, effort and wake cadence new squiggles start with, set in Settings or `defaults [model|effort|every <value>]`. Fable and models below Sonnet 5.5 are refused.
 - Settings (Menu > Settings, `?view=settings`, `room view settings`): Room sound, Sharing (only when tailnet is on), People, a Squiggles table (model, effort, wakes, pack, paused) and a character pack tester.
 - Avataaars characters: `look <id> avataaars` (or `room characters avataaars`) draws a seeded Avataaars person that talks and blinks. Credits in THIRD-PARTY-NOTICES.md.
@@ -58,6 +60,8 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - The scheduler staggers wakes per provider, 2 minutes apart (was 10 minutes across all).
 
 ### Fixed
+- Installed on iPhone, the header is no longer blurred under the status bar.
+- Settings at 390: passcode buttons stay on one line, selects are 44px on touch, and a refused default puts the select back.
 - After an upgrade the browser no longer runs stale UI files: they are served with no-cache and an ETag.
 - `look <id> constructor` (or `__proto__`) no longer breaks the room; unknown looks fall back to the default.
 - A server started with `node server.mjs` comes back after `restart`.
