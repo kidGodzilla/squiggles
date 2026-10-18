@@ -22,9 +22,15 @@
   <div class="sp"></div>
   <button class="chip me" id="meBtn" hidden title="Who is using this browser"></button>
   <div class="more">
-    <button class="chip" id="moreBtn" aria-haspopup="true" aria-expanded="false" aria-label="Menu" title="Menu: settings, inbox, lock"><svg viewBox="0 0 16 16"><path d="M2.5 4h11M2.5 8h11M2.5 12h11"/></svg></button>
+    <button class="chip" id="moreBtn" aria-haspopup="true" aria-expanded="false" aria-label="Menu" title="Menu: sound, settings, inbox, lock"><svg viewBox="0 0 16 16"><path d="M2.5 4h11M2.5 8h11M2.5 12h11"/></svg></button>
     <div id="morePanel" class="morep" role="menu">
       <div id="moreCount"></div>
+      <div class="msnd" role="group" aria-label="Sound">
+        <label class="ctl"><span>Radio</span><select data-snd="station"></select></label>
+        <label class="ctl"><span>Volume</span><input data-snd="musicVol" type="range" min="0" max="1" step="0.05"></label>
+        <label class="ctl"><span>Voices</span><input type="checkbox" data-snd="voice"></label>
+        <label class="ctl"><span>Chatter</span><select data-snd="chatter"><option value="quiet">Quiet</option><option value="normal" selected>Some chatter</option><option value="lively">Lively</option></select></label>
+      </div>
       <button class="chip" id="lockBtn" title="Lock: back to the splash, sound off (the team keeps working)"><svg viewBox="0 0 16 16"><rect x="3.5" y="7" width="9" height="6.5" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg>Lock</button>
       <button class="chip" id="settingsBtn" title="Settings: characters and more">Settings</button>
       <button class="chip" id="inboxBtn" title="Notes dropped in ~/Agents/inbox for the lead">Inbox</button>
@@ -83,10 +89,10 @@
         <h2>Room</h2>
         <p class="sethint">Sound in this browser. CLI: <code>room radio|volume|voices|chatter &lt;value&gt;</code>.</p>
         <div class="setform">
-          <label for="station">Radio</label><select id="station"></select>
-          <label for="musicVol">Music volume</label><input id="musicVol" type="range" min="0" max="1" step="0.05">
-          <label for="voiceOn">Voices</label><span><input type="checkbox" id="voiceOn"> <label for="voiceOn">Read messages aloud</label></span>
-          <label for="chatter">Idle chatter</label><select id="chatter"><option value="quiet">Quiet</option><option value="normal" selected>Some chatter</option><option value="lively">Lively</option></select>
+          <label for="station">Radio</label><select id="station" data-snd="station"></select>
+          <label for="musicVol">Music volume</label><input id="musicVol" data-snd="musicVol" type="range" min="0" max="1" step="0.05">
+          <label for="voiceOn">Voices</label><span><input type="checkbox" id="voiceOn" data-snd="voice"> <label for="voiceOn">Read messages aloud</label></span>
+          <label for="chatter">Idle chatter</label><select id="chatter" data-snd="chatter"><option value="quiet">Quiet</option><option value="normal" selected>Some chatter</option><option value="lively">Lively</option></select>
         </div>
       </section>
       <section class="setcard">

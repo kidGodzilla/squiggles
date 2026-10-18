@@ -700,10 +700,10 @@ async function roomCommand(ev) {
   const v = String(ev.value ?? '').toLowerCase();
   switch (ev.action) {
     case 'defaults': if (B.view === 'settings' && !document.activeElement?.closest('#setDefaults')) renderDefaults(); return; // t898
-    case 'radio': prefs.music = v !== 'off'; if (prefs.music && STATIONS.some(([s]) => s === v)) prefs.station = v; $('#station').value = prefs.music ? prefs.station : 'off'; break;
-    case 'volume': prefs.musicVol = Math.max(0, Math.min(1, +v || 0)); $('#musicVol').value = prefs.musicVol; break;
-    case 'voices': prefs.voice = v !== 'off'; paintVoice(); break;
-    case 'chatter': if (['quiet', 'normal', 'lively'].includes(v)) { prefs.chatter = v; $('#chatter').value = v; } break;
+    case 'radio': prefs.music = v !== 'off'; if (prefs.music && STATIONS.some(([s]) => s === v)) prefs.station = v; paintSound(); break;
+    case 'volume': prefs.musicVol = Math.max(0, Math.min(1, +v || 0)); paintSound(); break;
+    case 'voices': prefs.voice = v !== 'off'; paintSound(); break;
+    case 'chatter': if (['quiet', 'normal', 'lively'].includes(v)) { prefs.chatter = v; paintSound(); } break;
     case 'view': if (['room', 'lead', 'meeting', 'team', 'calendar', 'goals', 'tasks', 'merge', 'settings'].includes(v)) setView(v); else if (v === 'blocked' || v === 'rethink') openStuck(v); else if (v === '1on1' && S.sq[ev.id]) oneOnOne(ev.id); break;
     case 'chat': if (S.sq[ev.value]) { if (S.office && !S.officeIds.includes(ev.value)) setView('room'); discuss(ev.value, ev.text, false); } break;
     case 'lock': lock(); break;
@@ -874,13 +874,18 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { $('#shee
 //  composer, mic, header controls, joining
 // =====================================================================
 const leadId = () => S.order.find((id) => S.sq[id].lead);
-$('#station').innerHTML = `<option value="off">Off</option>` + STATIONS.map(([v, n]) => `<option value="${v}">${n}</option>`).join('');
-$('#station').value = prefs.music ? prefs.station : 'off';
-$('#station').onchange = (e) => { const v = e.target.value; prefs.music = v !== 'off'; if (prefs.music) prefs.station = v; savePrefs(); AUD.apply(); };
-$('#musicVol').value = prefs.musicVol; $('#musicVol').oninput = (e) => { prefs.musicVol = +e.target.value; savePrefs(); AUD.apply(); };
-const paintVoice = () => { $('#voiceOn').checked = !!prefs.voice; };
-paintVoice(); $('#voiceOn').onchange = (e) => { prefs.voice = e.target.checked; savePrefs(); AUD.apply(); };
-$('#chatter').value = prefs.chatter; $('#chatter').onchange = (e) => { prefs.chatter = e.target.value; savePrefs(); };
+// Sound controls live in the Menu and in Settings; every copy carries data-snd and repaints from prefs (t914).
+const snd = (k, f) => document.querySelectorAll(`[data-snd="${k}"]`).forEach(f);
+const paintSound = () => {
+  snd('station', (e) => { e.value = prefs.music ? prefs.station : 'off'; }); snd('musicVol', (e) => { e.value = prefs.musicVol; });
+  snd('voice', (e) => { e.checked = !!prefs.voice; }); snd('chatter', (e) => { e.value = prefs.chatter; });
+};
+const sndSet = (fn) => (e) => { fn(e.target); savePrefs(); AUD.apply(); paintSound(); };
+snd('station', (e) => { e.innerHTML = `<option value="off">Off</option>` + STATIONS.map(([v, n]) => `<option value="${v}">${n}</option>`).join(''); e.onchange = sndSet((t) => { prefs.music = t.value !== 'off'; if (prefs.music) prefs.station = t.value; }); });
+snd('musicVol', (e) => { e.oninput = sndSet((t) => { prefs.musicVol = +t.value; }); });
+snd('voice', (e) => { e.onchange = sndSet((t) => { prefs.voice = t.checked; }); });
+snd('chatter', (e) => { e.onchange = sndSet((t) => { prefs.chatter = t.value; }); });
+paintSound();
 // Share on tailnet (tailscale serve): the toggle and its link in More. CLI: share on|off|status.
 // Only Copy link shows (t837); the URL rides on the button. Hidden when tailnet sharing is off in config.
 // Tailnet sharing off in config: the Sharing card is hidden.
