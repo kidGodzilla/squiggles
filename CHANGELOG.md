@@ -5,6 +5,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 ## 0.1.2 (unreleased)
 
 ### Security
+- Content-Security-Policy: the UI runs only its own scripts and can't be framed; chat files, media and speech are sandboxed; nosniff on all of them.
 - Settings escapes option values, and squiggle model and effort accept only allowed values.
 - Shared screen reads regular files only, capped in size, and its content isn't saved to the transcript.
 
