@@ -895,9 +895,13 @@ function body(req) {
 }
 const json = (res, v, code = 200) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(v)); };
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.jpg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.wav': 'audio/wav', '.webmanifest': 'application/manifest+json' };
+// Pages revalidate every file (t907): no-cache plus an ETag from size and mtime, so an upgrade never runs a stale cast.js and unchanged files cost a 304.
 function serveFile(res, file) {
-  if (!fs.statSync(file, { throwIfNoEntry: false })?.isFile()) return json(res, { error: 'not found' }, 404);
-  res.writeHead(200, { 'content-type': MIME[path.extname(file)] || 'application/octet-stream' });
+  const st = fs.statSync(file, { throwIfNoEntry: false });
+  if (!st?.isFile()) return json(res, { error: 'not found' }, 404);
+  const etag = `W/"${st.size.toString(36)}-${Math.floor(st.mtimeMs).toString(36)}"`, head = { 'cache-control': 'no-cache', etag };
+  if (res.req?.headers['if-none-match'] === etag) { res.writeHead(304, head); return res.end(); }
+  res.writeHead(200, { 'content-type': MIME[path.extname(file)] || 'application/octet-stream', ...head });
   fs.createReadStream(file).on('error', () => res.destroy()).pipe(res);
 }
 const view = (s) => {

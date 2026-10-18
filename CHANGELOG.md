@@ -56,6 +56,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - The scheduler staggers wakes per provider, 2 minutes apart (was 10 minutes across all).
 
 ### Fixed
+- After an upgrade the browser no longer runs stale UI files: they are served with no-cache and an ETag.
 - `look <id> constructor` (or `__proto__`) no longer breaks the room; unknown looks fall back to the default.
 - A server started with `node server.mjs` comes back after `restart`.
 - Changing a squiggle's model, browser, permission mode, effort or folder takes effect on its next turn.
