@@ -131,7 +131,7 @@ function stopTalk(id) {
   const t = tileOf(id);
   for (const el of [t, ...camsOf(id)].filter(Boolean)) { el.classList.remove('speaking'); setMouth(el, 0.9, 4.6); }
   if (S.present === id) $('#pcap').textContent = '';
-  if ($('#speakcap').dataset.id === id) { $('#speakcap').classList.remove('on'); $('#speakcap').dataset.id = ''; }
+  if ($('#speakcap').dataset.id === id) capLinger();
 }
 // The speaker is always visible (t670): in the Room their tile scrolls into view, unless the user is scrolling the
 // stage; anywhere their tile isn't on screen, a caption with their face, name and words.
@@ -147,9 +147,20 @@ function showSpeaker(id, t, text) {
   else if (!onScreen(t) && !(S.present === id && $('#present').classList.contains('on'))) {
     const s = S.sq[id];
     cap.innerHTML = `<div class="tile mini">${avatarSVG(P(id), undefined, 'sc_')}</div><div><b>${esc(s.name)}</b><p>${esc(text)}</p></div>`;
-    cap.dataset.id = id; cap.classList.add('on'); cap.onclick = () => (S.office ? openChat(id) : oneOnOne(id));
+    if (!(cap.classList.contains('on') && cap.dataset.id === id)) capT0 = Date.now();
+    clearTimeout(capT); capT = 0;
+    cap.dataset.id = id; cap.classList.add('on'); cap.onclick = () => { capHide(); S.office ? openChat(id) : oneOnOne(id); };
   }
 }
+// After the words end the caption lingers as long again (4 to 12 s) so there's time to click it (t926);
+// hovering or touching it holds it, leaving gives 4 s more.
+let capT = 0, capT0 = 0, capHeld = false;
+function capHide() { clearTimeout(capT); capT = 0; const c = $('#speakcap'); c.classList.remove('on'); c.dataset.id = ''; }
+function capLinger(ms = Math.max(4000, Math.min(12000, Date.now() - capT0))) {
+  clearTimeout(capT); capT = capHeld ? -1 : setTimeout(capHide, ms);
+}
+$('#speakcap').addEventListener('pointerenter', () => { capHeld = true; if (capT > 0) clearTimeout(capT), (capT = -1); });
+$('#speakcap').addEventListener('pointerleave', () => { capHeld = false; if (capT === -1) capLinger(4000); });
 const tileOf = (id) => document.getElementById('t-' + id);
 const camsOf = (id) => [S.present === id ? $('#pcam') : null, document.querySelector(`#cw-${id} .tile.mini`), $('#speakcap').dataset.id === id ? $('#speakcap .tile') : null].filter(Boolean);
 
