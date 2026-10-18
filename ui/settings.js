@@ -3,7 +3,7 @@ const SET = { gen: '', talk: 0 };
 function renderSettings() {
   const room = roomGen(), sel = $('#setGen');
   if (!hasGen(SET.gen)) SET.gen = room;
-  sel.innerHTML = Object.values(GENS).map((g) => `<option value="${g.id}"${g.id === SET.gen ? ' selected' : ''}>${esc(g.name)}</option>`).join('');
+  sel.innerHTML = Object.values(GENS).map((g) => `<option value="${esc(g.id)}"${g.id === SET.gen ? ' selected' : ''}>${esc(g.name)}</option>`).join('');
   $('#setNow').textContent = `The room uses ${GENS[room].name}.`;
   $('#setRoom').disabled = SET.gen === room; $('#setRoom').textContent = SET.gen === room ? `${GENS[room].name} is the room's pack` : `Use ${GENS[SET.gen].name} for the room`;
   // A squiggle keeps its own options when it already uses this pack; otherwise it gets the pack's seeded look.
@@ -17,7 +17,7 @@ function renderSettings() {
 }
 // Squiggles card (t897): model, effort, cadence, paused and pack per squiggle; each change posts to /update, like the CLI's set and look.
 // Option lists shared by the Squiggles and Team defaults cards. A value outside the list (set from the CLI) is kept and shown.
-const withCur = (l, cur) => (cur != null && cur !== '' && !l.includes(cur) ? [...l, cur] : l), opt = (v, cur, label) => `<option value="${v}"${String(cur ?? '') === String(v) ? ' selected' : ''}>${esc(label)}</option>`;
+const withCur = (l, cur) => (cur != null && cur !== '' && !l.includes(cur) ? [...l, cur] : l), opt = (v, cur, label) => `<option value="${esc(v)}"${String(cur ?? '') === String(v) ? ' selected' : ''}>${esc(label)}</option>`;
 const cap = (m) => ({ xhigh: 'Extra high' })[m] || m[0].toUpperCase() + m.slice(1);
 const every = (m) => (!m ? 'Only when asked' : m % 1440 === 0 ? (m === 1440 ? 'Daily' : `Every ${m / 1440} days`) : m % 60 === 0 ? (m === 60 ? 'Hourly' : `Every ${m / 60} hours`) : `Every ${m} min`);
 const modelOpts = (cur) => withCur(['', 'opus', 'sonnet', 'gpt-6.1-sol'], cur).map((m) => opt(m, cur, m ? modelName(m) : 'Default (Opus 5.5)')).join('');

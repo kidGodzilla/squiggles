@@ -5,6 +5,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 ## 0.1.2 (unreleased)
 
 ### Security
+- Settings escapes option values, and squiggle model and effort accept only allowed values.
 - Shared screen reads regular files only, capped in size, and its content isn't saved to the transcript.
 
 ### Added

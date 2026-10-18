@@ -9,7 +9,7 @@ import path from 'node:path';
 import os from 'node:os';
 import vm from 'node:vm';
 import { createBoard } from './board.mjs';
-import { modelFor as pickModel, DEFAULT_MODELS } from './models.mjs';
+import { modelFor as pickModel, DEFAULT_MODELS, EFFORTS, checkModelEffort } from './models.mjs';
 import { createMeetings, local, markPast, meetingNotes, parseWhen } from './meetings.mjs';
 import { createInbox } from './inbox.mjs';
 import { createHumans } from './humans.mjs';
@@ -58,8 +58,10 @@ function saveSquiggle(s) {
   fs.mkdirSync(sqDir(id), { recursive: true });
   fs.writeFileSync(path.join(sqDir(id), 'squiggle.json'), JSON.stringify(meta, null, 2) + '\n');
 }
+const ROOMCFG = path.join(DATA, 'room.json');
+const roomCfg = () => { try { return JSON.parse(fs.readFileSync(ROOMCFG, 'utf8')); } catch { return {}; } };
 // Team defaults (t898): model, effort and cadence a new squiggle starts with; room.json `defaults`, set from Settings or `defaults`.
-const DEFAULT_OPTS = { model: DEFAULT_MODELS, effort: ['', 'low', 'medium', 'high', 'xhigh', 'max'] };
+const DEFAULT_OPTS = { model: DEFAULT_MODELS, effort: EFFORTS };
 const teamDefaults = () => ({ model: '', effort: '', every: 60, ...(roomCfg().defaults || {}) });
 function setDefaults(b) {
   const d = teamDefaults(), bad = Object.keys(b).filter((k) => !['model', 'effort', 'every'].includes(k));
@@ -71,7 +73,7 @@ function setDefaults(b) {
 function createSquiggle({ id, name, role, cwd, charter, every, permissionMode = 'auto', model }) {
   id = String(id || name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
   if (!id || fs.existsSync(sqDir(id))) throw new Error('name taken or empty');
-  const d = teamDefaults();
+  checkModelEffort({ model }); const d = teamDefaults();
   saveSquiggle({ id, name, role, cwd: cwd || '~', every: every == null || every === '' ? d.every : Number(every) || 0, permissionMode, model: model || d.model || undefined, effort: d.effort || undefined, paused: false, created: now() });
   fs.writeFileSync(path.join(sqDir(id), 'charter.md'), (charter || role || '').trim() + '\n');
   fs.writeFileSync(path.join(sqDir(id), 'journal.md'), `# ${name} journal\n`);
@@ -838,8 +840,6 @@ In flight (${open.length}): ${open.slice(0, 30).map((t) => `${t.id} ${t.status} 
 }
 // The squiggle's room avatar as its call face: idle, talking and open-mouth SVGs from ui/cast.js, for claude-in-call's --face=avatar:<dir>.
 // Room-wide settings that outlive a page: { characters: <default generator> }.
-const ROOMCFG = path.join(DATA, 'room.json');
-const roomCfg = () => { try { return JSON.parse(fs.readFileSync(ROOMCFG, 'utf8')); } catch { return {}; } };
 // ui/cast.js and the generators in ui/gen (parts before renderers) in a sandbox, with the room's default generator applied.
 function castCtx() {
   const ctx = vm.createContext({}), gen = path.join(ROOT, 'ui', 'gen');
@@ -1022,6 +1022,7 @@ const server = http.createServer(async (req, res) => {
         case 'remove': return json(res, removeSquiggle(id));
         case 'update': {
           const { charter, ...meta } = b;
+          checkModelEffort(meta); // t905: only allowed models and efforts reach squiggle.json and the launch args
           saveSquiggle({ ...s, ...meta, id });
           if (charter != null) fs.writeFileSync(path.join(sqDir(id), 'charter.md'), charter.trim() + '\n');
           emit(id, { k: 'meta' });
