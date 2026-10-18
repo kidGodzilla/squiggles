@@ -887,11 +887,15 @@ async function callLeave() {
   return 'left the call';
 }
 
-function body(req) {
+// Request bodies stop at 200 MB (t891): past it the client gets 413 and the handler never runs.
+const BODY_MAX = 200 * 1024 * 1024;
+function body(req, res) {
   return new Promise((resolve) => {
-    let d = '';
-    req.on('data', (c) => (d += c));
-    req.on('end', () => { try { resolve(d ? JSON.parse(d) : {}); } catch { resolve({}); } });
+    const parts = []; let n = 0, over = Number(req.headers['content-length'] || 0) > BODY_MAX;
+    const refuse = () => { over = true; parts.length = 0; if (res && !res.headersSent) { res.setHeader('connection', 'close'); json(res, { error: 'too large (200 MB max)' }, 413); } };
+    if (over) refuse();
+    req.on('data', (c) => { if (over) return; n += c.length; if (n > BODY_MAX) refuse(); else parts.push(c); });
+    req.on('end', () => { if (over) return; const d = Buffer.concat(parts).toString('utf8'); try { resolve(d ? JSON.parse(d) : {}); } catch { resolve({}); } });
   });
 }
 const json = (res, v, code = 200) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(v)); };
@@ -931,7 +935,7 @@ const server = http.createServer(async (req, res) => {
   try {
     if (url.pathname === '/api/passcode') {
       if (req.method === 'GET') return json(res, pass.status(req));
-      try { const r = pass.op(req, await body(req)); if (r.cookie) res.setHeader('set-cookie', r.cookie); return json(res, r.body); } catch (e) { return json(res, { error: e.message }, e.code || 400); }
+      try { const r = pass.op(req, await body(req, res)); if (r.cookie) res.setHeader('set-cookie', r.cookie); return json(res, r.body); } catch (e) { return json(res, { error: e.message }, e.code || 400); }
     }
     if (!(url.pathname === '/' || p[0] === 'ui') && !pass.ok(req)) return json(res, { error: 'locked' }, 401);
     if (url.pathname === '/') return serveFile(res, path.join(ROOT, 'ui', 'index.html'), UI_CSP);
@@ -951,24 +955,24 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     if (url.pathname === '/api/squiggles' && req.method === 'GET') return json(res, listSquiggles().map(view));
-    if (url.pathname === '/api/squiggles' && req.method === 'POST') return json(res, view(createSquiggle(await body(req))));
+    if (url.pathname === '/api/squiggles' && req.method === 'POST') return json(res, view(createSquiggle(await body(req, res))));
     if (url.pathname === '/api/tts') {
       const file = await tts(url.searchParams.get('text') || '', voiceFor(url.searchParams.get('id') || ''));
       return serveFile(res, file);
     }
     if (url.pathname === '/api/call' && req.method === 'GET') return json(res, callStatus());
-    if (url.pathname === '/api/call' && req.method === 'POST') { const b = await body(req); return json(res, b.op === 'leave' ? await callLeave() : callJoin(b.url, b.until)); }
+    if (url.pathname === '/api/call' && req.method === 'POST') { const b = await body(req, res); return json(res, b.op === 'leave' ? await callLeave() : callJoin(b.url, b.until)); }
     if (url.pathname === '/api/health') return json(res, 'ok');
-    if (url.pathname === '/api/humans') return json(res, req.method === 'POST' ? humans.op(await body(req)) : { humans: humans.all() });
+    if (url.pathname === '/api/humans') return json(res, req.method === 'POST' ? humans.op(await body(req, res)) : { humans: humans.all() });
     if (url.pathname === '/api/config') { const { userName, model, codex, tailnet } = CONFIG; return json(res, { userName, model, codex, tailnet, call: fs.existsSync(CALL_DIR), version: VERSION, schema: CONFIG.schema }); }
-    if (url.pathname === '/api/share') return json(res, req.method === 'POST' ? await share(!!(await body(req)).on) : await shareStatus());
+    if (url.pathname === '/api/share') return json(res, req.method === 'POST' ? await share(!!(await body(req, res)).on) : await shareStatus());
     if (url.pathname === '/api/inbox') return json(res, { ...drop.list(), dir: path.join(DATA, 'inbox').replace(os.homedir(), '~') });
     if (url.pathname === '/api/limit') return json(res, { until: limit.until > Date.now() ? limit.until : 0 });
     if (url.pathname === '/api/restart' && req.method === 'POST') { restartPending = true; setTimeout(maybeRestart, 500); return json(res, 'restarting as soon as nobody is mid-turn'); }
     if (url.pathname === '/api/voice') return json(res, kokoro.status());
     // Room controls (radio, voices, chatter, tabs, chat windows) so the lead can do whatever the user can.
     if (url.pathname === '/api/room' && req.method === 'POST') {
-      const b = await body(req);
+      const b = await body(req, res);
       if (b.action === 'characters') {   // the room's default character generator (t832), saved so every page agrees
         const gens = Object.keys(castCtx().GENS), g = String(b.value || '').toLowerCase();
         if (!gens.includes(g)) return json(res, { error: `generators: ${gens.join(', ')}` }, 400);
@@ -977,14 +981,14 @@ const server = http.createServer(async (req, res) => {
       broadcast('*room', { k: 'room', ...b }); return json(res, 'ok');
     }
     if (url.pathname === '/api/defaults' && req.method === 'POST') {
-      const d = setDefaults(await body(req)); broadcast('*room', { k: 'room', action: 'defaults' }); return json(res, d);
+      const d = setDefaults(await body(req, res)); broadcast('*room', { k: 'room', action: 'defaults' }); return json(res, d);
     }
     if (url.pathname === '/api/defaults') return json(res, teamDefaults());
     if (url.pathname === '/api/room') { const { passcode, ...c } = roomCfg(); return json(res, c); } // never the passcode hash (t913)
     if (url.pathname === '/api/board') return json(res, { goals: board.goals(), tasks: board.tasks() });
-    if (url.pathname === '/api/goals' && req.method === 'POST') return json(res, board.goalOp(await body(req)));
+    if (url.pathname === '/api/goals' && req.method === 'POST') return json(res, board.goalOp(await body(req, res)));
     if (url.pathname === '/api/tasks' && req.method === 'POST') {
-      const b = await body(req), r = board.taskOp(b);
+      const b = await body(req, res), r = board.taskOp(b);
       // A new suggestion rides along with the next team report to the lead; it never wakes anyone on its own (t825).
       if (b.op === 'suggest' && !r.dup) inbox.push(`[${(r.by && loadSquiggle(r.by)?.name) || r.by || 'Someone'} · SUGGESTION] ${r.id} ${r.title}${r.evidence ? ` (evidence: ${r.evidence})` : ''}`);
       return json(res, r);
@@ -994,7 +998,7 @@ const server = http.createServer(async (req, res) => {
       return json(res, { meetings: meetings.all(), upcoming: markPast(meetings.upcoming(from, new Date(from.getTime() + days * 864e5)), new Set(persisted['*started'] || []), readText(path.join(RUNS, 'meetings.log'))), current: meetingNow() });
     }
     if (url.pathname === '/api/meetings' && req.method === 'POST') {
-      const b = await body(req);
+      const b = await body(req, res);
       if (b.op === 'end') return json(res, endMeeting());
       if (b.op === 'next') return json(res, nextTurn());
       if (b.op === 'now') return json(res, meetNow(b));
@@ -1015,7 +1019,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/worktrees' && req.method === 'POST') return json(res, { note: board.orphanNotes(), worktrees: board.worktrees() });
     if (p[1] === 'merges' && p[2] && p[3] === 'diff') return json(res, board.mergeDiff(p[2]));
     if (url.pathname === '/api/merges' && req.method === 'POST') {
-      const b = await body(req);
+      const b = await body(req, res);
       if (b.op === 'merge') return json(res, board.merge(b.id, b.by));
       if (b.op === 'back') return json(res, board.mergeBack(b.id, b.note, b.by));
       if (b.op === 'refresh') { const closed = board.mergeSweep(); return json(res, { closed, merges: board.merges() }); }
@@ -1025,7 +1029,7 @@ const server = http.createServer(async (req, res) => {
       const id = p[2], s = loadSquiggle(id);
       if (!s) return json(res, { error: 'no such squiggle' }, 404);
       if (!['events', 'journal'].includes(p[3]) && req.method !== 'POST') return json(res, { error: 'POST only' }, 405);
-      const b = req.method === 'POST' ? await body(req) : {};
+      const b = req.method === 'POST' ? await body(req, res) : {};
       switch (p[3]) {
         case 'events': return json(res, tailEvents(id, Number(url.searchParams.get('n') || 400)));
         case 'journal': return json(res, readText(path.join(sqDir(id), 'journal.md')));

@@ -569,7 +569,7 @@ function wireAttach(form, ta, zone) {
   const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'attach'; btn.title = 'Attach image'; btn.setAttribute('aria-label', 'Attach image');
   btn.innerHTML = '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M13.5 7.5l-5.6 5.6a3.3 3.3 0 01-4.7-4.7l5.9-5.9a2.2 2.2 0 013.1 3.1L6.4 11.4a1.1 1.1 0 01-1.6-1.6l5.3-5.3"/></svg>';
   form.prepend(tray); ta.after(btn, pick);
-  const paint = () => { tray.innerHTML = form._imgs.map((u, i) => `<span><img src="${u}" alt="Image to send"><button type="button" data-i="${i}" title="Remove" aria-label="Remove image">×</button></span>`).join(''); tray.classList.toggle('on', form._imgs.length > 0); };
+  const paint = () => { tray.innerHTML = form._imgs.map((u, i) => `<span><img src="${esc(u)}" alt="Image to send"><button type="button" data-i="${i}" title="Remove" aria-label="Remove image">×</button></span>`).join(''); tray.classList.toggle('on', form._imgs.length > 0); };
   const add = async (files) => { for (const f of files) if (/^image\//.test(f.type) && form._imgs.length < 8) form._imgs.push(await shrinkImage(f)); paint(); ta.focus(); };
   form._paint = paint;
   btn.onclick = () => pick.click();
