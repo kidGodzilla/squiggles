@@ -8,6 +8,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Shared screen reads regular files only, capped in size, and its content isn't saved to the transcript.
 
 ### Added
+- Images in chat: paste, drop or pick them in a 1:1 or meeting thread; squiggles see them. `tell <id> <text> --image <path>` sends one from the CLI. Saved in the data dir under files/.
 - @mentions: type @ in a chat to pick a squiggle or person; the mentioned squiggle gets the message and its reply posts back in that chat.
 - The speaker stays visible: their tile scrolls into view, or a caption shows their face and words.
 - Owner faces on Merge and Tasks open a 1:1 with the item drafted.

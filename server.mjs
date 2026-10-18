@@ -29,6 +29,7 @@ const USER = CONFIG.userName || 'the user', User = CONFIG.userName || 'The user'
 const SQ = path.join(DATA, 'squiggles');
 const RUNS = path.join(DATA, 'runs');
 const MEDIA = path.join(RUNS, 'media');
+const FILES = path.join(DATA, 'files'); // chat images land here
 const STATE = path.join(RUNS, 'state.json');
 const TTS_DIR = path.join(RUNS, 'tts');
 for (const d of [SQ, RUNS, MEDIA, TTS_DIR]) fs.mkdirSync(d, { recursive: true });
@@ -311,7 +312,7 @@ function codexServer(s) {
     .then(() => proc.stdin.write(JSON.stringify({ method: 'initialized' }) + '\n'));
   return cx;
 }
-async function codexTurn(s, prompt) {
+async function codexTurn(s, prompt, images = []) {
   const r = R(s.id), cx = codexServer(s), cap = s.maxTurns ?? 40;
   let lastText = '', ended = false, turnId = null;
   const end = (text, err, subtype) => {
@@ -362,27 +363,27 @@ async function codexTurn(s, prompt) {
     }
     if (!r.codexPrimed) prompt = `${systemPrompt(s)}\n\n---\n\n${prompt}`;
     r.codexPrimed = true;
-    turnId = (await cx.req('turn/start', { threadId: r.codexThread, model: s.model, input: [{ type: 'text', text: prompt }] })).turn.id;
+    turnId = (await cx.req('turn/start', { threadId: r.codexThread, model: s.model, input: [{ type: 'text', text: prompt }, ...images.map((f) => ({ type: 'localImage', path: path.join(FILES, f) }))] })).turn.id;
     if (ended) interrupt();
   } catch (e) { emit(s.id, { k: 'log', text: shortEv(e.message) }); end(e.message, true); }
 }
-
 // from 'owner' means a person on the page; human says which one (humans.json), and the squiggle reads 'From <name>: '.
-function send(id, text, from = 'owner', { replay = false, human } = {}) {
+function send(id, text, from = 'owner', { replay = false, human, images = [] } = {}) {
   const s = loadSquiggle(id);
   if (!s) throw new Error(`no squiggle ${id}`);
   const r = R(id);
   // A pending restart waits for everyone to be idle; new turns would starve it (a report wakes the lead, the lead wakes someone).
   // So a turn that would start now is held in state and sent after the restart. Messages to a squiggle mid-turn still go through.
   if (restartPending && r.status !== 'working') {
-    r.lastWake = now(); (persisted['*held'] ||= []).push({ id, text, from, human }); saveState();
-    emit(id, { k: 'user', text, from, ...(human && { human }) }); emit(id, { k: 'log', text: 'held until the restart' });
+    r.lastWake = now(); (persisted['*held'] ||= []).push({ id, text, from, human, images }); saveState();
+    emit(id, { k: 'user', text, from, ...(human && { human }), ...(images.length && { imgs: images.map((f) => `/files/${f}`) }) }); emit(id, { k: 'log', text: 'held until the restart' });
     setTimeout(maybeRestart, 500); return;
   }
   const who = from === 'owner' && (humans.all().find((h) => h.id === (human || 'owner')) || { id: human, name: human });
-  const content = who ? `From ${who.name}: ${text}` : text;
+  const content = (who ? `From ${who.name}: ${text}` : text) + (images.length ? `\n\n(Attached: ${images.map((f) => path.join(FILES, f)).join(', ')})` : '');
+  const shown = { k: 'user', text, from, ...(who && { human: who.id }), ...(images.length && { imgs: images.map((f) => `/files/${f}`) }) };
   if (providerOf(s)) {
-    if (!replay) emit(id, { k: 'user', text, from, ...(who && { human: who.id }) });
+    if (!replay) emit(id, shown);
     if (r.proc) {
       // Mid-turn: steer the running turn; if it can't take input yet, the message waits for the next turn.
       const queue = () => { (r.queue ||= []).push(content); saveState(); emit(id, { k: 'log', text: 'queued for the next turn' }); };
@@ -391,14 +392,31 @@ function send(id, text, from = 'owner', { replay = false, human } = {}) {
     }
     r.lastWake = now(); r.turns = 0; r.board0 = ownNotes(id);
     setStatus(id, 'working', '');
-    return codexTurn(s, content);
+    return codexTurn(s, content, images);
   }
   if (r.proc && r.status !== 'working' && r.sig !== launchSig(s)) { const old = r.proc; r.proc = null; old.kill('SIGTERM'); emit(id, { k: 'log', text: 'settings changed: relaunching' }); }
   if (!r.proc) launch(s);
   r.lastWake = now(); r.turns = 0; r.board0 = ownNotes(id);
-  if (!replay) emit(id, { k: 'user', text, from, ...(who && { human: who.id }) });
+  if (!replay) emit(id, shown);
   setStatus(id, 'working', '');
-  r.proc.stdin.write(JSON.stringify({ type: 'user', message: { role: 'user', content } }) + '\n');
+  r.proc.stdin.write(JSON.stringify({ type: 'user', message: { role: 'user', content: images.length ? [{ type: 'text', text: content }, ...images.map(imageBlock).filter(Boolean)] : content } }) + '\n');
+}
+// Chat images (t169): the page or CLI sends data URLs; each is saved under files/ and sent to the squiggle as an image block.
+function saveImage(url) {
+  const m = /^data:image\/(png|jpeg|gif|webp);base64,([A-Za-z0-9+/=]+)$/.exec(url || '');
+  if (!m) throw new Error('images must be png, jpeg, gif or webp data URLs');
+  const buf = Buffer.from(m[2], 'base64');
+  if (buf.length > 20e6) throw new Error('image over 20 MB');
+  fs.mkdirSync(FILES, { recursive: true });
+  const f = `chat-${new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '')}-${Math.random().toString(36).slice(2, 6)}.${m[1] === 'jpeg' ? 'jpg' : m[1]}`;
+  fs.writeFileSync(path.join(FILES, f), buf);
+  return f;
+}
+// Claude takes up to 5 MB per image; bigger ones go by path only (the text names it).
+function imageBlock(f) {
+  const buf = fs.readFileSync(path.join(FILES, f)), ext = path.extname(f).slice(1);
+  if (buf.length > 5e6) return null;
+  return { type: 'image', source: { type: 'base64', media_type: `image/${ext === 'jpg' ? 'jpeg' : ext}`, data: buf.toString('base64') } };
 }
 
 // @mentions in a chat (t657): "@lead" or "@<id or name>" in a message to one squiggle also goes to the mentioned one,
@@ -555,7 +573,7 @@ function maybeRestart() {
 // Turns held by a pending restart go out once the new server is up.
 setTimeout(() => {
   const held = persisted['*held'] || []; delete persisted['*held']; saveState();
-  for (const h of held) try { send(h.id, h.text, h.from, { replay: true, human: h.human }); } catch (e) { console.error('held', h.id, e.message); }
+  for (const h of held) try { send(h.id, h.text, h.from, { replay: true, human: h.human, images: h.images || [] }); } catch (e) { console.error('held', h.id, e.message); }
 }, 3000);
 function shutdown(code) {
   for (const r of rt.values()) { if (r.proc) r.proc.kill('SIGTERM'); if (r.cx) r.cx.proc.kill('SIGTERM'); if (r.caff) r.caff.kill(); }
@@ -859,7 +877,7 @@ function body(req) {
   });
 }
 const json = (res, v, code = 200) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(v)); };
-const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.svg': 'image/svg+xml', '.wav': 'audio/wav', '.webmanifest': 'application/manifest+json' };
+const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.jpg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.wav': 'audio/wav', '.webmanifest': 'application/manifest+json' };
 function serveFile(res, file) {
   if (!fs.existsSync(file)) return json(res, { error: 'not found' }, 404);
   res.writeHead(200, { 'content-type': MIME[path.extname(file)] || 'application/octet-stream' });
@@ -889,6 +907,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/local.css') { res.writeHead(200, { 'content-type': 'text/css' }); return res.end(readText(path.join(DATA, 'local.css'))); }
     if (p[0] === 'ui') return serveFile(res, path.join(ROOT, 'ui', path.basename(p[1] || '')));
     if (p[0] === 'media') return serveFile(res, path.join(MEDIA, path.basename(p[1] || '')));
+    if (p[0] === 'files') return serveFile(res, path.join(FILES, path.basename(decodeURIComponent(p[1] || ''))));
     if (url.pathname === '/api/stream') {
       res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' });
       res.write(': hi\n\n');
@@ -973,7 +992,7 @@ const server = http.createServer(async (req, res) => {
       switch (p[3]) {
         case 'events': return json(res, tailEvents(id, Number(url.searchParams.get('n') || 400)));
         case 'journal': return json(res, readText(path.join(sqDir(id), 'journal.md')));
-        case 'send': send(id, b.text, b.from || 'owner', { human: b.human }); relayMentions(id, b.text, b.from || 'owner', b.human); return json(res, 'ok');
+        case 'send': send(id, b.text || '', b.from || 'owner', { human: b.human, images: (b.images || []).slice(0, 8).map(saveImage) }); relayMentions(id, b.text || '', b.from || 'owner', b.human); return json(res, 'ok');
         case 'wake': return json(res, wake(id, b.why || 'asked'));
         case 'stop': stop(id); return json(res, 'ok');
         case 'clear': return json(res, clearChat(id));

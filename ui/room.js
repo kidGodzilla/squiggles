@@ -382,7 +382,8 @@ const chatLine = (id, ev) => {
   const s = S.sq[id];
   if (ev.k === 'user' && ev.from === 'owner') {
     const h = ev.human || 'owner';
-    return h === (S.me || 'owner') ? { cls: 'm you', html: mentionHtml(esc(ev.text)) } : { cls: 'm you other', html: mentionHtml(esc(`${B.humans.find((x) => x.id === h)?.name || h}: ${ev.text}`)) };
+    const imgs = (ev.imgs || []).length ? `<div class="mimgs">${ev.imgs.map((u) => `<a href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(u)}" alt="Image"></a>`).join('')}</div>` : '';
+    return h === (S.me || 'owner') ? { cls: 'm you', text: ev.text, html: mentionHtml(esc(ev.text)) + imgs } : { cls: 'm you other', text: ev.text, html: mentionHtml(esc(`${B.humans.find((x) => x.id === h)?.name || h}: ${ev.text}`)) + imgs };
   }
   if (ev.k === 'user') {
     const from = ev.from === 'lead' ? 'From the lead' : ev.from === 'mention' ? 'Mentioned' : ev.from === 'harness' ? (/^Team reports/.test(ev.text) ? 'Team reports' : 'Woke up') : ev.from;
@@ -427,6 +428,7 @@ function appendLine(cw, line, keepPlace) {
   if (line.fold) d.onclick = (e) => { if (e.target.closest('.fhead')) d.classList.toggle('open'); };
   box.querySelector('.empty')?.remove();
   box.appendChild(d); if (typeof linkTasks === 'function') linkTasks(d); if (box.pinned !== false || !keepPlace) pinBottom(box);
+  for (const i of d.querySelectorAll('img')) i.addEventListener('load', () => { if (box.pinned !== false) pinBottom(box); }, { once: true });
 }
 // A chat stays pinned to its newest message unless the user scrolls up. Hidden windows (lock screen, another tab,
 // minimized) can't scroll, so the pin is re-applied whenever the list becomes visible or changes size.
@@ -543,10 +545,48 @@ document.addEventListener('keydown', (e) => {
   else return;
   e.preventDefault(); e.stopPropagation();
 }, true);
+// Images in chat (t169): paste, drop or pick; shown as a tray above the input until sent. Big photos are scaled to
+// 2000 px JPEG in the browser so phone shots stay well under the model's 5 MB image limit.
+function wireAttach(form, ta, zone) {
+  form._imgs = [];
+  const tray = document.createElement('div'); tray.className = 'atts';
+  const pick = document.createElement('input'); pick.type = 'file'; pick.accept = 'image/*'; pick.multiple = true; pick.hidden = true;
+  const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'attach'; btn.title = 'Attach image'; btn.setAttribute('aria-label', 'Attach image');
+  btn.innerHTML = '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M13.5 7.5l-5.6 5.6a3.3 3.3 0 01-4.7-4.7l5.9-5.9a2.2 2.2 0 013.1 3.1L6.4 11.4a1.1 1.1 0 01-1.6-1.6l5.3-5.3"/></svg>';
+  form.prepend(tray); ta.after(btn, pick);
+  const paint = () => { tray.innerHTML = form._imgs.map((u, i) => `<span><img src="${u}" alt="Image to send"><button type="button" data-i="${i}" title="Remove" aria-label="Remove image">×</button></span>`).join(''); tray.classList.toggle('on', form._imgs.length > 0); };
+  const add = async (files) => { for (const f of files) if (/^image\//.test(f.type) && form._imgs.length < 8) form._imgs.push(await shrinkImage(f)); paint(); ta.focus(); };
+  form._paint = paint;
+  btn.onclick = () => pick.click();
+  pick.onchange = () => { add([...pick.files]); pick.value = ''; };
+  tray.onclick = (e) => { const b = e.target.closest('button[data-i]'); if (b) { form._imgs.splice(+b.dataset.i, 1); paint(); } };
+  ta.addEventListener('paste', (e) => { const fs = [...(e.clipboardData?.files || [])].filter((f) => /^image\//.test(f.type)); if (fs.length) { e.preventDefault(); add(fs); } });
+  zone.addEventListener('dragover', (e) => { if ([...e.dataTransfer.types].includes('Files')) { e.preventDefault(); zone.classList.add('dropping'); } });
+  zone.addEventListener('dragleave', (e) => { if (!zone.contains(e.relatedTarget)) zone.classList.remove('dropping'); });
+  zone.addEventListener('drop', (e) => { zone.classList.remove('dropping'); const fs = [...e.dataTransfer.files].filter((f) => /^image\//.test(f.type)); if (fs.length) { e.preventDefault(); add(fs); } });
+}
+const takeImages = (form) => { const v = form._imgs.splice(0); form._paint(); return v; };
+function shrinkImage(file) {
+  const read = () => new Promise((ok) => { const r = new FileReader(); r.onload = () => ok(r.result); r.readAsDataURL(file); });
+  if (file.type === 'image/gif') return read();
+  return new Promise((ok) => {
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const k = Math.min(1, 2000 / Math.max(img.naturalWidth, img.naturalHeight));
+      if (k === 1 && file.size < 3.5e6 && /png|jpeg|webp/.test(file.type)) return ok(read());
+      const c = document.createElement('canvas'); c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); ok(c.toDataURL('image/jpeg', 0.85));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); ok(read()); };
+    img.src = url;
+  });
+}
 function wireChat(cw, id) {
   const ta = cw.querySelector('textarea'), head = cw.querySelector('.chead');
   const autosize = () => { ta.style.height = 'auto'; ta.style.height = Math.min(140, ta.scrollHeight) + 'px'; };
-  const send = async () => { const t = ta.value.trim(); if (!t) return; ta.value = ''; autosize(); paintMirror(ta); mentionClose(); await api(`/squiggles/${id}/send`, { text: t, from: 'owner', human: me().id }); };
+  const form = cw.querySelector('form'); wireAttach(form, ta, cw);
+  const send = async () => { const t = ta.value.trim(), images = takeImages(form); if (!t && !images.length) return; ta.value = ''; autosize(); paintMirror(ta); mentionClose(); await api(`/squiggles/${id}/send`, { text: t, images, from: 'owner', human: me().id }); };
   ta.addEventListener('input', autosize);
   ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); } if (e.key === 'Escape') cw.classList.add('min'); });
   cw.querySelector('form').onsubmit = (e) => { e.preventDefault(); send(); };
@@ -976,7 +1016,7 @@ function paintThread() {
   for (const { id, l, to } of rows) {
     const d = document.createElement('div'); d.className = l.cls + (l.cls === 'm lead' && id === on ? ' pres' : '');
     if (l.cls === 'm lead') d.innerHTML = `<span class="spk">${esc(mname(id))}${id === on ? ', presenting' : ''}</span>` + l.html;
-    else { d.textContent = l.text; const t = document.createElement('span'); t.className = 'to'; t.textContent = `To ${to.map(mname).join(', ')}`; d.prepend(t); }
+    else { if (l.html) d.innerHTML = l.html; else d.textContent = l.text; const t = document.createElement('span'); t.className = 'to'; t.textContent = `To ${to.map(mname).join(', ')}`; d.prepend(t); }
     box.appendChild(d);
   }
   linkTasks(box); if (box.pinned !== false) pinBottom(box);
@@ -993,7 +1033,8 @@ function threadTo(text) {
   const f = $('#meetThread form'), ta = f.querySelector('textarea');
   pinChat($('#meetThread .msgs'));
   const autosize = () => { ta.style.height = 'auto'; ta.style.height = Math.min(140, ta.scrollHeight) + 'px'; };
-  const send = async () => { const t = ta.value.trim(); if (!t) return; ta.value = ''; autosize(); paintMirror(ta); mentionClose(); pinBottom($('#meetThread .msgs')); for (const id of threadTo(t)) await api(`/squiggles/${id}/send`, { text: t, from: 'owner', human: me().id }); };
+  wireAttach(f, ta, $('#meetThread'));
+  const send = async () => { const t = ta.value.trim(), images = takeImages(f); if (!t && !images.length) return; ta.value = ''; autosize(); paintMirror(ta); mentionClose(); pinBottom($('#meetThread .msgs')); for (const id of threadTo(t)) await api(`/squiggles/${id}/send`, { text: t, images, from: 'owner', human: me().id }); };
   ta.addEventListener('input', autosize);
   ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); } });
   f.onsubmit = (e) => { e.preventDefault(); send(); };

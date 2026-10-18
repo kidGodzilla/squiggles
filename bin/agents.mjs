@@ -38,7 +38,15 @@ const cmds = {
       `  runs ${every(s.every)}, ${({ sonnet: 'Sonnet 5.5', 'gpt-6.1-sol': 'Codex 6.1 Sol' })[s.model] || 'Opus 5.5'}, ${s.permissionMode || 'auto'}, in ${s.cwd}`].filter(Boolean).join('\n')).join('\n\n');
   },
   wake: () => call(`/squiggles/${a[0]}/wake`, { why: a[1] || 'lead' }),
-  tell: () => call(`/squiggles/${a[0]}/send`, { text: a[1], from: 'lead' }),
+  // tell <id> "<text>" [--image <path>]: the image goes to the squiggle as an image block and shows in its chat (t169).
+  tell: async () => {
+    const i = a.indexOf('--image'), img = i >= 0 ? a.splice(i, 2)[1] : '';
+    if (!img) return call(`/squiggles/${a[0]}/send`, { text: a[1], from: 'lead' });
+    const { readFileSync } = await import('node:fs'), { resolve, extname } = await import('node:path');
+    const type = { '.png': 'png', '.jpg': 'jpeg', '.jpeg': 'jpeg', '.gif': 'gif', '.webp': 'webp' }[extname(img).toLowerCase()];
+    if (!type) throw new Error('--image must be png, jpg, gif or webp');
+    return call(`/squiggles/${a[0]}/send`, { text: a[1] || '', from: 'lead', images: [`data:image/${type};base64,${readFileSync(resolve(img)).toString('base64')}`] });
+  },
   stop: () => call(`/squiggles/${a[0]}/stop`, {}),
   clear: () => call(`/squiggles/${a[0]}/clear`, {}),
   tail: async () => (await call(`/squiggles/${a[0]}/events?n=${a[1] || 60}`)).map(brief).filter(Boolean).join('\n'),
@@ -208,7 +216,7 @@ const cmds = {
 };
 
 if (!cmds[cmd]) {
-  console.log('usage: agents.mjs list | team | wake <id> [why] | tell <id> <text> | stop <id> | clear <id> | remove <id> | room radio|volume|voices|chatter|characters|view|chat <value> | room view 1on1 <id> | room view blocked|rethink | room lock | room reload | call <teams-url> [until <time>] | call status | call leave | restart | upgrade | limit | inbox | screen diff <task>|url <url>|file <path>|off [--as <id>] | share on|off|status | humans | human add "<name>" [avatar] | human edit <id> name|avatar <value> | human remove <id> | tail <id> [n] | journal <id> | charter <id> [new text] | rename <id> <name> [role] | create <id> <name> <role> <cwd> <every> <charter> | set <id> <field> <value> | look <id> [<generator>[:<options>]|character|auto|shuffle] | goals | goal add|move|confirm|owner|note|repos|merge|edit|drop ... | tasks [goal|owner] | task add|move|confirm|edit|needs|drop ... | task needs <id> add "<text>"|done|undo|drop <n>|clear | task move <id> review [repo:]<branch> ["<test result>"] | meetings [days] [from YYYY-MM-DD] | meeting add "<title>" "<when>" <id,id> [once|daily|weekdays|weekly] ["<agenda>"] | meeting edit <id> <field> <value> | meeting cancel <id> [date] | meeting start <id> | meeting next | meeting end | meeting now | meet now <id,id> ["topic"] [--presenters <id,id>] | meet merges | merges [refresh] | worktrees [check] | task worktree <id> [repo] | suggest "<one line>" [evidence] | suggestions [all] | suggestion accept <id> <goal> <owner> | suggestion decline <id> "<why>" | merge <task> | merge diff <task> | merge back <task> "<note>"');
+  console.log('usage: agents.mjs list | team | wake <id> [why] | tell <id> <text> [--image <path>] | stop <id> | clear <id> | remove <id> | room radio|volume|voices|chatter|characters|view|chat <value> | room view 1on1 <id> | room view blocked|rethink | room lock | room reload | call <teams-url> [until <time>] | call status | call leave | restart | upgrade | limit | inbox | screen diff <task>|url <url>|file <path>|off [--as <id>] | share on|off|status | humans | human add "<name>" [avatar] | human edit <id> name|avatar <value> | human remove <id> | tail <id> [n] | journal <id> | charter <id> [new text] | rename <id> <name> [role] | create <id> <name> <role> <cwd> <every> <charter> | set <id> <field> <value> | look <id> [<generator>[:<options>]|character|auto|shuffle] | goals | goal add|move|confirm|owner|note|repos|merge|edit|drop ... | tasks [goal|owner] | task add|move|confirm|edit|needs|drop ... | task needs <id> add "<text>"|done|undo|drop <n>|clear | task move <id> review [repo:]<branch> ["<test result>"] | meetings [days] [from YYYY-MM-DD] | meeting add "<title>" "<when>" <id,id> [once|daily|weekdays|weekly] ["<agenda>"] | meeting edit <id> <field> <value> | meeting cancel <id> [date] | meeting start <id> | meeting next | meeting end | meeting now | meet now <id,id> ["topic"] [--presenters <id,id>] | meet merges | merges [refresh] | worktrees [check] | task worktree <id> [repo] | suggest "<one line>" [evidence] | suggestions [all] | suggestion accept <id> <goal> <owner> | suggestion decline <id> "<why>" | merge <task> | merge diff <task> | merge back <task> "<note>"');
   process.exit(1);
 }
 try {
