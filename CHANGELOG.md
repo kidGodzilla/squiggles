@@ -65,6 +65,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Loading the Merge tab no longer freezes the server while git runs; a branch sent back mid-merge is not merged.
 - Editing a squiggle's settings.json takes effect on its next message.
 - Stopping a Codex squiggle right as its turn starts now stops it.
+- Merge tab on phone: the list keeps its full height and an open row wraps instead of scrolling sideways.
 
 ## 0.1.1
 
