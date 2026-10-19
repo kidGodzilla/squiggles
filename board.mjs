@@ -359,6 +359,7 @@ export function createBoard(root, onChange) {
   // by: who merged or sent back (t142), a human id from the page or a squiggle id from the CLI.
   async function merge(id, by) {
     const task = mergeTask(id), r = await mergeInfo(task, memo());
+    mergeTask(id); // sent back while git ran
     if (r.error) throw new Error(r.error);
     if (r.head === r.branch) throw new Error(`${r.repo} has ${r.branch} checked out: switch it away first`);
     const wts = git(r.repo, ['worktree', 'list', '--porcelain']).split(/\n\n+/);

@@ -27,6 +27,9 @@ test('merge listing: async git, merged branches swept, concurrent calls share on
   assert.equal(t.t3.status, 'done'); assert.match(t.t3.note, /branch gone/);
   const p3 = b.merges(); assert.notEqual(p3, p1); assert.deepEqual((await p3).map((x) => x.id), ['t1']);
   const d = await b.mergeDiff('t1'); assert.equal(d.base, 'main'); assert.match(d.stat, /\bb\b/);
+  const sent = b.merge('t1', 'owner'); b.taskOp({ op: 'move', id: 't1', status: 'doing' });
+  await assert.rejects(sent, /t1 is doing, not in review/);
+  b.taskOp({ op: 'move', id: 't1', status: 'review' });
   const m = await b.merge('t1', 'owner'); assert.equal(m.base, 'main');
   assert.match(String(g('ls-tree', '--name-only', 'main')), /^b$/m);
   fs.rmSync(dir, { recursive: true, force: true });
