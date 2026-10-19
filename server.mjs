@@ -198,7 +198,8 @@ function systemPrompt(s) {
 // Sonnet is the floor (Haiku has no auto mode); Opus is the default and the ceiling. config.model sets the default.
 const modelFor = (s) => pickModel(s, CONFIG.model);
 // Settings baked into a process's flags. A change ends the idle process before the next turn; --resume keeps the session.
-const launchSig = (s) => JSON.stringify([!!s.chrome, modelFor(s), s.permissionMode, s.autocompact, s.maxTurns, s.effort, s.cwd]);
+// The squiggle's settings.json (allow rules) is in it too: an edit relaunches the idle process on its next message.
+const launchSig = (s) => JSON.stringify([!!s.chrome, modelFor(s), s.permissionMode, s.autocompact, s.maxTurns, s.effort, s.cwd, readText(path.join(sqDir(s.id), 'settings.json'), '')]);
 function launch(s) {
   const r = R(s.id); r.sig = launchSig(s);
   const args = ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose',
