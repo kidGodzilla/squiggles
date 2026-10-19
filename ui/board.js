@@ -273,12 +273,12 @@ function renderMerges() {
   $('#mcount').textContent = list.length ? `${list.length} branch${list.length > 1 ? 'es' : ''} waiting${stale ? `, ${stale} stale` : ''}` : 'Nothing waiting';
   if (!list.length) { $('#mq').innerHTML = '<div class="empty">Nothing in review. Squiggles put branches here with task move &lt;id&gt; review &lt;branch&gt; "&lt;test result&gt;".</div>' + worktreesHtml(); return; }
   const row = (m) => {
-    const open = B.mopen.has(m.id), why = m.error || (m.head !== m.base ? `${repoName(m.repo)} is on ${m.head}: check out ${m.base} first` : '');
+    const nc = m.conflicts?.length || 0, open = B.mopen.has(m.id), why = m.error || (nc ? `Conflicts with ${m.base}: send it back` : m.head !== m.base ? `${repoName(m.repo)} is on ${m.head}: check out ${m.base} first` : '');
     const ab = m.error ? '' : `${m.ahead} ahead${m.behind ? `, ${m.behind} behind` : ''}`, left = (m.needs || []).filter((x) => !x.done).length;
     const acts = `<button data-a="diff" ${m.error ? 'disabled' : ''}>Diff</button><button data-a="back">Send back</button><button class="go" data-a="merge" ${why ? 'disabled' : ''} title="${esc(why || `Merge into ${m.base}, delete the branch, mark done`)}">Merge</button>`;
     return `<tr class="mrow ${open ? 'open' : ''} ${m.error ? 'err' : ''}" data-merge="${esc(m.id)}">
       <td class="mid">${esc(m.id)}${m.stale ? ` <span class="mtag" title="In review ${m.age} days">Stale</span>` : ''}</td>
-      <td class="mtt" title="${esc(m.title)}">${left ? `<span class="mtag mneed" title="${esc(m.needs.filter((x) => !x.done).map((x) => x.t).join('\n'))}">Needs ${left}</span>` : ''}<span>${esc(m.title)}</span></td>
+      <td class="mtt" title="${esc(m.title)}">${nc ? `<span class="mtag mneed mconf" title="${esc(m.conflicts.join('\n'))}">Conflicts</span>` : ''}${left ? `<span class="mtag mneed" title="${esc(m.needs.filter((x) => !x.done).map((x) => x.t).join('\n'))}">Needs ${left}</span>` : ''}<span>${esc(m.title)}</span></td>
       <td class="mrepo">${esc(repoName(m.repo))}</td>
       <td class="mab">${ab}</td>
       <td class="mres ${m.error ? 'bad' : m.result ? '' : 'none'}" title="${esc(m.error || m.result)}">${m.error ? esc(m.error) : m.result ? esc(m.result) : 'No test result'}</td>
@@ -288,6 +288,7 @@ function renderMerges() {
       <p class="mdt">${esc(m.title)}</p>
       ${m.needs?.length ? `<div class="mneeds"><h5>Before merging${left ? '' : ': all done'}</h5>${m.needs.map((x, i) => `<label class="${x.done ? 'done' : ''}"><input type="checkbox" data-a="need" data-n="${i + 1}" ${x.done ? 'checked' : ''}><span>${esc(x.t)}</span></label>`).join('')}</div>` : ''}
       <dl><dt>Goal</dt><dd>${esc(g(m.goal))}</dd><dt>Branch</dt><dd><code>${esc(m.repo)}:${esc(m.branch)}</code></dd>
+      ${nc ? `<dt>Conflicts</dt><dd>${m.conflicts.map((f) => `<code>${esc(f)}</code>`).join(', ')}</dd>` : ''}
       ${m.error ? '' : `<dt>Base</dt><dd>${esc(m.base)}, ${ab}${m.dirty ? `, ${m.dirty} uncommitted file${m.dirty > 1 ? 's' : ''} in the repo` : ''}</dd>`}
       <dt>Test result</dt><dd>${esc(m.error || m.result || 'None on the note')}</dd><dt>In review</dt><dd>since ${esc(m.reviewed || '')} (${m.age <= 0 ? 'today' : `${m.age}d`})${m.owner ? `, by ${esc(ownerName(m.owner))}` : ''}</dd>
       ${m.log?.length ? `<dt>Commits</dt><dd><code class="mlog">${esc(m.log.join('\n'))}</code></dd>` : ''}</dl>
@@ -357,7 +358,8 @@ $('#mergeView').onclick = async (e) => {
   // The owner opens a 1:1 with the item in the message box (t627). CLI: room chat <id> "<text>".
   if (a === 'owner') return discuss(m.owner, `About ${m.id} (${repoName(m.repo)}:${m.branch}): `);
   if (a === 'back') {
-    const note = prompt(`Send "${m.title}" back to ${ownerName(m.owner)}. What should change?`); if (!note || !note.trim()) return;
+    const pre = m.conflicts?.length ? `Conflicts with ${m.base} in ${m.conflicts.join(', ')}: rebase or merge ${m.base} in and resolve.` : '';
+    const note = prompt(`Send "${m.title}" back to ${ownerName(m.owner)}. What should change?`, pre); if (!note || !note.trim()) return;
     const r = await api('/merges', { op: 'back', id, note: note.trim(), by: me().id }); if (r?.error) return toast(r.error);
     toast(`Sent back to ${ownerName(m.owner)}`); return loadMerges();
   }

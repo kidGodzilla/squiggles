@@ -36,6 +36,9 @@ const git = (repo, args, opts = {}) => execFileSync('git', ['-C', expand(repo), 
 const pexec = promisify(execFile);
 const gitA = async (repo, args) => (await pexec('git', ['-C', expand(repo), ...args], { encoding: 'utf8', maxBuffer: 32 << 20, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } })).stdout.trim();
 const okA = (p) => p.then(() => true, () => false);
+// Files that would conflict merging branch into base (t783), [] if clean. merge-tree exits 1 on conflicts, file names after the tree id.
+const conflictsA = (repo, base, branch) => gitA(repo, ['merge-tree', '--write-tree', '--name-only', base, branch]).then(() => [],
+  (e) => { if (e.code !== 1) throw e; return String(e.stdout || '').split('\n\n')[0].split('\n').slice(1).filter(Boolean); });
 async function baseOfA(repo) {
   try { return (await gitA(repo, ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'])).replace(/^origin\//, ''); } catch {}
   for (const b of ['main', 'master']) if (await okA(gitA(repo, ['rev-parse', '--verify', '--quiet', `refs/heads/${b}`]))) return b;
@@ -291,6 +294,7 @@ export function createBoard(root, onChange) {
       r.base = base; r.head = await q(`head ${task.repo}`, () => gitA(task.repo, ['rev-parse', '--abbrev-ref', 'HEAD']));
       r.ahead = Number(await gitA(task.repo, ['rev-list', '--count', `${base}..${task.branch}`]));
       r.behind = Number(await gitA(task.repo, ['rev-list', '--count', `${task.branch}..${base}`]));
+      r.conflicts = r.ahead && r.behind ? await conflictsA(task.repo, base, task.branch) : [];
       r.dirty = await q(`dirty ${task.repo}`, async () => (await gitA(task.repo, ['status', '--porcelain'])).split('\n').filter(Boolean).length);
       r.log = (await gitA(task.repo, ['log', '--format=%h %s', `${base}..${task.branch}`])).split('\n').filter(Boolean);
       // Links, never a push: GitHub Desktop opens any local branch; the compare page only when origin already has it (as of the last fetch).

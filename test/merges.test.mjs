@@ -34,3 +34,21 @@ test('merge listing: async git, merged branches swept, concurrent calls share on
   assert.match(String(g('ls-tree', '--name-only', 'main')), /^b$/m);
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test('merge listing names the files that would conflict with the base (t783)', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'merges-')), repo = path.join(dir, 'repo');
+  const g = (...a) => execFileSync('git', ['-C', repo, ...a], { stdio: 'pipe', env: { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' } });
+  const commit = (f, m) => { fs.writeFileSync(path.join(repo, f), m); g('add', f); g('commit', '-q', '-m', m); };
+  fs.mkdirSync(repo); g('init', '-q', '-b', 'main'); commit('a', 'base'); commit('x', 'base');
+  g('checkout', '-q', '-b', 'clash'); commit('a', 'branch side'); commit('y', 'new');
+  g('checkout', '-q', '-b', 'clean', 'main'); commit('z', 'clean');
+  g('checkout', '-q', 'main'); commit('a', 'main side'); commit('x', 'main only');
+  fs.writeFileSync(path.join(dir, 'goals.json'), JSON.stringify({ active: [{ id: 'g', title: 'G', merge: 'gated' }] }));
+  fs.writeFileSync(path.join(dir, 'tasks.json'), JSON.stringify({ tasks: [
+    { id: 't1', title: 'clash', goal: 'g', status: 'review', repo, branch: 'clash' },
+    { id: 't2', title: 'clean', goal: 'g', status: 'review', repo, branch: 'clean' } ] }));
+  const b = createBoard(dir, () => {}), l = Object.fromEntries((await b.merges()).map((x) => [x.id, x]));
+  assert.deepEqual(l.t1.conflicts, ['a']); assert.deepEqual(l.t2.conflicts, []);
+  await assert.rejects(b.merge('t1', 'james'), /conflicts merging clash into main/);
+  fs.rmSync(dir, { recursive: true, force: true });
+});

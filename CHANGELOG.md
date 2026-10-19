@@ -14,6 +14,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Passcode limiter: empty codes don't count, and local scripts have their own bucket, so they can't lock out the browser.
 
 ### Added
+- Merge tab flags branches that conflict with the base: lists the files, disables Merge, and pre-fills Send back.
 - Areas: a goal can be an ongoing area (`goal kind <id> area`), shown in a strip above the Goals columns; areas never go to Done or get a "still on?". The strip shows short names (full title on hover).
 - `calendar [from] [to] [calendar]` reads this Mac's calendars (iCloud, Google, Exchange) through EventKit, read-only; `calendar allow` asks macOS once. Needs Xcode command line tools.
 - Settings tabs: Room, Characters, Squiggles, People, Sharing, Defaults, Security; `?tab=` and `room view settings <tab>` open one.
