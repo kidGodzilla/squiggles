@@ -66,6 +66,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Editing a squiggle's settings.json takes effect on its next message.
 - Stopping a Codex squiggle right as its turn starts now stops it.
 - Merge tab on phone: the list keeps its full height and an open row wraps instead of scrolling sideways.
+- Areas strip no longer breaks on a goal titled ': x'; editing a goal to an empty title is refused.
 
 ## 0.1.1
 

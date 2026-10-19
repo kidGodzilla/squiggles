@@ -137,7 +137,7 @@ export function createBoard(root, onChange) {
       g[tier].splice(index == null ? g[tier].length : Math.max(0, Math.min(index, g[tier].length)), 0, f.goal);
     } else if (op === 'confirm') f.goal.last_confirmed = today();
     else if (op === 'edit') {
-      if (title != null) f.goal.title = title;
+      if (title != null) { if (!String(title).trim()) throw new Error('a goal needs a title'); f.goal.title = title; }
       if (owner !== undefined) { if (owner) f.goal.owner = owner; else delete f.goal.owner; }
       if (note !== undefined) { if (note) f.goal.note = note; else delete f.goal.note; }
       if (repos !== undefined) { const r = (Array.isArray(repos) ? repos : String(repos).split(/[\s,]+/)).filter(Boolean); if (r.length) f.goal.repos = r; else delete f.goal.repos; }

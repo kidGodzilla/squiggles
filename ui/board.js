@@ -36,7 +36,7 @@ window.onBoard = () => loadBoard();
 const isArea = (g) => g.kind === 'area';
 const openCount = (id) => B.tasks.filter((t) => t.goal === id && t.status !== 'done').length;
 // Areas strip shows short names: 'SEO: example.com' is SEO, 'Personal site: example.com' is example.com. The tooltip keeps the full title.
-const areaName = (t) => { const [a, b] = t.split(/:\s+/); t = b && a.length > 4 ? b : a; return t.includes('.') ? t : t[0].toUpperCase() + t.slice(1); };
+const areaName = (t = '') => { const [a, b] = t.split(/:\s+/); t = (b && a.length > 4 ? b : a) || t; return !t || t.includes('.') ? t : t[0].toUpperCase() + t.slice(1); };
 function renderGoals() {
   const q = B.gq.toLowerCase(), found = (g) => hit(q, g.title, g.note, ownerName(g.owner)); let shown = 0;
   const areas = allGoals().filter(isArea).sort((a, b) => openCount(b.id) - openCount(a.id)), aShown = areas.filter(found);

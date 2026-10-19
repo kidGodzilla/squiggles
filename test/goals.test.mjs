@@ -13,3 +13,13 @@ test('goal kind: area on, back to goal, bad kind refused (t977)', () => {
   assert.equal(b.goalOp({ op: 'edit', id: g.id, note: 'x' }).kind, undefined);
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test('goal edit refuses an empty title (Vex t1030)', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'goals-'));
+  const b = createBoard(dir, () => {});
+  const g = b.goalOp({ op: 'add', title: 'Security', tier: 'active' });
+  assert.throws(() => b.goalOp({ op: 'edit', id: g.id, title: '' }), /needs a title/);
+  assert.throws(() => b.goalOp({ op: 'edit', id: g.id, title: '  ' }), /needs a title/);
+  assert.equal(b.goals().active[0].title, 'Security');
+  fs.rmSync(dir, { recursive: true, force: true });
+});
