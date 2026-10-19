@@ -18,7 +18,8 @@ export function makePasscode({ read, write, now = () => Date.now() }) {
   const isLocal = (req) => /^(::1|127\.|::ffff:127\.)/.test(req.socket?.remoteAddress || '') && !req.headers?.['x-forwarded-for'] && !/\.ts\.net$/i.test(String(req.headers?.host || '').split(':')[0]);
   // Node's fetch sends sec-fetch-mode too, so only these mark a browser.
   const isBrowser = (req) => ['sec-fetch-site', 'origin', 'cookie'].some((h) => req.headers?.[h] !== undefined) || /Mozilla\//.test(req.headers?.['user-agent'] || '');
-  const client = (req) => String(req.headers?.['x-forwarded-for'] || req.socket?.remoteAddress || '').split(',')[0].trim();
+  // Local non-browser callers (CLI, scripts) get their own bucket, so one can't lock out the user's browser on 127.0.0.1.
+  const client = (req) => String(req.headers?.['x-forwarded-for'] || req.socket?.remoteAddress || '').split(',')[0].trim() + (isLocal(req) && !isBrowser(req) ? ' cli' : '');
   const live = (p) => { const t = now(), s = {}; for (const [k, exp] of Object.entries(p.sessions || {})) if (exp > t) s[k] = exp; return s; };
   const hasSession = (req, p) => { const t = cookieTok(req); return !!t && (live(p)[sha(t)] || 0) > now(); };
 
@@ -45,13 +46,16 @@ export function makePasscode({ read, write, now = () => Date.now() }) {
     const p = cfg() || {};
     if (b.op === 'unlock') {
       if (!p.hash) return { body: status(req) };
+      // An empty code is a slip, not a guess: refused without counting.
+      if (b.code == null || b.code === '') throw err('wrong passcode', 401);
       const c = client(req), f = fails.get(c) || { n: 0, until: 0 }, t = now();
       recent = recent.filter((x) => t - x < 10 * 60000);
       if (f.until > t) throw err(`too many tries, wait ${Math.ceil((f.until - t) / 1000)} s`, 429);
       if (recent.length >= 30) throw err('too many tries, wait a few minutes', 429);
       const want = Buffer.from(p.hash, 'hex'), got = Buffer.from(hashCode(b.code ?? '', p.salt), 'hex');
       if (!crypto.timingSafeEqual(want, got)) {
-        f.n++; recent.push(t);
+        // The global cap is for tailnet guessing; a local process could read the hash from room.json anyway.
+        f.n++; if (!isLocal(req)) recent.push(t);
         if (f.n >= 5) f.until = t + Math.min(15 * 60000, 30000 * 2 ** (f.n - 5));
         fails.set(c, f); throw err('wrong passcode', 401);
       }

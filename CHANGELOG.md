@@ -11,6 +11,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Content-Security-Policy: the UI runs only its own scripts and can't be framed; chat files, media and speech are sandboxed; nosniff on all of them.
 - Settings escapes option values, and squiggle model and effort accept only allowed values.
 - Shared screen reads regular files only, capped in size, and its content isn't saved to the transcript.
+- Passcode limiter: empty codes don't count, and local scripts have their own bucket, so they can't lock out the browser.
 
 ### Added
 - Areas: a goal can be an ongoing area (`goal kind <id> area`), shown in a strip above the Goals columns; areas never go to Done or get a "still on?". The strip shows short names (full title on hover).

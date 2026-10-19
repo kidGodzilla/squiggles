@@ -82,3 +82,12 @@ test('setting a new passcode ends other sessions; clear turns it off', () => {
   s.pc.op(cli, { op: 'clear' });
   assert.equal(s.pc.ok(remote()), true);
 });
+
+test('empty codes and local scripts cannot lock the user out (t956)', () => {
+  const s = setup(), r = remote(), local = localBrowser();
+  s.pc.op(cli, { op: 'set', code: '2468' });
+  for (let i = 0; i < 40; i++) assert.throws(() => s.pc.op(r, { op: 'unlock' }), /wrong/);
+  for (let i = 0; i < 40; i++) assert.throws(() => s.pc.op(cli, { op: 'unlock', code: '0000' }), /wrong|too many/);
+  assert.equal(s.pc.op(local, { op: 'unlock', code: '2468' }).body.ok, true, 'the local browser has its own bucket');
+  assert.equal(s.pc.op(r, { op: 'unlock', code: '2468' }).body.ok, true, 'neither counted toward the tailnet client or the global cap');
+});
