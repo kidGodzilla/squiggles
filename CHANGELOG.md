@@ -62,6 +62,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Codex squiggles no longer show idle mid-turn, so wakes aren't sent into a running turn.
 - Loading the Merge tab no longer freezes the server while git runs.
 - Editing a squiggle's settings.json takes effect on its next message.
+- Stopping a Codex squiggle right as its turn starts now stops it.
 
 ## 0.1.1
 

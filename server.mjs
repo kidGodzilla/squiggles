@@ -319,14 +319,15 @@ function codexServer(s) {
 }
 async function codexTurn(s, prompt, images = []) {
   const r = R(s.id), cx = codexServer(s), cap = s.maxTurns ?? 40;
-  let lastText = '', ended = false, turnId = null;
+  let lastText = '', ended = false, turnId = null, stopAsked = false;
   const end = (text, err, subtype) => {
     if (ended) return; ended = true; cx.on = null; r.proc = null; turnEnded(s, text, err, subtype);
     if (r.queue?.length) { const q = r.queue.splice(0); saveState(); send(s.id, q.join('\n\n'), 'harness', { replay: true }); }
   };
   // r.proc stands for the running turn: stop interrupts it, remove and shutdown end the server too.
   const interrupt = () => { if (r.codexThread && turnId) cx.req('turn/interrupt', { threadId: r.codexThread, turnId }).catch(() => {}); };
-  r.proc = { kill: () => interrupt(), removeAllListeners() {}, steer: (text) => (turnId ? cx.req('turn/steer', { threadId: r.codexThread, expectedTurnId: turnId, input: [{ type: 'text', text }] }) : Promise.reject(new Error('no turn yet'))) };
+  // A stop before turn/start returns is held in stopAsked and sent once the turn id exists.
+  r.proc = { kill: () => { stopAsked = true; interrupt(); }, removeAllListeners() {}, steer: (text) => (turnId ? cx.req('turn/steer', { threadId: r.codexThread, expectedTurnId: turnId, input: [{ type: 'text', text }] }) : Promise.reject(new Error('no turn yet'))) };
   cx.on = (method, p) => {
     const it = p.item || {};
     if (method === 'exit') return end(lastText || 'codex stopped', true);
@@ -367,9 +368,10 @@ async function codexTurn(s, prompt, images = []) {
       r.codexThread = res.thread.id; r.cxThread = cx; saveState();
     }
     if (!r.codexPrimed) prompt = `${systemPrompt(s)}\n\n---\n\n${prompt}`;
+    if (stopAsked) return end(lastText, true, 'interrupted');
     r.codexPrimed = true;
     turnId = (await cx.req('turn/start', { threadId: r.codexThread, model: s.model, input: [{ type: 'text', text: prompt }, ...images.map((f) => ({ type: 'localImage', path: path.join(FILES, f) }))] })).turn.id;
-    if (ended) interrupt();
+    if (ended || stopAsked) interrupt();
   } catch (e) { emit(s.id, { k: 'log', text: shortEv(e.message) }); end(e.message, true); }
 }
 // from 'owner' means a person on the page; human says which one (humans.json), and the squiggle reads 'From <name>: '.
