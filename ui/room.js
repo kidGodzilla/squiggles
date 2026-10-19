@@ -212,7 +212,7 @@ function paintSubs(id) {
 function renderSummary() {
   if (typeof B !== 'undefined' && B.view === 'team') renderTeam();
   const n = {}; for (const id of S.order) { const s = S.sq[id]; const k = s.paused ? 'paused' : s.status || 'idle'; n[k] = (n[k] || 0) + 1; }
-  const parts = [['working', 'working'], ['blocked', 'blocked'], ['rethink', 'need a rethink'], ['done', 'done'], ['paused', 'paused']].filter(([k]) => n[k]);
+  const parts = [['working', 'working'], ['blocked', 'blocked'], ['rethink', '<i>need a </i>rethink'], ['done', 'done'], ['paused', 'paused']].filter(([k]) => n[k]);
   $('#moreCount').textContent = `${S.order.length} in the room`;
   $('#summary').innerHTML = parts.map(([k, w]) => k === 'blocked' || k === 'rethink'
     ? `<button class="${k}" data-k="${k}" title="Show who">${n[k]} ${w}</button>` : `<span class="${k}">${n[k]} ${w}</span>`).join('');

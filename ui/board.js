@@ -262,9 +262,11 @@ function editTask(el) {
 
 // ---------- Merge: branches in review across gated goals ----------
 B.merges = [];
+// The listing can take ~40s (t1129): say so until the first answer lands.
 async function loadMerges() {
-  const [m, w] = await Promise.all([api('/merges'), api('/worktrees').catch(() => [])]); if (!Array.isArray(m)) { toast(m?.error || 'merge queue unavailable'); return; }
-  B.merges = m; B.worktrees = Array.isArray(w) ? w : []; renderMerges();
+  if (!B.mloaded) $('#mcount').textContent = 'Loading branches…';
+  const [m, w] = await Promise.all([api('/merges').catch(() => null), api('/worktrees').catch(() => [])]); if (!Array.isArray(m)) { if (!B.mloaded) $('#mcount').textContent = 'Couldn’t load branches'; toast(m?.error || 'merge queue unavailable'); return; }
+  B.mloaded = true; B.merges = m; B.worktrees = Array.isArray(w) ? w : []; renderMerges();
 }
 const repoName = (p) => String(p || '').replace(/\/+$/, '').split('/').pop();
 B.mopen = new Set();

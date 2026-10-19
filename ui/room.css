@@ -50,7 +50,11 @@ header { min-width: 0; overflow-x: clip } /* nothing in the top bar may widen th
   header .tabs.open [data-view=team], header .tabs.open [data-view=calendar], header .tabs.open [data-view=goals] { display: block }
   header .tabs [data-view=team] { bottom: calc(100% + 104px) } header .tabs [data-view=calendar] { bottom: calc(100% + 56px) } header .tabs [data-view=goals] { bottom: calc(100% + 8px) }
   #summary { margin-left: 0 }
+  /* One line at 360+ (t1016): the menu never wraps; pills shorten, then the name goes, then pills clip before the menu does. */
+  header { flex-wrap: nowrap } #summary { flex: 0 1 auto; display: flex; gap: 6px } #summary i { display: none }
+  header:has(#summary > :nth-child(3)) .brand b, header:has(#summary > :nth-child(2)):has(#meBtn:not([hidden])) .brand b { display: none }
 }
+#summary i { font-style: normal }
 .brand { display: flex; align-items: center; gap: 9px; cursor: pointer }
 .brand b { font-size: 15px; font-weight: 700; letter-spacing: -.01em }
 .logo { width: 28px; height: 28px; border-radius: 9px; background: linear-gradient(135deg, #e8845f, #d4566f); display: grid; place-items: center; font-size: 15px; color: #fff }
@@ -425,7 +429,7 @@ body.v-one.v-meet #chats .cw.office { left: var(--mx) !important; top: var(--my)
   .mtab td { border: 0 } .mrow .mtt { flex: 1; min-width: 0 }
   .mrow.open .mtt { white-space: normal } .mdbox .mdt { display: none }
   .mtab .mid, .mtab .mrepo, .mtab .mab, .mtab .mres, .mtab .mown, .mrow .macts { display: none }
-  .mdacts { display: flex; gap: 6px; margin-top: 12px } .mdacts button { margin: 0 } .mdacts button.go { margin-left: auto }
+  .mdacts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px } .mdacts button { margin: 0; white-space: nowrap } .mdacts button.go { margin-left: auto }
   .mtab tr.mdet { border-bottom: 1px solid var(--line) } .mdet td { padding: 0 12px 12px; white-space: normal } .mdbox dd { min-width: 0; overflow-wrap: anywhere } .mdbox dl { grid-template-columns: 82px 1fr }
 }
 .diffp { width: min(1100px, 94vw); max-height: 90vh; display: flex; flex-direction: column; gap: 10px }
@@ -670,3 +674,8 @@ body.v-one.screen:not(.v-meet) #chats .cw.office { left: auto !important; width:
 .settabs button[aria-selected=true] { background: var(--bg); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.3) }
 .setcard[hidden] { display: none }
 @media (pointer: coarse) { .settabs button { min-height: 44px } }
+/* Touch targets on Merge, header pills and top tabs (t1128, Iris): 44px under a finger. Pills keep their look; an invisible 44px box takes the touch. */
+@media (pointer: coarse) {
+  .macts button, .tabs button { min-height: 44px }
+  #summary { align-self: stretch; align-items: center; min-height: 44px } #summary button { position: relative } #summary button::after { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 44px; transform: translateY(-50%) }
+}
