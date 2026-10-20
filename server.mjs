@@ -18,6 +18,7 @@ import { migrate } from './migrate.mjs';
 import { createSchedule } from './schedule.mjs';
 import { makeGuard, tailnetName } from './guard.mjs';
 import { makePasscode } from './passcode.mjs';
+import { createPeers, fence, checkName } from './peers.mjs';
 
 const home = (p) => String(p || '').replace(/^~(?=\/|$)/, os.homedir());
 // Code (ROOT) is written by git only; the room lives in DATA. See docs/upgrading.md.
@@ -913,12 +914,12 @@ async function callLeave() {
 
 // Request bodies stop at 200 MB (t891): past it the client gets 413 and the handler never runs.
 const BODY_MAX = 200 * 1024 * 1024;
-function body(req, res) {
+function body(req, res, max = BODY_MAX) {
   return new Promise((resolve) => {
-    const parts = []; let n = 0, over = Number(req.headers['content-length'] || 0) > BODY_MAX;
-    const refuse = () => { over = true; parts.length = 0; if (res && !res.headersSent) { res.setHeader('connection', 'close'); json(res, { error: 'too large (200 MB max)' }, 413); } };
+    const parts = []; let n = 0, over = Number(req.headers['content-length'] || 0) > max;
+    const refuse = () => { over = true; parts.length = 0; if (res && !res.headersSent) { res.setHeader('connection', 'close'); json(res, { error: `too large (${max === BODY_MAX ? '200 MB' : `${max} bytes`} max)` }, 413); } };
     if (over) refuse();
-    req.on('data', (c) => { if (over) return; n += c.length; if (n > BODY_MAX) refuse(); else parts.push(c); });
+    req.on('data', (c) => { if (over) return; n += c.length; if (n > max) refuse(); else parts.push(c); });
     req.on('end', () => { if (over) return; const d = Buffer.concat(parts).toString('utf8'); try { resolve(d ? JSON.parse(d) : {}); } catch { resolve({}); } });
   });
 }
@@ -950,6 +951,53 @@ const tailnet = CONFIG.tailnet ? tailnetName(TS) : { get: () => '', seen: () => 
 const refuse = makeGuard(PORT, tailnet.get);
 // Optional room passcode (t913): the page and its files always load (the lock screen asks); everything else needs it.
 const pass = makePasscode({ read: () => roomCfg().passcode, write: (v) => { const c = roomCfg(); if (v) c.passcode = v; else delete c.passcode; fs.writeFileSync(ROOMCFG, JSON.stringify(c, null, 2) + '\n'); } });
+const peers = createPeers(path.join(DATA, 'peers.json'));
+// Off until the user turns it on (room.json peers: true). Off, nothing arrives and nothing pairs.
+const peersOn = () => roomCfg().peers === true;
+const setRoom = (k, v) => { const c = roomCfg(); if (v == null) delete c[k]; else c[k] = v; fs.writeFileSync(ROOMCFG, JSON.stringify(c, null, 2) + '\n'); };
+// How the other room names and reaches this one: the name the user picked (default this Mac's), and the shared tailnet URL.
+const peerSelf = async () => {
+  const name = roomCfg().peerName || os.hostname().replace(/\.local$/, '').toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32) || 'room';
+  const url = process.env.PEER_SELF_URL || await shareStatus().then((s) => s.on ? new URL(s.url).origin : '', () => '');
+  return { name, url };
+};
+const NEED_SHARE = 'Turn on Share the room first: they need to reach this Mac.';
+async function peersOp(b) {
+  if (b.op === 'on' || b.op === 'off') { setRoom('peers', b.op === 'on' || null); return { on: peersOn() }; }
+  if (b.op === 'remove') return peers.remove(b.name);
+  if (b.op === 'cancel') return peers.cancel();
+  if (!peersOn()) throw new Error('peers are off: peer on');
+  if (b.op === 'send') return await peers.send(b.name, String(b.text || ''));
+  if (b.op === 'add') { const p = peers.add(b.name, b.url, b.key); const f = path.join(RUNS, `peer-${p.name}.key`); fs.writeFileSync(f, p.key + '\n', { mode: 0o600 }); return { name: p.name, url: p.url, keyFile: f }; }
+  const self = await peerSelf();
+  if (!self.url) throw new Error(NEED_SHARE);
+  if (b.op === 'invite') { const name = b.name ? checkName(b.name) : self.name; if (b.name) setRoom('peerName', name); return peers.invite(name, self.url); }
+  if (b.op === 'join') return await peers.join(b.code, self.name, self.url);
+  throw new Error('op: invite, join, cancel, add, remove, send, on or off');
+}
+// Another room's lead (t1171): its key is the only pass, so this sits before the passcode. Reaches us only from this Mac or
+// through tailscale serve (the server listens on 127.0.0.1); never from Funnel, the public internet.
+async function peerMessage(req, res) {
+  if (req.headers['tailscale-funnel-request']) return json(res, { error: 'not over Funnel' }, 403);
+  if (!peersOn()) return json(res, { error: 'peers are off' }, 403);
+  const b = await body(req, res, 32 * 1024); if (res.headersSent) return;
+  const r = peers.receive(req.headers.authorization, b.text);
+  if (r.error) return json(res, { error: r.error }, r.code);
+  const lead = listSquiggles().find((x) => x.lead);
+  if (!lead) return json(res, { error: 'no lead here' }, 503);
+  send(lead.id, fence(r.peer, b.text), `peer:${r.peer}`);
+  return json(res, { ok: true });
+}
+// Another room spends our pairing code (t1177). Same footing as a message: tailnet only, before the passcode.
+async function peerJoin(req, res) {
+  if (req.headers['tailscale-funnel-request']) return json(res, { error: 'not over Funnel' }, 403);
+  if (!peersOn()) return json(res, { error: 'peers are off' }, 403);
+  const b = await body(req, res, 4 * 1024); if (res.headersSent) return;
+  const r = peers.redeem(req.headers.authorization, b);
+  if (r.error) return json(res, { error: r.error }, r.code);
+  broadcast('*room', { k: 'room', action: 'peers' });
+  return json(res, r);
+}
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   const p = url.pathname.split('/').filter(Boolean);
@@ -957,6 +1005,8 @@ const server = http.createServer(async (req, res) => {
   const why = refuse(req);
   if (why) { res.writeHead(403, { 'content-type': 'text/plain' }); return res.end(`refused: ${why}`); }
   try {
+    if (url.pathname === '/api/peer/message' && req.method === 'POST') return await peerMessage(req, res);
+    if (url.pathname === '/api/peer/join' && req.method === 'POST') return await peerJoin(req, res);
     if (url.pathname === '/api/passcode') {
       if (req.method === 'GET') return json(res, pass.status(req));
       try { const r = pass.op(req, await body(req, res)); if (r.cookie) res.setHeader('set-cookie', r.cookie); return json(res, r.body); } catch (e) { return json(res, { error: e.message }, e.code || 400); }
@@ -987,6 +1037,12 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/call' && req.method === 'GET') return json(res, callStatus());
     if (url.pathname === '/api/call' && req.method === 'POST') { const b = await body(req, res); return json(res, b.op === 'leave' ? await callLeave() : callJoin(b.url, b.until)); }
     if (url.pathname === '/api/health') return json(res, 'ok');
+    if (url.pathname === '/api/peers' && req.method === 'GET') return json(res, { on: peersOn(), self: await peerSelf(), pending: peers.invited(), peers: peers.list() });
+    if (url.pathname === '/api/peers' && req.method === 'POST') {
+      const b = await body(req, res);
+      try { const r = await peersOp(b); broadcast('*room', { k: 'room', action: 'peers' }); return json(res, r); }
+      catch (e) { return json(res, { error: e.message, ...(e.kind ? { kind: e.kind } : {}) }, 400); }
+    }
     if (url.pathname === '/api/humans') return json(res, req.method === 'POST' ? humans.op(await body(req, res)) : { humans: humans.all() });
     if (url.pathname === '/api/config') { const { userName, model, codex, tailnet } = CONFIG; return json(res, { userName, model, codex, tailnet, call: fs.existsSync(CALL_DIR), version: VERSION, schema: CONFIG.schema }); }
     if (url.pathname === '/api/share') return json(res, req.method === 'POST' ? await share(!!(await body(req, res)).on) : await shareStatus());
