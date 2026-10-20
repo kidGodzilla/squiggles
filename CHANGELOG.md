@@ -69,7 +69,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Areas strip no longer breaks on a goal titled ': x'; editing a goal to an empty title is refused.
 - Phone header stays on one line; the menu never wraps.
 - Merge tab says 'Loading branches…' until the list arrives, and 'Couldn’t load branches' if it fails.
-- Merge buttons, header pills and top tabs have 44px touch targets.
+- Merge buttons, toolbar, links, header pills and top tabs have 44px touch targets.
 
 ## 0.1.1
 
