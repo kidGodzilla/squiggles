@@ -72,6 +72,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Merge tab says 'Loading branches…' until the list arrives, and 'Couldn’t load branches' if it fails.
 - Merge buttons, toolbar, links, header pills and top tabs have 44px touch targets.
 - Merge tab shows a listing error without waiting on the worktree list.
+- Inbox button tooltip no longer names a fixed folder; the Inbox panel shows the real path.
 
 ## 0.1.1
 
