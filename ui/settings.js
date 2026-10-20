@@ -2,7 +2,7 @@
 const SET = { gen: '', talk: 0 };
 // Settings tabs (t917): one card group per tab; ?view=settings&tab=<x>, CLI room view settings <tab>.
 function paintSetTab() {
-  if (!SET_TABS.includes(B.stab)) B.stab = 'room';
+  if (!SET_TABS.includes(B.stab) || (B.shareOff && B.stab === 'sharing')) B.stab = 'room';
   document.querySelectorAll('.settabs [data-stab]').forEach((b) => { const on = b.dataset.stab === B.stab; b.setAttribute('aria-selected', on); b.tabIndex = on ? 0 : -1; });
   document.querySelectorAll('.setcard[data-stab]').forEach((c) => { c.hidden = c.dataset.stab !== B.stab; });
   $(`.settabs [data-stab="${B.stab}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
@@ -10,7 +10,7 @@ function paintSetTab() {
 $('.settabs').onclick = (e) => { const t = e.target.closest('[data-stab]'); if (!t || t.dataset.stab === B.stab) return; B.stab = t.dataset.stab; paintSetTab(); syncUrl(); };
 $('.settabs').onkeydown = (e) => {
   const d = { ArrowRight: 1, ArrowLeft: -1 }[e.key]; if (!d) return;
-  B.stab = SET_TABS[(SET_TABS.indexOf(B.stab) + d + SET_TABS.length) % SET_TABS.length]; paintSetTab(); syncUrl(); $(`.settabs [data-stab="${B.stab}"]`).focus();
+  const tabs = SET_TABS.filter((t) => !(B.shareOff && t === 'sharing')); B.stab = tabs[(tabs.indexOf(B.stab) + d + tabs.length) % tabs.length]; paintSetTab(); syncUrl(); $(`.settabs [data-stab="${B.stab}"]`).focus();
 };
 function renderSettings() {
   paintSetTab();

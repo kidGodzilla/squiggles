@@ -106,6 +106,12 @@
           <label for="shareOn">Tailnet</label><span><input type="checkbox" id="shareOn"> <label for="shareOn">Share the room</label> <button class="chip" id="shareCopy" hidden>Copy link</button></span>
         </div>
       </section>
+      <section class="setcard" id="setPeers" role="tabpanel" data-stab="sharing">
+        <h2>Peers</h2>
+        <p class="sethint">Link this room's lead to another room's lead. What they send arrives as data, never as instructions. CLI: <code>peer invite</code>, <code>peer join '&lt;code&gt;'</code>, <code>peers</code>, <code>peer on|off</code>.</p>
+        <div class="setform"><label for="peersOn">Linking</label><span><input type="checkbox" id="peersOn"> <label for="peersOn">Link with other rooms</label></span></div>
+        <div id="peerBody"></div>
+      </section>
       <section class="setcard" id="setPass" role="tabpanel" data-stab="security">
         <h2>Passcode</h2>
         <p class="sethint">The lock screen asks for it: snoop protection for a shared iPad, not a vault. CLI: <code>room passcode set &lt;code&gt;|clear|local on|off</code>.</p>
@@ -179,5 +185,6 @@
 <script src="/ui/room.js"></script>
 <script src="/ui/board.js"></script>
 <script src="/ui/settings.js"></script>
+<script src="/ui/peers.js"></script>
 </body>
 </html>

@@ -668,6 +668,7 @@ body.v-one.screen:not(.v-meet) #chats .cw.office { left: auto !important; width:
 @media (pointer: coarse) { #passNew, #passSet, #passClear { min-height: 44px } }
 #passNew { flex: 1; min-width: 0 } #setPass .setform > span { min-width: 0 } #setPass .setform > span > .chip { flex: none; white-space: nowrap } /* Turn off stays one line (Iris, t913) */
 @media (pointer: coarse) { .setform select, .setrow select { height: 44px } } /* Iris, t898 */
+@media (pointer: coarse) { .setform > span:has(> input[type=checkbox]) > label { display: flex; align-items: center; min-height: 44px } } /* checkbox rows are 44px targets (Iris, t1174) */
 /* Settings tabs (t917) */
 .settabs { display: flex; gap: 4px; margin: 0 0 16px; padding: 4px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); overflow-x: auto; scrollbar-width: none; width: max-content; max-width: 100% }
 .settabs::-webkit-scrollbar { display: none }
@@ -684,3 +685,20 @@ body.v-one.screen:not(.v-meet) #chats .cw.office { left: auto !important; width:
 /* Quit (t1154): inline confirm in the menu, and a notice once the server is off. */
 #quitAsk { display: flex; flex-direction: column; gap: 6px; padding-top: 8px; border-top: 1px solid var(--line) } #quitAsk[hidden] { display: none } #quitAsk p { margin: 0; font-size: 12.5px; color: var(--dim); white-space: normal; overflow-wrap: anywhere }
 #offnote { position: fixed; inset: 0; z-index: 200; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; background: rgba(10,12,20,.92); text-align: center } #offnote b { font-size: 20px } #offnote p { margin: 0; color: var(--dim) }
+/* Settings > Sharing > Peers (t1174, Iris's mockup) */
+.ptable { width: 100%; border-collapse: collapse; font-size: 13.5px }
+.ptable th { text-align: left; color: var(--dim); font-weight: 500; font-size: 12px; padding: 0 10px 8px 0; border-bottom: 1px solid var(--line) }
+.ptable td { padding: 10px 10px 10px 0; border-bottom: 1px solid var(--line); vertical-align: middle }
+.ptable td:last-child { text-align: right; padding-right: 0 } .ptable td[colspan] { text-align: left }
+.ptable .psub { display: none; color: var(--dim); font-size: 12.5px; overflow-wrap: anywhere }
+.ptable .st-bad { color: var(--warn) } .ptable .st-wait { color: var(--dim) } .ptable .prm { margin-right: 6px }
+.pact { display: flex; gap: 8px; flex-wrap: wrap } #peerBody { display: flex; flex-direction: column; gap: 12px } #peerBody:empty { display: none }
+.ppanel { border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 10px; background: var(--panel2) }
+.ppanel label { color: var(--dim); font-size: 13px }
+.ppanel input[type=text], .ppanel textarea { background: var(--bg); border: 1px solid var(--line); border-radius: 9px; color: var(--text); padding: 8px 10px; font: inherit; font-size: 13.5px; width: 100%; box-sizing: border-box }
+.ppanel textarea.code { font-family: ui-monospace, Menlo, monospace; font-size: 12.5px; resize: none; word-break: break-all }
+.ppanel .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap }
+.ppanel .pnote { color: var(--dim); font-size: 13px } .ppanel .err { color: var(--warn); font-size: 13px }
+#peerBody .chip:disabled { opacity: .45 }
+@media (max-width: 760px) { .ptable .hide-s { display: none } .ptable .psub { display: block } .pact .chip { flex: 1 } }
+@media (pointer: coarse) { .ptable .chip, .pact .chip, .ppanel .chip { height: 44px } .ppanel input[type=text] { height: 44px } }

@@ -15,6 +15,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 
 ### Added
 - Peer rooms (off by default; needs Share the room): leads of two Squiggles rooms can message each other. `peer on`, `peer invite [name]` gives a one-time code for the other room's `peer join '<code>'`, then `peer send <name> "<text>"`. Incoming messages need the pair's key and reach the lead fenced as untrusted.
+- Settings > Sharing > Peers: turn linking on, invite, paste a code, see and remove peers.
 - Merge tab flags branches that conflict with the base: lists the files, disables Merge, and pre-fills Send back.
 - Areas: a goal can be an ongoing area (`goal kind <id> area`), shown in a strip above the Goals columns; areas never go to Done or get a "still on?". The strip shows short names (full title on hover).
 - `calendar [from] [to] [calendar]` reads this Mac's calendars (iCloud, Google, Exchange) through EventKit, read-only; `calendar allow` asks macOS once. Needs Xcode command line tools.
@@ -66,6 +67,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - The lead's "Handled." replies fold with the reports they answer into one line that opens to list them.
 
 ### Fixed
+- With tailnet sharing off in config, the Sharing settings tab is hidden; before, it still showed when opened.
 - Codex squiggles no longer show idle mid-turn, so wakes aren't sent into a running turn.
 - Loading the Merge tab no longer freezes the server while git runs; a branch sent back mid-merge is not merged.
 - Editing a squiggle's settings.json takes effect on its next message.

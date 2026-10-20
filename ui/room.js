@@ -735,6 +735,7 @@ async function roomCommand(ev) {
     case 'meeting': meetingNow(ev.value, true); break;
     case 'meetingSoon': meetingSoon(ev.value); break;
     case 'share': paintShare(ev.value); break;
+    case 'peers': loadPeers(); return;
     case 'characters': roomGen(v); S.order.forEach(reskin); if (B.view === 'settings') renderSettings(); break;
   }
   savePrefs(); AUD.apply();
@@ -908,9 +909,9 @@ snd('voice', (e) => { e.onchange = sndSet((t) => { prefs.voice = t.checked; }); 
 snd('chatter', (e) => { e.onchange = sndSet((t) => { prefs.chatter = t.value; }); });
 paintSound();
 // Share on tailnet (tailscale serve): the toggle and its link in More. CLI: share on|off|status.
-// Only Copy link shows (t837); the URL rides on the button. Hidden when tailnet sharing is off in config.
-// Tailnet sharing off in config: the Sharing card is hidden.
-function paintShare(st) { $('#shareOn').closest('.setcard').hidden = !!st?.off; $('#shareOn').checked = !!st?.on; $('#shareCopy').hidden = !st?.on; $('#shareCopy').dataset.url = st?.url || ''; }
+// Only Copy link shows (t837); the URL rides on the button.
+// Tailnet sharing off in config: the Sharing tab (Sharing and Peers cards) is hidden.
+function paintShare(st) { B.shareOff = !!st?.off; $('.settabs [data-stab="sharing"]').hidden = B.shareOff; if (B.shareOff && B.stab === 'sharing' && typeof paintSetTab === 'function') paintSetTab(); if (typeof loadPeers === 'function' && !B.shareOff && !!st?.on !== $('#shareOn').checked) loadPeers(); $('#shareOn').checked = !!st?.on; $('#shareCopy').hidden = !st?.on; $('#shareCopy').dataset.url = st?.url || ''; }
 async function loadShare() { const r = await fetch('/api/share').then((x) => x.json()).catch(() => null); if (r && !r.error) paintShare(r); }
 // Copy the tailnet link (t149). The clipboard API needs a secure page (localhost or https); otherwise copy through a selection.
 $('#shareCopy').onclick = async (e) => {
