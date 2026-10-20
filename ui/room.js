@@ -728,6 +728,7 @@ async function roomCommand(ev) {
     case 'chat': if (S.sq[ev.value]) { if (S.office && !S.officeIds.includes(ev.value)) setView('room'); discuss(ev.value, ev.text, false); } break;
     case 'lock': lock(); break;
     case 'reload': location.reload(); break;
+    case 'quit': if (!$('#offnote')) document.body.insertAdjacentHTML('beforeend', '<div id="offnote"><b>Squiggles is off</b><p>Open Squiggles to start it again.</p></div>'); break;
     case 'restarting': toast('Server restarting with the latest code…'); setTimeout(() => location.reload(), 4000); break;
     case 'limit': showLimit(+ev.value || 0); break;
     case 'call': window.onCall?.(); break;
@@ -1087,6 +1088,22 @@ function lock(why = '') {
   renderJoinCast(); $('#join').classList.add('on'); document.body.classList.add('locked');
 }
 $('#lockBtn').onclick = () => lock();
+// Free memory and Quit (t1154). Quit asks first, and with turns running offers to wait for them.
+$('#freeBtn').onclick = async () => {
+  const r = await api('/free', {}); if (r?.error) return toast(r.error);
+  toast((r.freed.length ? `Freed ${r.freed.length} idle squiggle${r.freed.length > 1 ? 's' : ''}` : 'Nothing idle to free') + (r.working ? `; ${r.working} working, left running` : ''));
+};
+$('#quitBtn').onclick = () => {
+  const n = S.order.filter((id) => S.sq[id].status === 'working').length, a = $('#quitAsk');
+  a.innerHTML = n ? `<p>${n} working. Quit when they finish, or stop them now?</p><button class="chip" data-q="wait">Quit when they finish</button><button class="chip" data-q="now">Quit now</button><button class="chip" data-q="no">Cancel</button>`
+    : '<p>Stop every squiggle and the server? Open Squiggles to start again.</p><button class="chip" data-q="now">Quit</button><button class="chip" data-q="no">Cancel</button>';
+  a.hidden = false;
+};
+$('#quitAsk').onclick = async (e) => {
+  const q = e.target.dataset?.q; if (!q) return; $('#quitAsk').hidden = true; if (q === 'no') return;
+  const r = await api('/quit', { now: q === 'now' }).catch(() => null); if (r?.error) return toast(r.error);
+  if (typeof r === 'string') toast(r[0].toUpperCase() + r.slice(1));
+};
 let lastActive = Date.now();
 for (const ev of ['mousemove', 'mousedown', 'keydown', 'wheel', 'touchstart']) addEventListener(ev, () => (lastActive = Date.now()), { passive: true });
 setInterval(() => { if (S.joined && Date.now() - lastActive > 10 * 60000) lock('Locked after 10 minutes away.'); }, 30000);

@@ -41,6 +41,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Suggestions: squiggles file things outside their tasks with `suggest "<one line>"`; the lead accepts one as a task or declines it with a reason (`suggestions`, `suggestion accept|decline`), on the board too, and the author hears back at its next wake.
 - `look <id> <character|auto|shuffle>` sets a squiggle's character; looks take a generator (`cast:Puff`), and `room characters <generator>` sets the room default, saved in room.json.
 
+- Quit and Free memory in the menu (and `quit [now]`, `free` in the CLI). Quit waits for working turns or stops them now; the login item stays off until Squiggles.app is opened. Free memory ends idle squiggle processes; each resumes on its next wake.
 ### Changed
 - A Codex usage limit no longer pauses wakes: the turn ends and the next wake tries again. `limit` shows the day as well as the time.
 - The bottom speaker caption shows only replies to you, blockers and presentations, not idle chatter.
@@ -70,6 +71,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Phone header stays on one line; the menu never wraps.
 - Merge tab says 'Loading branches…' until the list arrives, and 'Couldn’t load branches' if it fails.
 - Merge buttons, toolbar, links, header pills and top tabs have 44px touch targets.
+- Merge tab shows a listing error without waiting on the worktree list.
 
 ## 0.1.1
 

@@ -679,3 +679,6 @@ body.v-one.screen:not(.v-meet) #chats .cw.office { left: auto !important; width:
   .macts button, .tabs button, #mergeView .btool .chip { min-height: 44px } .mdbox .mlinks a { display: inline-flex; align-items: center; min-height: 44px } /* t1150 */
   #summary { align-self: stretch; align-items: center; min-height: 44px } #summary button { position: relative } #summary button::after { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 44px; transform: translateY(-50%) }
 }
+/* Quit (t1154): inline confirm in the menu, and a notice once the server is off. */
+#quitAsk { display: flex; flex-direction: column; gap: 6px; padding-top: 8px; border-top: 1px solid var(--line) } #quitAsk[hidden] { display: none } #quitAsk p { margin: 0; font-size: 12.5px; color: var(--dim); white-space: normal; overflow-wrap: anywhere }
+#offnote { position: fixed; inset: 0; z-index: 200; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; background: rgba(10,12,20,.92); text-align: center } #offnote b { font-size: 20px } #offnote p { margin: 0; color: var(--dim) }

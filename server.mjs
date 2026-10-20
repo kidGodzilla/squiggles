@@ -35,6 +35,13 @@ const FILES = path.join(DATA, 'files'); // chat images land here
 const STATE = path.join(RUNS, 'state.json');
 const TTS_DIR = path.join(RUNS, 'tts');
 for (const d of [SQ, RUNS, MEDIA, TTS_DIR]) fs.mkdirSync(d, { recursive: true });
+// Run by the login item (t1154)? Squiggles inherit XPC_SERVICE_NAME, so a server they start must also not be launchd's child.
+const LAUNCHD = process.env.XPC_SERVICE_NAME === 'local.squiggles.server' && process.ppid === 1;
+// After Quit (runs/quit), the login item doesn't bring the server back; Squiggles.app deletes the file, or a hand start does.
+if (fs.existsSync(path.join(RUNS, 'quit'))) {
+  if (LAUNCHD) { try { execFileSync('launchctl', ['bootout', `gui/${process.getuid()}/local.squiggles.server`]); } catch {} process.exit(0); }
+  fs.rmSync(path.join(RUNS, 'quit'), { force: true });
+}
 
 const kokoro = createRequire(import.meta.url)('./voice/kokoro.cjs');
 const now = () => new Date().toISOString();
@@ -569,23 +576,48 @@ function broadcast(id, ev) {
 
 // Restart without killing anyone mid-turn: wait until nobody is working, then exit; the login item starts the server again.
 // Started by hand (no login item), start the replacement ourselves; it waits for this one to free the port.
-let restartPending = false;
+let restartPending = false, quitting = false;
 const supervised = process.env.XPC_SERVICE_NAME === 'local.squiggles.server';
+const working = () => [...rt.values()].filter((r) => r.status === 'working' && (r.proc || r.cx)).length;
 function maybeRestart() {
-  if (!restartPending || [...rt.values()].some((r) => r.status === 'working' && r.proc)) return;
+  if (!restartPending || working()) return;
+  if (quitting) return quitNow();
   broadcast('*room', { k: 'room', action: 'restarting' });
   if (!supervised) spawn(process.execPath, process.argv.slice(1), { detached: true, stdio: 'inherit', env: { ...process.env, SQUIGGLES_RESPAWN: '1' } }).unref();
   shutdown(0);
+}
+// Quit (t1154): every squiggle process and the server end, and the login item stays off until Squiggles.app is opened
+// (it deletes runs/quit, then starts the job). Held turns go out on the next start, like a restart's.
+const QUIT = path.join(RUNS, 'quit');
+function quit(now) {
+  restartPending = quitting = true;
+  if (now || !working()) { quitNow(); return 'quitting now'; }
+  return `quitting when ${working()} working turn${working() > 1 ? 's' : ''} finish${working() > 1 ? '' : 'es'}`;
+}
+function quitNow() {
+  fs.writeFileSync(QUIT, new Date().toISOString() + '\n');
+  broadcast('*room', { k: 'room', action: 'quit' });
+  shutdown(0, true);
+}
+// Free memory (t1154): end the processes of squiggles not mid-turn; the next wake resumes the same session.
+function freeIdle() {
+  const freed = [];
+  for (const [id, r] of rt) {
+    if (r.status === 'working' || !(r.proc || r.cx)) continue;
+    r.proc?.kill('SIGTERM'); r.cx?.proc.kill('SIGTERM'); freed.push(id);
+  }
+  return freed;
 }
 // Turns held by a pending restart go out once the new server is up.
 setTimeout(() => {
   const held = persisted['*held'] || []; delete persisted['*held']; saveState();
   for (const h of held) try { send(h.id, h.text, h.from, { replay: true, human: h.human, images: h.images || [] }); } catch (e) { console.error('held', h.id, e.message); }
 }, 3000);
-function shutdown(code) {
+function shutdown(code, unload) {
   for (const r of rt.values()) { if (r.proc) r.proc.kill('SIGTERM'); if (r.cx) r.cx.proc.kill('SIGTERM'); if (r.caff) r.caff.kill(); }
   kokoro.shutdown(); saveState();
-  setTimeout(() => process.exit(code), 300);
+  // KeepAlive would start a quit server again; unloading the job (which also ends this process) keeps it off.
+  setTimeout(() => { if (unload && LAUNCHD) execFile('launchctl', ['bootout', `gui/${process.getuid()}/local.squiggles.server`], () => process.exit(code)); else process.exit(code); }, 300);
 }
 
 function stop(id) {
@@ -960,6 +992,8 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/share') return json(res, req.method === 'POST' ? await share(!!(await body(req, res)).on) : await shareStatus());
     if (url.pathname === '/api/inbox') return json(res, { ...drop.list(), dir: path.join(DATA, 'inbox').replace(os.homedir(), '~') });
     if (url.pathname === '/api/limit') return json(res, { until: limit.until > Date.now() ? limit.until : 0 });
+    if (url.pathname === '/api/quit' && req.method === 'POST') return json(res, quit(!!(await body(req, res)).now));
+    if (url.pathname === '/api/free' && req.method === 'POST') { const f = freeIdle(); return json(res, { freed: f, working: working() }); }
     if (url.pathname === '/api/restart' && req.method === 'POST') { restartPending = true; setTimeout(maybeRestart, 500); return json(res, 'restarting as soon as nobody is mid-turn'); }
     if (url.pathname === '/api/voice') return json(res, kokoro.status());
     // Room controls (radio, voices, chatter, tabs, chat windows) so the lead can do whatever the user can.

@@ -265,8 +265,8 @@ B.merges = [];
 // The listing can take ~40s (t1129): say so until the first answer lands.
 async function loadMerges() {
   if (!B.mloaded) $('#mcount').textContent = 'Loading branches…';
-  const [m, w] = await Promise.all([api('/merges').catch(() => null), api('/worktrees').catch(() => [])]); if (!Array.isArray(m)) { if (!B.mloaded) $('#mcount').textContent = 'Couldn’t load branches'; toast(m?.error || 'merge queue unavailable'); return; }
-  B.mloaded = true; B.merges = m; B.worktrees = Array.isArray(w) ? w : []; renderMerges();
+  const wp = api('/worktrees').catch(() => []), m = await api('/merges').catch(() => null); if (!Array.isArray(m)) { if (!B.mloaded) $('#mcount').textContent = 'Couldn’t load branches'; toast(m?.error || 'merge queue unavailable'); return; }
+  const w = await wp; B.mloaded = true; B.merges = m; B.worktrees = Array.isArray(w) ? w : []; renderMerges();
 }
 const repoName = (p) => String(p || '').replace(/\/+$/, '').split('/').pop();
 B.mopen = new Set();
