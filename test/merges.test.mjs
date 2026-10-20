@@ -52,3 +52,27 @@ test('merge listing names the files that would conflict with the base (t783)', a
   await assert.rejects(b.merge('t1', 'james'), /conflicts merging clash into main/);
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test('conflicting review branch goes back to doing once per conflict, owner told (t1189)', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'merges-')), repo = path.join(dir, 'repo');
+  const g = (...a) => execFileSync('git', ['-C', repo, ...a], { stdio: 'pipe', env: { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' } });
+  const commit = (f, m) => { fs.writeFileSync(path.join(repo, f), m); g('add', f); g('commit', '-q', '-m', m); };
+  fs.mkdirSync(repo); g('init', '-q', '-b', 'main'); commit('a', 'base');
+  g('checkout', '-q', '-b', 'clash'); commit('a', 'branch side');
+  g('checkout', '-q', '-b', 'clean', 'main'); commit('z', 'clean');
+  g('checkout', '-q', 'main'); commit('a', 'main side');
+  fs.writeFileSync(path.join(dir, 'goals.json'), JSON.stringify({ active: [{ id: 'g', title: 'G', merge: 'gated' }] }));
+  fs.writeFileSync(path.join(dir, 'tasks.json'), JSON.stringify({ tasks: [
+    { id: 't1', title: 'clash', goal: 'g', owner: 'o', status: 'review', repo, branch: 'clash' },
+    { id: 't2', title: 'clean', goal: 'g', owner: 'o', status: 'review', repo, branch: 'clean' } ] }));
+  const told = [], b = createBoard(dir, () => {}, { onConflict: (x) => told.push(x) });
+  const task = (id) => b.tasks().find((x) => x.id === id);
+  assert.deepEqual((await b.merges()).map((x) => x.id), ['t2']);
+  assert.equal(task('t1').status, 'doing'); assert.match(task('t1').note, /^sent back by the harness: conflicts with main: a\./);
+  assert.deepEqual(told.map((x) => [x.id, x.owner]), [['t1', 'o']]);
+  b.taskOp({ op: 'move', id: 't1', status: 'review' }); // resubmitted unchanged: stays, not sent again
+  assert.deepEqual((await b.merges()).map((x) => x.id).sort(), ['t1', 't2']); assert.equal(told.length, 1);
+  g('checkout', '-q', 'clash'); commit('y', 'more'); g('checkout', '-q', 'main'); // new commit, still conflicting: sent again
+  await b.merges(); assert.equal(task('t1').status, 'doing'); assert.equal(told.length, 2);
+  fs.rmSync(dir, { recursive: true, force: true });
+});

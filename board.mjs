@@ -100,7 +100,7 @@ const STOP = new Set('the a an and or of to in on for with is are be no not it i
 const words = (s) => new Set(String(s).toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').split(/\s+/).filter((w) => w.length > 2 && !STOP.has(w)));
 // Two titles name the same thing when most of their words overlap (Jaccard over content words).
 export function similar(a, b) { const x = words(a), y = words(b); if (!x.size || !y.size) return false; let i = 0; for (const w of x) if (y.has(w)) i++; return i / (x.size + y.size - i) >= 0.5; }
-export function createBoard(root, onChange) {
+export function createBoard(root, onChange, { onConflict } = {}) {
   const GOALS = path.join(root, 'goals.json'), TASKS = path.join(root, 'tasks.json');
   const read = (f, d) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return d; } };
   const goals = () => { const g = read(GOALS, {}); for (const t of TIERS) { g[t] = g[t] || []; for (const x of g[t]) x.merge = x.merge === 'open' ? 'open' : 'gated'; } return g; };
@@ -380,7 +380,24 @@ export function createBoard(root, onChange) {
   }
   // Concurrent callers share one listing; git runs off the event loop, 6 branches at a time.
   let listing = null;
-  const merges = () => listing ||= (async () => { const q = memo(); await mergeSweep(q); return pool(inQueue(), 6, (t) => mergeInfo(t, q)); })().finally(() => { listing = null; });
+  const merges = () => listing ||= (async () => { const q = memo(); await mergeSweep(q); return conflictSweep(await pool(inQueue(), 6, (t) => mergeInfo(t, q))); })().finally(() => { listing = null; });
+  // Auto send-back (t1189): a review branch that conflicts with its base goes back to doing with the files, and onConflict
+  // tells the owner. Once per conflict: the same branch and base commits stay in review if resubmitted unchanged.
+  async function conflictSweep(list) {
+    if (!onConflict) return list;
+    const sent = [];
+    for (const r of list) {
+      if (r.error || !r.conflicts?.length) continue;
+      let key; try { key = `${await gitA(r.repo, ['rev-parse', r.branch])} ${await gitA(r.repo, ['rev-parse', r.base])}`; } catch { continue; }
+      const t = tasks(), x = t.find((k) => k.id === r.id);
+      if (x?.status !== 'review' || x.conflictSent === key) continue;
+      x.conflictSent = key; saveTasks(t);
+      const note = `conflicts with ${r.base}: ${r.conflicts.join(', ')}. Merge ${r.base} into ${r.branch}, fix, test, move back to review`;
+      taskOp({ op: 'move', id: r.id, status: 'doing', note: `sent back by the harness: ${note}` });
+      sent.push(r.id); try { onConflict({ id: r.id, owner: r.owner, title: r.title, note }); } catch {}
+    }
+    return list.filter((r) => !sent.includes(r.id));
+  }
   function mergeTask(id) {
     const t = tasks().find((x) => x.id === id);
     if (!t) throw new Error(`no task ${id}`);
