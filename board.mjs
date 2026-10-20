@@ -221,15 +221,21 @@ export function createBoard(root, onChange) {
       if (note !== undefined) task.note = note;
       if (status === 'done') retire(task);
     } else if (op === 'confirm') task.confirmed = today();
-    // What merging needs besides the button (t766): stacked tasks, deploy steps, syncs. { t, done }.
-    else if (op === 'needs') {
-      const list = task.needs || [], i = Number(n) - 1;
-      if (act === 'add') { if (!String(text || '').trim()) throw new Error('needs add "<what merging needs>"'); list.push({ t: String(text).trim(), done: false }); }
-      else if (act === 'done' || act === 'undo') { if (!list[i]) throw new Error(`no need ${n} on ${task.id}`); list[i].done = act === 'done'; }
-      else if (act === 'drop') { if (!list[i]) throw new Error(`no need ${n} on ${task.id}`); list.splice(i, 1); }
+    // The user's steps around the Merge button, { t, done } each: needs before merging (t766: stacked tasks, deploy
+    // order, syncs) and after merging (t1182: e.g. a one-time migration). A squiggle's own checks go on neither.
+    else if (op === 'needs' || op === 'after') {
+      const list = task[op] || [], i = Number(n) - 1, what = op === 'needs' ? 'need' : 'after-merge step';
+      if (act === 'add') {
+        const t = String(text || '').trim();
+        if (!t) throw new Error(op === 'needs' ? 'needs add "<what the user must do before merging>"' : 'after add "<what the user must do after merging>"');
+        if (op === 'needs' && /^after\b/i.test(t)) throw new Error(`that is after merging: task after ${task.id} add "<step>", only if the user must do it`);
+        list.push({ t, done: false });
+      }
+      else if (act === 'done' || act === 'undo') { if (!list[i]) throw new Error(`no ${what} ${n} on ${task.id}`); list[i].done = act === 'done'; }
+      else if (act === 'drop') { if (!list[i]) throw new Error(`no ${what} ${n} on ${task.id}`); list.splice(i, 1); }
       else if (act === 'clear') list.length = 0;
-      else throw new Error('needs add|done|undo|drop|clear');
-      if (list.length) task.needs = list; else delete task.needs;
+      else throw new Error(`${op} add|done|undo|drop|clear`);
+      if (list.length) task[op] = list; else delete task[op];
     }
     else if (op === 'edit') {
       for (const [k, v] of Object.entries({ title, goal, owner, note })) if (v !== undefined) { if (v) task[k] = v; else delete task[k]; }
@@ -285,7 +291,7 @@ export function createBoard(root, onChange) {
   async function mergeInfo(task, q) {
     const goal = goalOf(task.goal), reviewed = task.reviewed || task.confirmed, age = daysSince(reviewed);
     const r = { id: task.id, title: task.title, goal: task.goal, goalTitle: goal?.title || '', owner: task.owner || '', repo: task.repo || '', branch: task.branch || '',
-      result: task.note || '', needs: task.needs || [], reviewed, age, stale: age >= 7 };
+      result: task.note || '', needs: task.needs || [], after: task.after || [], reviewed, age, stale: age >= 7 };
     if (!task.branch) return { ...r, error: 'no branch on the task' };
     if (!task.repo) return { ...r, error: 'no repo on the task: set it with task edit <id> branch repo:branch' };
     try {

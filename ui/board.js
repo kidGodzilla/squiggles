@@ -273,7 +273,7 @@ B.mopen = new Set();
 function renderMerges() {
   const list = B.merges, g = (id) => goalById(id)?.title || id || '', stale = list.filter((m) => m.stale).length;
   $('#mcount').textContent = list.length ? `${list.length} branch${list.length > 1 ? 'es' : ''} waiting${stale ? `, ${stale} stale` : ''}` : 'Nothing waiting';
-  if (!list.length) { $('#mq').innerHTML = '<div class="empty">Nothing in review. Squiggles put branches here with task move &lt;id&gt; review &lt;branch&gt; "&lt;test result&gt;".</div>' + worktreesHtml(); return; }
+  if (!list.length) { $('#mq').innerHTML = '<div class="empty">Nothing in review. Squiggles put branches here with task move &lt;id&gt; review &lt;branch&gt; "&lt;test result&gt;".</div>' + afterHtml() + worktreesHtml(); return; }
   const row = (m) => {
     const nc = m.conflicts?.length || 0, open = B.mopen.has(m.id), why = m.error || (nc ? `Conflicts with ${m.base}: send it back` : m.head !== m.base ? `${repoName(m.repo)} is on ${m.head}: check out ${m.base} first` : '');
     const ab = m.error ? '' : `${m.ahead} ahead${m.behind ? `, ${m.behind} behind` : ''}`, left = (m.needs || []).filter((x) => !x.done).length;
@@ -288,7 +288,7 @@ function renderMerges() {
       <td class="macts">${acts}</td>
     </tr>${open ? `<tr class="mdet"><td colspan="7"><div class="mdbox">
       <p class="mdt">${esc(m.title)}</p>
-      ${m.needs?.length ? `<div class="mneeds"><h5>Before merging${left ? '' : ': all done'}</h5>${m.needs.map((x, i) => `<label class="${x.done ? 'done' : ''}"><input type="checkbox" data-a="need" data-n="${i + 1}" ${x.done ? 'checked' : ''}><span>${esc(x.t)}</span></label>`).join('')}</div>` : ''}
+      ${stepsHtml(m.needs, 'need', 'Before merging')}${stepsHtml(m.after, 'after', 'After merging')}
       <dl><dt>Goal</dt><dd>${esc(g(m.goal))}</dd><dt>Branch</dt><dd><code>${esc(m.repo)}:${esc(m.branch)}</code></dd>
       ${nc ? `<dt>Conflicts</dt><dd>${m.conflicts.map((f) => `<code>${esc(f)}</code>`).join(', ')}</dd>` : ''}
       ${m.error ? '' : `<dt>Base</dt><dd>${esc(m.base)}, ${ab}${m.dirty ? `, ${m.dirty} uncommitted file${m.dirty > 1 ? 's' : ''} in the repo` : ''}</dd>`}
@@ -297,7 +297,14 @@ function renderMerges() {
       ${m.desktop || m.compare ? `<p class="mlinks">${m.desktop ? `<a href="${esc(m.desktop)}">Open in GitHub Desktop</a>` : ''}${m.compare ? `<a href="${esc(m.compare)}" target="_blank" rel="noopener">View on GitHub</a>` : m.desktop ? '<span title="The branch is not on GitHub; nobody pushes it from here">Not on GitHub yet</span>' : ''}</p>` : ''}
       <div class="macts mdacts">${m.owner ? `<button data-a="owner">Discuss with ${esc(ownerName(m.owner))}</button>` : ''}${acts}</div></div></td></tr>` : ''}`;
   };
-  $('#mq').innerHTML = `<table class="mtab"><thead><tr><th class="mid">Task</th><th>Title</th><th class="mrepo">Repo</th><th class="mab">Commits</th><th class="mres">Test result</th><th class="mown">Owner</th><th></th></tr></thead><tbody>${list.map(row).join('')}</tbody></table>` + worktreesHtml();
+  $('#mq').innerHTML = `<table class="mtab"><thead><tr><th class="mid">Task</th><th>Title</th><th class="mrepo">Repo</th><th class="mab">Commits</th><th class="mres">Test result</th><th class="mown">Owner</th><th></th></tr></thead><tbody>${list.map(row).join('')}</tbody></table>` + afterHtml() + worktreesHtml();
+}
+// The user's steps around the button (t766 needs, t1182 after), ticked here or with task needs|after <id> done <n>.
+const stepsHtml = (l, a, h) => l?.length ? `<div class="mneeds"><h5>${h}${l.some((x) => !x.done) ? '' : ': all done'}</h5>${l.map((x, i) => `<label class="${x.done ? 'done' : ''}"><input type="checkbox" data-a="${a}" data-n="${i + 1}" ${x.done ? 'checked' : ''}><span>${esc(x.t)}</span></label>`).join('')}</div>` : '';
+// Merged tasks with after-merge steps left (t1182). CLI: merges lists them too.
+function afterHtml() {
+  const t = B.tasks.filter((x) => x.status === 'done' && x.after?.some((n) => !n.done)); if (!t.length) return '';
+  return `<h3 class="wth">After merging <span>${t.length}</span></h3><div class="mafter">${t.map((x) => `<div class="mabox" data-merge="${esc(x.id)}">${stepsHtml(x.after, 'after', `${esc(x.id)} ${esc(x.title)}`)}</div>`).join('')}</div>`;
 }
 // Worktrees (t769): every extra worktree in the goals' repos and the task that owns it. CLI: worktrees.
 function worktreesHtml() {
@@ -354,7 +361,7 @@ $('#mrefresh').onclick = async () => {
 $('#mergeView').onclick = async (e) => {
   // Buttons in the expanded row (the only ones on phone) belong to the row above it.
   const a = e.target.closest('[data-a]')?.dataset.a, det = e.target.closest('.mdet'), row = e.target.closest('[data-merge]') || (a && det?.previousElementSibling); if (!row) return;
-  if (!a) { if (e.target.closest('button,a')) return; const id = row.dataset.merge; B.mopen.has(id) ? B.mopen.delete(id) : B.mopen.add(id); return renderMerges(); }
+  if (!a) { if (e.target.closest('button,a,label,.mabox')) return; const id = row.dataset.merge; B.mopen.has(id) ? B.mopen.delete(id) : B.mopen.add(id); return renderMerges(); }
   const id = row.dataset.merge, m = B.merges.find((x) => x.id === id);
   if (a === 'diff') return openDiff(id);
   // The owner opens a 1:1 with the item in the message box (t627). CLI: room chat <id> "<text>".
@@ -366,7 +373,7 @@ $('#mergeView').onclick = async (e) => {
     toast(`Sent back to ${ownerName(m.owner)}`); return loadMerges();
   }
   if (a === 'merge') return mergeBranch(m, e.target);
-  if (a === 'need') { const r = await api('/tasks', { op: 'needs', id, act: e.target.checked ? 'done' : 'undo', n: e.target.dataset.n }); if (r?.error) toast(r.error); return loadMerges(); }
+  if (a === 'need' || a === 'after') { const r = await api('/tasks', { op: a === 'need' ? 'needs' : 'after', id, act: e.target.checked ? 'done' : 'undo', n: e.target.dataset.n }); if (r?.error) toast(r.error); else if (a === 'after') { const t = B.tasks.find((x) => x.id === id); if (t && r?.id) { t.after = r.after; renderMerges(); } } return a === 'after' ? loadBoard() : loadMerges(); }
 };
 
 // ---------- Team: every squiggle, what it cares about and guards, how it runs ----------

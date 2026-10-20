@@ -42,6 +42,8 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - `look <id> <character|auto|shuffle>` sets a squiggle's character; looks take a generator (`cast:Puff`), and `room characters <generator>` sets the room default, saved in room.json.
 
 - Quit and Free memory in the menu (and `quit [now]`, `free` in the CLI). Quit waits for working turns or stops them now; the login item stays off until Squiggles.app is opened. Free memory ends idle squiggle processes; each resumes on its next wake.
+- After-merge list beside needs: `task after <id> add|done|undo|drop|clear` for the user's own steps after merging (a one-time migration). Shown on the Merge tab and in `merges` until ticked. A needs line starting "After" is refused.
+- Shared prompt: no routine deploy or self-check chores in review notes or needs; checking your own work after a merge is the squiggle's job.
 ### Changed
 - A Codex usage limit no longer pauses wakes: the turn ends and the next wake tries again. `limit` shows the day as well as the time.
 - The bottom speaker caption shows only replies to you, blockers and presentations, not idle chatter.
