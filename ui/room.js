@@ -1096,9 +1096,9 @@ $('#freeBtn').onclick = async () => {
 };
 $('#quitBtn').onclick = () => {
   const n = S.order.filter((id) => S.sq[id].status === 'working').length, a = $('#quitAsk');
-  a.innerHTML = n ? `<p>${n} working. Quit when they finish, or stop them now?</p><button class="chip" data-q="wait">Quit when they finish</button><button class="chip" data-q="now">Quit now</button><button class="chip" data-q="no">Cancel</button>`
+  a.innerHTML = n ? `<p>${n} working. Quit when they finish, or stop them now?</p><button class="chip primary" data-q="wait">Quit when they finish</button><button class="chip" data-q="now">Quit now</button><button class="chip" data-q="no">Cancel</button>`
     : '<p>Stop every squiggle and the server? Open Squiggles to start again.</p><button class="chip" data-q="now">Quit</button><button class="chip" data-q="no">Cancel</button>';
-  a.hidden = false;
+  a.hidden = false; a.querySelector('.primary')?.focus(); // the safe choice is the default (t1154)
 };
 $('#quitAsk').onclick = async (e) => {
   const q = e.target.dataset?.q; if (!q) return; $('#quitAsk').hidden = true; if (q === 'no') return;

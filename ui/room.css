@@ -36,6 +36,7 @@ header { min-width: 0; overflow-x: clip } /* nothing in the top bar may widen th
 .msnd { display: flex; flex-direction: column; gap: 6px; padding-bottom: 8px; border-bottom: 1px solid var(--line) }
 .msnd select { max-width: 140px } .msnd input[type=range] { flex: 1; min-width: 0; max-width: 140px } .msnd input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent) }
 #shareOn { width: 16px; height: 16px; accent-color: var(--accent) }
+.morep .msep { border-top: 1px solid var(--line) } /* system actions are their own group (t1154) */
 .morep .chip { width: 100%; justify-content: center } .morep #lockBtn { display: flex; align-items: center; gap: 6px }
 @media (max-width: 1100px) { #summary span:not(.working):not(.blocked):not(.rethink) { display: none } }
 @media (max-width: 760px) {
