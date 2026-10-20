@@ -43,12 +43,12 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Suggestions: squiggles file things outside their tasks with `suggest "<one line>"`; the lead accepts one as a task or declines it with a reason (`suggestions`, `suggestion accept|decline`), on the board too, and the author hears back at its next wake.
 - `look <id> <character|auto|shuffle>` sets a squiggle's character; looks take a generator (`cast:Puff`), and `room characters <generator>` sets the room default, saved in room.json.
 
-- Quit and Free memory in the menu (and `quit [now]`, `free` in the CLI). Quit waits for working turns or stops them now; the login item stays off until Squiggles.app is opened. Free memory ends idle squiggle processes; each resumes on its next wake.
+- Quit in the menu (and `quit [now]` in the CLI). Quit waits for working turns or stops them now; the login item stays off until Squiggles.app is opened.
 - After-merge list beside needs: `task after <id> add|done|undo|drop|clear` for the user's own steps after merging (a one-time migration). Shown on the Merge tab and in `merges` until ticked. A needs line starting "After" is refused.
 - Shared prompt: no routine deploy or self-check chores in review notes or needs; checking your own work after a merge is the squiggle's job.
 - Merge merges every goal repo carrying the task's branch (Repo shows "api + web"; detail lists "Also merges"). `repo:branch` accepts a goal repo's bare name.
 ### Changed
-- More menu: Free memory and Quit sit in their own group; with squiggles working, Quit when they finish is the default.
+- More menu: Quit sits in its own group; with squiggles working, Quit when they finish is the default.
 - A Codex usage limit no longer pauses wakes: the turn ends and the next wake tries again. `limit` shows the day as well as the time.
 - The bottom speaker caption shows only replies to you, blockers and presentations, not idle chatter.
 - The speaker caption has × to dismiss it, and moves to the top when it would cover the field you're typing in.

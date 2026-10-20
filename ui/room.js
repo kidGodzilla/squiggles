@@ -1089,11 +1089,7 @@ function lock(why = '') {
   renderJoinCast(); $('#join').classList.add('on'); document.body.classList.add('locked');
 }
 $('#lockBtn').onclick = () => lock();
-// Free memory and Quit (t1154). Quit asks first, and with turns running offers to wait for them.
-$('#freeBtn').onclick = async () => {
-  const r = await api('/free', {}); if (r?.error) return toast(r.error);
-  toast((r.freed.length ? `Freed ${r.freed.length} idle squiggle${r.freed.length > 1 ? 's' : ''}` : 'Nothing idle to free') + (r.working ? `; ${r.working} working, left running` : ''));
-};
+// Quit (t1154) asks first, and with turns running offers to wait for them.
 $('#quitBtn').onclick = () => {
   const n = S.order.filter((id) => S.sq[id].status === 'working').length, a = $('#quitAsk');
   a.innerHTML = n ? `<p>${n} working. Quit when they finish, or stop them now?</p><button class="chip primary" data-q="wait">Quit when they finish</button><button class="chip" data-q="now">Quit now</button><button class="chip" data-q="no">Cancel</button>`

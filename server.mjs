@@ -600,15 +600,6 @@ function quitNow() {
   broadcast('*room', { k: 'room', action: 'quit' });
   shutdown(0, true);
 }
-// Free memory (t1154): end the processes of squiggles not mid-turn; the next wake resumes the same session.
-function freeIdle() {
-  const freed = [];
-  for (const [id, r] of rt) {
-    if (r.status === 'working' || !(r.proc || r.cx)) continue;
-    r.proc?.kill('SIGTERM'); r.cx?.proc.kill('SIGTERM'); freed.push(id);
-  }
-  return freed;
-}
 // Turns held by a pending restart go out once the new server is up.
 setTimeout(() => {
   const held = persisted['*held'] || []; delete persisted['*held']; saveState();
@@ -1049,7 +1040,6 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/inbox') return json(res, { ...drop.list(), dir: path.join(DATA, 'inbox').replace(os.homedir(), '~') });
     if (url.pathname === '/api/limit') return json(res, { until: limit.until > Date.now() ? limit.until : 0 });
     if (url.pathname === '/api/quit' && req.method === 'POST') return json(res, quit(!!(await body(req, res)).now));
-    if (url.pathname === '/api/free' && req.method === 'POST') { const f = freeIdle(); return json(res, { freed: f, working: working() }); }
     if (url.pathname === '/api/restart' && req.method === 'POST') { restartPending = true; setTimeout(maybeRestart, 500); return json(res, 'restarting as soon as nobody is mid-turn'); }
     if (url.pathname === '/api/voice') return json(res, kokoro.status());
     // Room controls (radio, voices, chatter, tabs, chat windows) so the lead can do whatever the user can.
