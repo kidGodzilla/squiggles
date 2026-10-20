@@ -281,7 +281,7 @@ function renderMerges() {
     return `<tr class="mrow ${open ? 'open' : ''} ${m.error ? 'err' : ''}" data-merge="${esc(m.id)}">
       <td class="mid">${esc(m.id)}${m.stale ? ` <span class="mtag" title="In review ${m.age} days">Stale</span>` : ''}</td>
       <td class="mtt" title="${esc(m.title)}">${nc ? `<span class="mtag mneed mconf" title="${esc(m.conflicts.join('\n'))}">Conflicts</span>` : ''}${left ? `<span class="mtag mneed" title="${esc(m.needs.filter((x) => !x.done).map((x) => x.t).join('\n'))}">Needs ${left}</span>` : ''}<span>${esc(m.title)}</span></td>
-      <td class="mrepo">${esc(repoName(m.repo))}</td>
+      <td class="mrepo" title="${esc([m.repo, ...(m.others || []).map((o) => o.repo)].join('\n'))}">${esc([m.repo, ...(m.others || []).map((o) => o.repo)].map(repoName).join(' + '))}</td>
       <td class="mab">${ab}</td>
       <td class="mres ${m.error ? 'bad' : m.result ? '' : 'none'}" title="${esc(m.error || m.result)}">${m.error ? esc(m.error) : m.result ? esc(m.result) : 'No test result'}</td>
       <td class="mown">${m.owner ? `<button class="mowner" data-a="owner" title="Discuss with ${esc(ownerName(m.owner))}">${face(m.owner, 'mg' + m.id + '_')}</button>` : ''}</td>
@@ -290,6 +290,7 @@ function renderMerges() {
       <p class="mdt">${esc(m.title)}</p>
       ${stepsHtml(m.needs, 'need', 'Before merging')}${stepsHtml(m.after, 'after', 'After merging')}
       <dl><dt>Goal</dt><dd>${esc(g(m.goal))}</dd><dt>Branch</dt><dd><code>${esc(m.repo)}:${esc(m.branch)}</code></dd>
+      ${m.others?.length ? `<dt>Also merges</dt><dd>${m.others.map((o) => `<code>${esc(o.repo)}:${esc(o.branch)}</code>${o.error ? ` ${esc(o.error)}` : `, ${o.ahead} ahead of ${esc(o.base)}`}`).join('<br>')}</dd>` : ''}
       ${nc ? `<dt>Conflicts</dt><dd>${m.conflicts.map((f) => `<code>${esc(f)}</code>`).join(', ')}</dd>` : ''}
       ${m.error ? '' : `<dt>Base</dt><dd>${esc(m.base)}, ${ab}${m.dirty ? `, ${m.dirty} uncommitted file${m.dirty > 1 ? 's' : ''} in the repo` : ''}</dd>`}
       <dt>Test result</dt><dd>${esc(m.error || m.result || 'None on the note')}</dd><dt>In review</dt><dd>since ${esc(m.reviewed || '')} (${m.age <= 0 ? 'today' : `${m.age}d`})${m.owner ? `, by ${esc(ownerName(m.owner))}` : ''}</dd>
@@ -344,7 +345,7 @@ async function mergeBranch(m, btn) {
   if (!confirm(`Merge ${repoName(m.repo)}:${m.branch} into ${m.base}? The branch is deleted and the task marked done.`)) return false;
   btn.disabled = true; btn.textContent = 'Merging';
   const r = await api('/merges', { op: 'merge', id: m.id, by: me().id }).catch(() => ({ error: 'Merge request failed' })); if (r?.error) { toast(r.error); btn.disabled = false; btn.textContent = 'Merge'; loadMerges(); return false; }
-  AUD.ding(); toast(`Merged ${m.branch} at ${r.sha}`); loadMerges(); return true;
+  AUD.ding(); toast(`Merged ${m.branch} ${r.merged?.length > 1 ? `into ${r.merged.length} repos` : `at ${r.sha}`}`); loadMerges(); return true;
 }
 $('#diffBox').onclick = (e) => { if (e.target.id === 'diffBox') closeDiff(); };
 // Merge review now (t599): a meeting where the squiggles with branches in review present them. CLI: meet merges.

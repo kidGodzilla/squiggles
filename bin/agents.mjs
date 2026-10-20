@@ -129,7 +129,7 @@ const cmds = {
     ? ((r) => r.closed.length ? r.closed.map((c) => `${c.id} done: ${c.why}`).join('\n') : `nothing merged outside; ${r.merges.length} in review`)(await call('/merges', { op: 'refresh' }))
     : [(await call('/merges')).map((m) => m.error
     ? `${m.id}  ${m.title}  ${m.repo}:${m.branch}  — ${m.error}`
-    : `${m.id}  ${m.title}  ${m.repo}:${m.branch}  ${m.ahead} ahead${m.behind ? `, ${m.behind} behind` : ''} of ${m.base}${m.conflicts?.length ? `  CONFLICTS: ${m.conflicts.join(', ')}` : ''}  ${m.age}d${m.stale ? ' STALE' : ''}${m.owner ? `  @${m.owner}` : ''}${m.result ? `  — ${m.result}` : '  — no test result'}${m.needs?.length ? m.needs.map((x, i) => `\n    needs ${i + 1}${x.done ? ' (done)' : ''}: ${x.t}`).join('') : ''}${steps(m.after, 'after')}${m.desktop ? `\n    desktop: ${m.desktop}` : ''}${m.compare ? `\n    github: ${m.compare}` : ''}`).join('\n'), await afterMerge()].filter(Boolean).join('\n\n') || 'nothing in review',
+    : `${m.id}  ${m.title}  ${m.repo}:${m.branch}  ${m.ahead} ahead${m.behind ? `, ${m.behind} behind` : ''} of ${m.base}${m.others?.length ? `  + ${m.others.map((o) => `${o.repo}${o.error ? ` (${o.error})` : ` ${o.ahead} ahead`}`).join(', ')}` : ''}${m.conflicts?.length ? `  CONFLICTS: ${m.conflicts.join(', ')}` : ''}  ${m.age}d${m.stale ? ' STALE' : ''}${m.owner ? `  @${m.owner}` : ''}${m.result ? `  — ${m.result}` : '  — no test result'}${m.needs?.length ? m.needs.map((x, i) => `\n    needs ${i + 1}${x.done ? ' (done)' : ''}: ${x.t}`).join('') : ''}${steps(m.after, 'after')}${m.desktop ? `\n    desktop: ${m.desktop}` : ''}${m.compare ? `\n    github: ${m.compare}` : ''}`).join('\n'), await afterMerge()].filter(Boolean).join('\n\n') || 'nothing in review',
   // meetings [days] [from YYYY-MM-DD] (past ones say Done or Missed) | meeting add "<title>" "<when>" <id,id> [once|daily|weekdays|weekly] ["<agenda>"] | meeting edit <id> <field> <value> (presenters <id,id> sets the turn order; showtell true|false builds each presenter's agenda from their work since the last one) | meeting cancel <id> [date] | meeting start <id> | meeting next | meeting end | meeting now
   meetings: async () => {
     const { upcoming } = await call(`/meetings?days=${Number(a[0]) || 7}${a[1] ? `&from=${a[1]}T00:00` : ''}`);
@@ -160,7 +160,7 @@ const cmds = {
   merge: async () => {
     if (a[0] === 'back') return call('/merges', { op: 'back', id: a[1], note: a[2], by: process.env.AGENTS_ID || 'owner' });
     if (a[0] === 'diff') { const d = await call(`/merges/${a[1]}/diff`); return `${d.log.join('\n')}\n\n${d.stat}\n\n${d.diff}`; }
-    const r = await call('/merges', { op: 'merge', id: a[0], by: process.env.AGENTS_ID || 'owner' }); return `${r.id} merged into ${r.base} at ${r.sha}, branch ${r.branch} deleted, task done`;
+    const r = await call('/merges', { op: 'merge', id: a[0], by: process.env.AGENTS_ID || 'owner' }); return `${r.id} merged into ${r.merged?.length > 1 ? r.merged.map((d) => `${d.repo} ${d.base} at ${d.sha}`).join(', ') : `${r.base} at ${r.sha}`}, branch ${r.branch} deleted, task done`;
   },
   // call <teams-url> [until <time>] | call status | call leave: the lead joins a Teams call through ~/claude-in-call
   call: async () => {

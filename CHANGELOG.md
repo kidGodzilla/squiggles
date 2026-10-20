@@ -44,6 +44,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Quit and Free memory in the menu (and `quit [now]`, `free` in the CLI). Quit waits for working turns or stops them now; the login item stays off until Squiggles.app is opened. Free memory ends idle squiggle processes; each resumes on its next wake.
 - After-merge list beside needs: `task after <id> add|done|undo|drop|clear` for the user's own steps after merging (a one-time migration). Shown on the Merge tab and in `merges` until ticked. A needs line starting "After" is refused.
 - Shared prompt: no routine deploy or self-check chores in review notes or needs; checking your own work after a merge is the squiggle's job.
+- Merge merges every goal repo carrying the task's branch (Repo shows "api + web"; detail lists "Also merges"). `repo:branch` accepts a goal repo's bare name.
 ### Changed
 - A Codex usage limit no longer pauses wakes: the turn ends and the next wake tries again. `limit` shows the day as well as the time.
 - The bottom speaker caption shows only replies to you, blockers and presentations, not idle chatter.
@@ -75,6 +76,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Merge buttons, toolbar, links, header pills and top tabs have 44px touch targets.
 - Merge tab shows a listing error without waiting on the worktree list.
 - Inbox button tooltip no longer names a fixed folder; the Inbox panel shows the real path.
+- Merge detail centers the GitHub links; the After merging card heading stays on one line.
 
 ## 0.1.1
 

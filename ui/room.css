@@ -414,11 +414,11 @@ body.v-one.v-meet #chats .cw.office { left: var(--mx) !important; top: var(--my)
 .mtag.mconf { color: #e07a72 }
 .mneeds { margin: 0 0 10px; padding: 8px 10px; border: 1px solid rgba(217,162,74,.45); border-radius: 10px; font-size: 12.5px }
 .mneeds h5 { margin: 0 0 4px; font-size: 11.5px; font-weight: 600; color: #d9a24a }
-.mafter { display: grid; gap: 8px; margin: 0 0 14px } .mabox .mneeds { margin: 0 }
+.mafter { display: grid; gap: 8px; margin: 0 0 14px } .mabox .mneeds { margin: 0 } .mabox { min-width: 0 } .mabox h5 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis } /* t1182 */
 .mneeds label { display: flex; gap: 8px; align-items: baseline; padding: 2px 0; cursor: pointer } .mneeds label.done span { color: var(--dim); text-decoration: line-through }
 @media (pointer: coarse) { .mneeds label { min-height: 44px; align-items: center } } /* tick a step with a thumb (t1182) */
 .mdbox dl { display: grid; grid-template-columns: 100px 1fr; gap: 4px 12px; margin: 0; font-size: 12.5px } .mdbox dt { color: var(--dim) } .mdbox dd { margin: 0; word-break: break-word }
-.mdbox .mlinks { display: flex; gap: 16px; margin: 10px 0 0; font-size: 12.5px } .mdbox .mlinks a { color: var(--accent) } .mdbox .mlinks span { color: var(--dim) }
+.mdbox .mlinks { display: flex; align-items: center; gap: 16px; margin: 10px 0 0; font-size: 12.5px } .mdbox .mlinks a { color: var(--accent) } .mdbox .mlinks span { color: var(--dim) }
 .mdbox code { font: 12px var(--mono) } .mdbox .mlog { white-space: pre-wrap; color: var(--dim) }
 .mq:has(.wth) > .empty { flex: none; padding: 28px 0 } .wth { margin: 10px 2px 0; font-size: 13px; font-weight: 600 } .wth span { margin-left: 6px; color: var(--dim); font-weight: 400 }
 .wtab th:nth-child(1) { width: 92px } .wtab th:nth-child(2) { width: auto } .wtab th:nth-child(3) { width: 30% } .wtab th:nth-child(4) { width: 22% } .wtab th:nth-child(5) { width: 56px }
