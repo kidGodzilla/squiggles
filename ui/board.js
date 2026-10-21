@@ -582,9 +582,16 @@ function setView(v, who, nav) {
   if (v === 'settings') { if (typeof renderSettings === 'function') renderSettings(); loadHumans(); }
   focusOffice();
 }
-// Entering an office puts the cursor in its chat (t188), also after Join on a page opened on one (t1206). Not on touch screens: it would pop the keyboard.
-function focusOffice() {
-  if ((B.view === 'lead' || B.view === 'one') && matchMedia('(pointer: fine)').matches) requestAnimationFrame(() => document.querySelector(`#cw-${S.officeIds[0]} textarea`)?.focus());
+// Entering an office puts the cursor in its chat (t188), also after Join on a page opened on one (t1206); the Team tab, in its search
+// unless the user is typing somewhere (t1362). Not on touch screens: it would pop the keyboard.
+// force: after Join, where the lead chat's own autofocus isn't the user typing.
+function focusOffice(force) {
+  if (!matchMedia('(pointer: fine)').matches) return;
+  if (B.view === 'lead' || B.view === 'one') requestAnimationFrame(() => document.querySelector(`#cw-${S.officeIds[0]} textarea`)?.focus());
+  if (B.view === 'team') requestAnimationFrame(() => {
+    const a = document.activeElement, typing = a && (/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) || a.isContentEditable) && a.offsetParent;
+    if ((force || !typing) && !document.body.classList.contains('locked')) $('#teamq').focus();
+  });
 }
 // Phone bottom bar (t154): More opens Team, Calendar and Goals above the bar.
 const moreTabs = (on) => { $('.tabs').classList.toggle('open', on); $('.tabs .tmore').setAttribute('aria-expanded', String(on)); };

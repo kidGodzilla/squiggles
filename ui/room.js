@@ -1109,12 +1109,12 @@ $('#joinBtn').onclick = () => {
   if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission().catch(() => {});
   const rejoin = !!AUD.ctx; lastActive = Date.now();
   AUD.init(); S.joined = true; $('#join').classList.remove('on'); document.body.classList.remove('locked'); AUD.join();
-  if (rejoin) { S.spokeAt = performance.now(); AUD.apply(); return focusOffice(); }
+  if (rejoin) { S.spokeAt = performance.now(); AUD.apply(); return focusOffice(true); }
   const lead = leadId(), chat = new URLSearchParams(URL0).get('chat');
   // On phone the lead's chat would cover the room; its unread count sits on the Lead tab instead (t352).
   if (lead) { if (!PHONE.matches) openChat(lead); say(lead, pick(['Hey. Everyone’s here.', `${(h => h < 5 ? 'Late one' : h < 12 ? 'Morning' : h < 18 ? 'Afternoon' : 'Evening')(new Date().getHours())}. The team is in.`, 'Hi. We’re all set up.']), { priority: true }); }
   if (S.sq[chat]) openChat(chat);
-  focusOffice();
+  focusOffice(true);
 };
 document.addEventListener('keydown', (e) => { if (e.key === '/' && S.joined && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) { e.preventDefault(); const l = leadId(); if (l) openChat(l); } });
 
