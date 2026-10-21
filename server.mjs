@@ -940,15 +940,15 @@ const refuse = makeGuard(PORT, tailnet.get);
 const pass = makePasscode({ read: () => roomCfg().passcode, write: (v) => { const c = roomCfg(); if (v) c.passcode = v; else delete c.passcode; fs.writeFileSync(ROOMCFG, JSON.stringify(c, null, 2) + '\n'); } });
 // Gated merges (t1384): the user or the lead, never another squiggle. A squiggle sets `by` and AGENTS_ID itself; it can't
 // choose whose child its shell is, so a caller whose process chain runs through a squiggle's claude process is that squiggle.
-// With a passcode set, anyone else needs an unlocked browser session. Without one, callers outside every squiggle (the
-// user's browser or terminal) may merge; a squiggle's detached process would pass too, so set a passcode to close that.
+// Anyone else needs a browser session unlocked with the room passcode, so gated merges need one set. Unknown callers are
+// refused: a squiggle's detached process looks like the user's terminal.
 async function merger(req, b) {
-  if (pass.session(req)) return { by: String(b.by || 'owner').slice(0, 40) };
+  let why; try { pass.session(req); return { by: String(b.by || 'owner').slice(0, 40) }; } catch (e) { why = e; }
   const procs = new Map([...rt].filter(([, r]) => r.proc?.pid).map(([id, r]) => [r.proc.pid, id]));
   const id = (await callerChain(req)).map((p) => procs.get(p)).find(Boolean);
-  if (id) return loadSquiggle(id)?.lead ? { by: id } : { error: `${id} can't merge gated work: ${USER} presses Merge on the Merge tab` };
-  if (!pass.status(req).set) return { by: String(b.by || 'owner').slice(0, 40) };
-  return { error: 'Merging gated work needs an unlocked browser: Lock the room from the menu, then unlock it with the passcode' };
+  if (id && loadSquiggle(id)?.lead) return { by: id };
+  if (id || !/Mozilla\//.test(req.headers['user-agent'] || '')) return { error: `${id ? `${id} can't merge` : `Only ${USER} and the lead merge`} gated work: ${USER} presses Merge on the Merge tab` };
+  return { error: why.message, ...(why.unlock && { unlock: true }) };
 }
 const peers = createPeers(path.join(DATA, 'peers.json'));
 // Off until the user turns it on (room.json peers: true). Off, nothing arrives and nothing pairs.

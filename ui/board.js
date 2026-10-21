@@ -344,7 +344,7 @@ function closeDiff(sync = true) { $('#diffBox').classList.remove('on'); B.diff =
 async function mergeBranch(m, btn) {
   if (!confirm(`Merge ${repoName(m.repo)}:${m.branch} into ${m.base}? The branch is deleted and the task marked done.`)) return false;
   btn.disabled = true; btn.textContent = 'Merging';
-  const r = await api('/merges', { op: 'merge', id: m.id, by: me().id }).catch(() => ({ error: 'Merge request failed' })); if (r?.error) { toast(r.error); btn.disabled = false; btn.textContent = 'Merge'; loadMerges(); return false; }
+  const r = await unlocked(() => api('/merges', { op: 'merge', id: m.id, by: me().id }), 'Unlock merges').catch(() => ({ error: 'Merge request failed' })); if (r === null) { btn.disabled = false; btn.textContent = 'Merge'; return false; } if (r?.error) { toast(r.error); btn.disabled = false; btn.textContent = 'Merge'; loadMerges(); return false; }
   AUD.ding(); toast(!r.merged?.length ? `Already on ${r.base}; task done` : `Merged ${m.branch} ${r.merged?.length > 1 ? `into ${r.merged.length} repos` : `at ${r.sha}`}`); loadMerges(); return true;
 }
 $('#diffBox').onclick = (e) => { if (e.target.id === 'diffBox') closeDiff(); };
@@ -678,3 +678,25 @@ function openTaskNote(id) {
   n.scrollIntoView({ block: 'center' }); n.classList.add('new'); editTask(n);
 }
 document.addEventListener('click', (e) => { const a = e.target.closest('a.tlink'); if (!a) return; e.preventDefault(); e.stopPropagation(); taskPop(a); }, true);
+
+// Gated merges need this browser unlocked with the passcode (t1384): once per device, then the 30-day session covers them.
+// Raw fetch for unlock: api() reloads the page on 401, which a wrong code is.
+async function unlocked(go, title) {
+  const r = await go(); if (!r?.unlock) return r;
+  const code = await askCode(title, '<p>Once on this device. It stays unlocked for 30 days.</p>', 'Unlock'); if (code == null) return null;
+  const u = await fetch('/api/passcode', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ op: 'unlock', code }) }).then((x) => x.json()).catch(() => ({ error: 'Unlock failed' }));
+  return u.error ? u : go();
+}
+// A confirm, or with a label a passcode prompt (passcode changes, unlocking merges): the server checks it, the page never keeps
+// it. Resolves the code (true for a plain confirm), or null on cancel.
+function askCode(title, html, go, label = 'Room passcode') {
+  const f = $('#daskForm');
+  f.innerHTML = `<h2>${esc(title)}</h2>${html}${label ? `<label for="daskCode">${esc(label)}</label><input id="daskCode" type="password" autocomplete="off" required>` : ''}<div class="daskb"><button type="button" class="chip" data-a="no">Cancel</button><button class="chip primary">${esc(go)}</button></div>`;
+  $('#dask').classList.add('on'); requestAnimationFrame(() => ($('#daskCode') || f.querySelector('.primary'))?.focus());
+  return new Promise((done) => {
+    const end = (v) => { $('#dask').classList.remove('on'); f.innerHTML = ''; f.onsubmit = f.onclick = $('#dask').onclick = null; done(v); };
+    f.onsubmit = (e) => { e.preventDefault(); end(label ? $('#daskCode').value : true); };
+    f.onclick = (e) => { if (e.target.dataset.a === 'no') end(null); };
+    $('#dask').onclick = (e) => { if (e.target.id === 'dask') end(null); };
+  });
+}

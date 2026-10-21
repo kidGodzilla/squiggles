@@ -1,5 +1,7 @@
-// Optional room passcode (t913): casual snoop protection, not Fort Knox. room.json `passcode` holds a salted scrypt hash,
-// the 'local skips' choice and sha256 hashes of live session tokens. Unlocking sets an HttpOnly SameSite=Strict cookie.
+// Optional room passcode (t913): casual snoop protection, not Fort Knox. room.json `passcode` holds a salted scrypt hash
+// and the 'local skips' choice. Unlocking sets an HttpOnly SameSite=Strict cookie.
+// Read once at boot, then memory only (t1396): a squiggle writing room.json can't add a session or swap the hash.
+// Sessions are never written, so unlocks end with a restart.
 // Local non-browser callers (the CLI, squiggles) always pass; a browser on this Mac passes only when local skips is on.
 import crypto from 'node:crypto';
 
@@ -8,8 +10,11 @@ const sha = (s) => crypto.createHash('sha256').update(s).digest('hex');
 const hashCode = (code, salt) => crypto.scryptSync(String(code), salt, 32).toString('hex');
 
 export function makePasscode({ read, write, now = () => Date.now() }) {
-  const cfg = () => read() || null;
-  const save = (p) => write(p);
+  const disk = (p) => (p?.hash ? { salt: p.salt, hash: p.hash, localSkips: !!p.localSkips } : null);
+  let mem = disk(read());
+  if (read()?.sessions) write(mem); // sessions an older server stored
+  const cfg = () => mem;
+  const save = (p) => { mem = p?.hash ? { ...disk(p), sessions: p.sessions || {} } : null; write(disk(mem)); };
   const fails = new Map(); // client -> { n, until }
   let recent = []; // failure times, all clients
 
@@ -40,26 +45,39 @@ export function makePasscode({ read, write, now = () => Date.now() }) {
     return `${COOKIE}=${tok}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${age}${secure ? '; Secure' : ''}`;
   };
 
+  const err = (m, code = 400) => Object.assign(new Error(m), { code });
+  // The code against the hash, behind the same per-client and global limits as unlocking. Step-up checks answer a wrong code
+  // with 403: the page reloads to the lock screen on 401, which means the session ended.
+  function check(req, p, code, bad = 401) {
+    // An empty code is a slip, not a guess: refused without counting.
+    if (code == null || code === '') throw err('wrong passcode', bad);
+    const c = client(req), f = fails.get(c) || { n: 0, until: 0 }, t = now();
+    recent = recent.filter((x) => t - x < 10 * 60000);
+    if (f.until > t) throw err(`too many tries, wait ${Math.ceil((f.until - t) / 1000)} s`, 429);
+    if (recent.length >= 30) throw err('too many tries, wait a few minutes', 429);
+    const want = Buffer.from(p.hash, 'hex'), got = Buffer.from(hashCode(code ?? '', p.salt), 'hex');
+    if (!crypto.timingSafeEqual(want, got)) {
+      // The global cap is for tailnet guessing; a local process could read the hash from room.json anyway.
+      f.n++; if (!isLocal(req)) recent.push(t);
+      if (f.n >= 5) f.until = t + Math.min(15 * 60000, 30000 * 2 ** (f.n - 5));
+      fails.set(c, f); throw err('wrong passcode', bad);
+    }
+    fails.delete(c);
+  }
+  // Gated merges (t1384): a live unlocked session cookie, from a browser that typed the passcode.
+  // Not ok(): local non-browser callers and local skips pass that. No passcode set means no sessions, so no.
+  function session(req) {
+    const p = cfg(); if (!p?.hash) throw err('Set a room passcode first (Settings > Security): merging gated work needs it', 403);
+    if (!hasSession(req, p)) throw Object.assign(err('Unlock with the room passcode first', 403), { unlock: true });
+    return true;
+  }
+
   // Returns { body, cookie? }. Throws Error with .code for HTTP status.
   function op(req, b = {}) {
-    const err = (m, code = 400) => Object.assign(new Error(m), { code });
     const p = cfg() || {};
     if (b.op === 'unlock') {
       if (!p.hash) return { body: status(req) };
-      // An empty code is a slip, not a guess: refused without counting.
-      if (b.code == null || b.code === '') throw err('wrong passcode', 401);
-      const c = client(req), f = fails.get(c) || { n: 0, until: 0 }, t = now();
-      recent = recent.filter((x) => t - x < 10 * 60000);
-      if (f.until > t) throw err(`too many tries, wait ${Math.ceil((f.until - t) / 1000)} s`, 429);
-      if (recent.length >= 30) throw err('too many tries, wait a few minutes', 429);
-      const want = Buffer.from(p.hash, 'hex'), got = Buffer.from(hashCode(b.code ?? '', p.salt), 'hex');
-      if (!crypto.timingSafeEqual(want, got)) {
-        // The global cap is for tailnet guessing; a local process could read the hash from room.json anyway.
-        f.n++; if (!isLocal(req)) recent.push(t);
-        if (f.n >= 5) f.until = t + Math.min(15 * 60000, 30000 * 2 ** (f.n - 5));
-        fails.set(c, f); throw err('wrong passcode', 401);
-      }
-      fails.delete(c);
+      check(req, p, b.code);
       return { body: { ...status(req), ok: true }, cookie: cookie(req, issue(p)) };
     }
     if (b.op === 'lock') {
@@ -68,6 +86,8 @@ export function makePasscode({ read, write, now = () => Date.now() }) {
       return { body: { ...status(req), ok: false }, cookie: cookie(req, '', 0) };
     }
     if (!ok(req)) throw err('locked', 401);
+    // Changing, clearing or loosening a set passcode needs the current one (t950), from anyone, CLI included.
+    if (p.hash && ['set', 'clear', 'local'].includes(b.op)) check(req, p, b.old, 403);
     if (b.op === 'set') {
       const code = String(b.code ?? '');
       if (code.length < 4 || code.length > 64) throw err('passcode: 4 to 64 characters');
@@ -83,7 +103,5 @@ export function makePasscode({ read, write, now = () => Date.now() }) {
     throw err('op: unlock, lock, set, clear, local or status');
   }
 
-  // Gated merges (t1384): a live unlocked session cookie, i.e. a browser that typed the passcode. False when none is set.
-  const session = (req) => { const p = cfg(); return !!p?.hash && hasSession(req, p); };
   return { ok, status, op, session };
 }

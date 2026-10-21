@@ -19,6 +19,19 @@ async function call(path, body) {
   return v;
 }
 
+// The room passcode, typed at a terminal and not echoed (t950). Squiggles have no terminal, so they can't answer it.
+async function askCode(what) {
+  if (!process.stdin.isTTY) throw new Error(`${what} needs the room passcode: run it from your terminal`);
+  process.stderr.write(`Room passcode for ${what}: `);
+  process.stdin.setRawMode(true); process.stdin.resume(); process.stdin.setEncoding('utf8');
+  return new Promise((ok, no) => { let v = ''; const on = (c) => { for (const ch of c) {
+    if (ch === '\r' || ch === '\n') { done(); return ok(v); }
+    if (ch === '\u0003') { done(); return no(new Error('cancelled')); }
+    v = ch === '\u007f' ? v.slice(0, -1) : v + ch;
+  } }; const done = () => { process.stdin.setRawMode(false); process.stdin.pause(); process.stdin.off('data', on); process.stderr.write('\n'); }; process.stdin.on('data', on); });
+}
+const codeIfSet = async (what) => ((await call('/passcode')).set ? askCode(what) : undefined);
+
 function brief(e) {
   if (e.k === 'say') return e.text;
   if (e.k === 'tool') return `[${e.name}] ${e.text || e.file || e.arg || ''}`.slice(0, 220);
@@ -222,12 +235,13 @@ const cmds = {
   },
   remove: () => call(`/squiggles/${a[0]}/remove`, {}),
   // room radio <fip|fipjazz|...|off> | room volume <0-1> | room voices on|off | room chatter quiet|normal|lively | room characters <generator> | room view room|lead|meeting|team|calendar|goals|tasks|merge|settings | room view blocked|rethink | room view 1on1 <id> | room view settings [room|characters|squiggles|people|sharing|defaults|security] | room chat <id> ["<draft>"] | room lock
-  // room passcode set <code>|clear|status|local on|off (t913): optional lock-screen passcode; this CLI always gets through.
+  // room passcode set <code>|clear|status|local on|off (t913): optional lock-screen passcode. Once set, changing it asks for the current one.
   room: async () => {
     if (a[0] === 'passcode') {
       const op = a[1] || 'status', b = op === 'set' ? { op, code: a[2] } : op === 'local' ? { op, on: a[2] === 'on' } : { op };
       if (op === 'set' && !a[2]) throw new Error('room passcode set <code>');
       if (op === 'local' && !['on', 'off'].includes(a[2])) throw new Error('room passcode local on|off');
+      if (['set', 'clear', 'local'].includes(op)) b.old = await codeIfSet('the current passcode');
       const r = op === 'status' ? await call('/passcode') : await call('/passcode', b);
       return r.set ? `passcode on${r.localSkips ? ', this Mac skips it' : ''}` : 'passcode off';
     }

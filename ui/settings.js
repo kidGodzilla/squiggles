@@ -44,11 +44,15 @@ async function renderPass() {
   $('#passSet').textContent = r.set ? 'Change' : 'Set'; $('#passClear').hidden = !r.set;
   $('#passLocal').checked = !!r.localSkips; $('#passLocal').disabled = !r.set;
 }
-const passOp = async (b, done) => { const r = await api('/passcode', b); if (!r || r.error) return toast(r?.error || 'Not saved'); toast(done); renderPass(); };
-$('#passSet').onclick = () => { const code = $('#passNew').value; $('#passNew').value = ''; passOp({ op: 'set', code }, 'Passcode set'); };
+// Changing, clearing or loosening a set passcode asks for the current one (t950).
+const passOp = async (b, done, title) => {
+  if (PASS.set) { b.old = await askCode(title, '', 'Save', 'Current passcode'); if (b.old == null) return renderPass(); }
+  const r = await api('/passcode', b); if (!r || r.error) { toast(r?.error || 'Not saved'); return renderPass(); } toast(done); renderPass();
+};
+$('#passSet').onclick = () => { const code = $('#passNew').value; $('#passNew').value = ''; passOp({ op: 'set', code }, 'Passcode set', 'Change the passcode'); };
 $('#passNew').onkeydown = (e) => { if (e.key === 'Enter') $('#passSet').click(); };
-$('#passClear').onclick = () => passOp({ op: 'clear' }, 'Passcode off');
-$('#passLocal').onchange = (e) => passOp({ op: 'local', on: e.target.checked }, e.target.checked ? "This Mac's browser skips the passcode" : "This Mac's browser asks too");
+$('#passClear').onclick = () => passOp({ op: 'clear' }, 'Passcode off', 'Turn the passcode off');
+$('#passLocal').onchange = (e) => passOp({ op: 'local', on: e.target.checked }, e.target.checked ? "This Mac's browser skips the passcode" : "This Mac's browser asks too", "This Mac's browser and the passcode");
 // Team defaults card (t898): what a new squiggle starts with. CLI: defaults.
 async function renderDefaults() {
   const d = await api('/defaults'); if (!d || d.error) return;
