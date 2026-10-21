@@ -497,7 +497,7 @@ function meetingForm(m, date, occ) {
     <div class="row2"><div><label>Minutes</label><input id="cmM" type="number" min="5" step="5" value="${m?.minutes || 30}"></div>
       <div><label>Repeats</label><select id="cmR">${Object.keys(REPEAT_WORD).map((r) => `<option value="${r}" ${(m?.repeat || 'once') === r ? 'selected' : ''}>${REPEAT_WORD[r] || 'Once'}</option>`).join('')}</select></div></div>
     <label>Who</label><div class="calwho">${S.order.map((id) => `<label><input type="checkbox" value="${esc(id)}" ${who.has(id) ? 'checked' : ''}>${esc(S.sq[id].name)}</label>`).join('')}</div>
-    <label>Presenters, in order (optional)</label><input id="cmP" value="${esc((m?.presenters || []).map((id) => S.sq[id]?.name || id).join(', '))}" placeholder="Empty: everyone briefs at once. Or e.g. Vex, Otto">
+    <label>Presenters, in order (optional)</label><input id="cmP" value="${esc((m?.presenters || []).map((id) => S.sq[id]?.name || id).join(', '))}" placeholder="Empty: everyone briefs at once. Or e.g. Sam, Alex">
     <div class="calwho"><label><input type="checkbox" id="cmS" ${m?.showtell ? 'checked' : ''}>Show and tell: each presenter's agenda is their work since the last one</label></div>
     <label>Agenda</label><textarea id="cmA" class="grow" rows="4" placeholder="What to cover; attendees get this when they wake">${esc(m?.agenda || '')}</textarea>
     ${occ?.past && S.meeting?.id !== m.id ? `<label>Notes</label>${occ.notes ? `<pre class="calnotes">${esc(occ.notes)}</pre>` : `<p class="calempty">${occ.past === 'done' ? 'No notes in runs/meetings.log.' : 'It never started.'}</p>`}`

@@ -14,7 +14,7 @@ test('goal kind: area on, back to goal, bad kind refused (t977)', () => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test('goal edit refuses an empty title (Vex t1030)', () => {
+test('goal edit refuses an empty title (t1030)', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'goals-'));
   const b = createBoard(dir, () => {});
   const g = b.goalOp({ op: 'add', title: 'Security', tier: 'active' });

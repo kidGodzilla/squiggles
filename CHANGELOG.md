@@ -75,6 +75,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - The lead's "Handled." replies fold with the reports they answer into one line that opens to list them.
 
 ### Fixed
+- The meeting presenters example uses placeholder names.
 - With tailnet sharing off in config, the Sharing settings tab is hidden; before, it still showed when opened.
 - Codex squiggles no longer show idle mid-turn, so wakes aren't sent into a running turn.
 - Loading the Merge tab no longer freezes the server while git runs; a branch sent back mid-merge is not merged.

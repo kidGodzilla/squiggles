@@ -80,7 +80,7 @@ export function createPeers(file, { now = Date.now, fetchFn = globalThis.fetch }
     return { peer: p.name };
   }
   async function post(p, route, key, payload) {
-    // No redirects: a 30x would carry the bearer to wherever it points (Vex t1176).
+    // No redirects: a 30x would carry the bearer to wherever it points (t1176).
     const r = await fetchFn(`${p.url}${route}`, { method: 'POST', redirect: 'error', headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` }, body: JSON.stringify(payload), signal: AbortSignal.timeout(15000) })
       .catch((e) => { throw fail(`${p.name} unreachable: ${e.cause?.code || e.message}`, 'unreachable'); });
     const out = await r.json().catch(() => ({}));
