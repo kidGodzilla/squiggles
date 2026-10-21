@@ -13,6 +13,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Shared screen reads regular files only, capped in size, and its content isn't saved to the transcript.
 - Passcode limiter: empty codes don't count, and local scripts have their own bucket, so they can't lock out the browser.
 - Gated merges: only the lead, or a browser unlocked with the room passcode, merges; the Merge button asks for it once per device. Without a passcode, set one first.
+- Gated merges check the caller's process first: a squiggle holding an unlocked session cookie is still refused.
 - Passcode hash loads at boot and sessions stay in memory, so editing room.json can't forge an unlock. Unlocks end on restart.
 - Changing, clearing or loosening a set passcode needs the current one, in Settings and the CLI.
 

@@ -1,6 +1,7 @@
 // Optional room passcode (t913): casual snoop protection, not Fort Knox. room.json `passcode` holds a salted scrypt hash
 // and the 'local skips' choice. Unlocking sets an HttpOnly SameSite=Strict cookie.
-// Read once at boot, then memory only (t1396): a squiggle writing room.json can't add a session or swap the hash.
+// Read once at boot, then memory only (t1396): writing room.json can't add a session; a swapped hash counts only after a
+// restart, and gated merges check the caller's process tree first (t1423).
 // Sessions are never written, so unlocks end with a restart.
 // Local non-browser callers (the CLI, squiggles) always pass; a browser on this Mac passes only when local skips is on.
 import crypto from 'node:crypto';

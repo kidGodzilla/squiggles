@@ -942,12 +942,13 @@ const pass = makePasscode({ read: () => roomCfg().passcode, write: (v) => { cons
 // choose whose child its shell is, so a caller whose process chain runs through a squiggle's claude process is that squiggle.
 // Anyone else needs a browser session unlocked with the room passcode, so gated merges need one set. Unknown callers are
 // refused: a squiggle's detached process looks like the user's terminal.
+// Process tree before the cookie (t1423): a squiggle holding a session cookie is still a squiggle.
 async function merger(req, b) {
-  let why; try { pass.session(req); return { by: String(b.by || 'owner').slice(0, 40) }; } catch (e) { why = e; }
   const procs = new Map([...rt].filter(([, r]) => r.proc?.pid).map(([id, r]) => [r.proc.pid, id]));
   const id = (await callerChain(req)).map((p) => procs.get(p)).find(Boolean);
-  if (id && loadSquiggle(id)?.lead) return { by: id };
-  if (id || !/Mozilla\//.test(req.headers['user-agent'] || '')) return { error: `${id ? `${id} can't merge` : `Only ${USER} and the lead merge`} gated work: ${USER} presses Merge on the Merge tab` };
+  if (id) return loadSquiggle(id)?.lead ? { by: id } : { error: `${id} can't merge gated work: ${USER} presses Merge on the Merge tab` };
+  let why; try { pass.session(req); return { by: String(b.by || 'owner').slice(0, 40) }; } catch (e) { why = e; }
+  if (!/Mozilla\//.test(req.headers['user-agent'] || '')) return { error: `Only ${USER} and the lead merge gated work: ${USER} presses Merge on the Merge tab` };
   return { error: why.message, ...(why.unlock && { unlock: true }) };
 }
 const peers = createPeers(path.join(DATA, 'peers.json'));
