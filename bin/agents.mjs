@@ -218,7 +218,7 @@ const cmds = {
   },
   limit: async () => {
     const l = await call('/limit'), t = (x) => new Date(x).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' });
-    return l.until ? `session limit: scheduled wakes paused until ${t(l.until)}` : 'no session limit in effect';
+    return l.until ? `session limit hit, stated reset ${t(l.until)} (display only: wakes carry on)` : 'no session limit reported';
   },
   remove: () => call(`/squiggles/${a[0]}/remove`, {}),
   // room radio <fip|fipjazz|...|off> | room volume <0-1> | room voices on|off | room chatter quiet|normal|lively | room characters <generator> | room view room|lead|meeting|team|calendar|goals|tasks|merge|settings | room view blocked|rethink | room view 1on1 <id> | room view settings [room|characters|squiggles|people|sharing|defaults|security] | room chat <id> ["<draft>"] | room lock

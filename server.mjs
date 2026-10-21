@@ -101,7 +101,6 @@ const R = (id) => {
 function saveState() {
   const out = {};
   for (const [id, { proc, caff, cx, cxThread, cxLast, sig, subs, ...r }] of rt) out[id] = r;
-  if (persisted['*limit']) { const { timer, ...l } = persisted['*limit']; out['*limit'] = l; }
   for (const k of ['*meeting', '*started', '*held', '*warned']) if (persisted[k]) out[k] = persisted[k];
   fs.writeFileSync(STATE, JSON.stringify(out, null, 2));
 }
@@ -507,10 +506,11 @@ function lastSaved(s) {
 const inbox = [];
 function turnEnded(s, text, isError, subtype) {
   const p = providerOf(s), reset = !p && parseReset(text); if (reset) limitHit(reset);
-  const limited = !p && limit.until > Date.now() && (reset || isError);
+  const limited = !p && limit.until && (reset || isError);
+  if (!p && limit.until && !limited) limitLifted(); // a Claude turn went through: that, not the stated reset, ends it
   const st = subtype === 'provider_limit' ? { status: 'idle', note: `${p} usage limit; next wake tries again` }
     : subtype === 'capacity' ? { status: 'waiting', note: `model at capacity, retrying at ${hhmm(R(s.id).capAt)} (try ${R(s.id).capTries} of 3)` }
-    : limited ? { status: 'idle', note: `session limit, wakes resume ${hhmm(limit.until)}` }
+    : limited ? { status: 'idle', note: `session limit (stated reset ${hhmm(limit.until)}); next wake tries again` }
     : subtype === 'interrupted' ? { status: 'idle', note: 'stopped' }
     : subtype === 'error_max_turns' ? { status: 'error', note: `hit the turn cap (${s.maxTurns ?? 40}); ${lastSaved(s)}; fresh process next wake` }
     : isError ? { status: 'error', note: 'turn failed' } : statusLine(text) || { status: 'idle', note: '' };
@@ -527,13 +527,14 @@ function turnEnded(s, text, isError, subtype) {
 }
 function flushInbox() {
   const lead = listSquiggles().find((x) => x.lead);
-  if (!lead || !inbox.length || R(lead.id).status === 'working' || limit.until > Date.now()) return;
+  if (!lead || !inbox.length || R(lead.id).status === 'working') return;
   send(lead.id, `Team reports:\n${inbox.splice(0).join('\n')}\n\nHandle what you can. Tell ${USER} only what needs them, in one short message.`, 'harness');
 }
 
-// Session limit: one hit pauses every scheduled wake (and the lead's inbox) until the reset time plus 5 minutes,
-// shows a banner in the Room, and reports once to the lead when things resume.
-const limit = persisted['*limit'] || { until: 0, reported: 0 };
+// Session limit: display info only (t1284: the stated reset is guidance the user can change; never schedule around it).
+// Nothing waits on it or times off it: a limited turn just ends, the next wake tries again, and the banner clears when a Claude
+// turn next succeeds. Not persisted.
+const limit = { until: 0, reported: 0 }; delete persisted['*limit'];
 const hhmm = (t) => (t - Date.now() > 20 * 3600000 ? new Date(t).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }) + ' ' : '') + new Date(t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 function parseReset(text) {
   const m = /session limit[^\n]*?resets\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i.exec(text || ''); if (!m) return 0;
@@ -543,18 +544,11 @@ function parseReset(text) {
   return d.getTime();
 }
 function limitHit(resetsAt) {
-  const until = resetsAt + 5 * 60000;
-  if (until <= limit.until) return;
-  limit.until = until; limit.reported = 0; persisted['*limit'] = limit; saveState();
-  broadcast('*room', { k: 'room', action: 'limit', value: until });
-  inbox.push(`[Harness · LIMIT] Session limit hit at ${hhmm(Date.now())}; scheduled wakes paused until ${hhmm(until)}.`);
-  armLimit();
+  const first = !limit.until; limit.until = resetsAt;
+  broadcast('*room', { k: 'room', action: 'limit', value: resetsAt });
+  if (first) inbox.push(`[Harness · LIMIT] Session limit hit at ${hhmm(Date.now())}; stated reset ${hhmm(resetsAt)}. Wakes carry on.`);
 }
-function armLimit() {
-  clearTimeout(limit.timer);
-  if (limit.until > Date.now()) limit.timer = setTimeout(() => { broadcast('*room', { k: 'room', action: 'limit', value: 0 }); flushInbox(); }, limit.until - Date.now() + 1000);
-}
-armLimit(); // a limit that was in force when the server restarted still lifts on time
+function limitLifted() { limit.until = 0; broadcast('*room', { k: 'room', action: 'limit', value: 0 }); }
 
 // Clears what the chat window shows. The agent keeps its session and remembers everything.
 function clearChat(id) { emit(id, { k: 'cleared' }); return 'cleared'; }
@@ -633,7 +627,6 @@ setInterval(() => {
     if (s.lead || s.paused || !(s.every > 0)) continue;
     const p = providerOf(s);
     if (started.has(p) || Date.now() - (newest[p] || 0) < 2 * 60000) continue;
-    if (!p && limit.until > Date.now()) continue;
     const r = R(s.id);
     const last = Date.parse(r.lastWake || 0) || 0;
     if (r.status !== 'working' && Date.now() >= dueAt(s.id, s.every, last) && wake(s.id)) started.add(p);
@@ -645,13 +638,12 @@ setInterval(() => {
 const meetingNow = () => persisted['*meeting'] || null;
 function startMeeting(m, by = 'calendar') {
   if (meetingNow()) throw new Error(`${meetingNow().title} is still on: end it first`);
-  const names = m.attendees.map((id) => loadSquiggle(id)?.name || id), paused = limit.until > Date.now(), pres = (m.presenters || []).filter((id) => m.attendees.includes(id));
+  const names = m.attendees.map((id) => loadSquiggle(id)?.name || id), pres = (m.presenters || []).filter((id) => m.attendees.includes(id));
   const showtell = pres.length && meetings.all().find((x) => x.id === m.id)?.showtell;
   const cur = { id: m.id, title: m.title, agenda: m.agenda || '', attendees: m.attendees, ...(pres.length ? { presenters: pres, turn: 0 } : {}), ...(showtell ? { since: lastShow(m) } : {}), start: m.start, end: m.end, key: `${m.id}@${m.start}`, by, at: Date.now() };
   persisted['*meeting'] = cur; persisted['*started'] = [...(persisted['*started'] || []), cur.key].slice(-100); saveState();
   broadcast('*room', { k: 'room', action: 'meeting', value: cur });
   if (by === 'calendar') macAlert(`Meeting now: ${m.title}`, `${m.title} has started with ${names.join(', ')}. Join it in the room?`, true);
-  if (paused) { inbox.push(`[Harness · MEETING] ${m.title} started but nobody was woken: session limit until ${hhmm(limit.until)}.`); return cur; }
   const head = `Meeting now: ${m.title}, ${m.start.slice(11)} to ${m.end.slice(11)}, with ${USER} and ${names.join(', ')}.${m.agenda ? `\nAgenda:\n${m.agenda}` : ''}\n`;
   const order = pres.map((id) => loadSquiggle(id)?.name || id).join(', then ');
   for (const id of m.attendees) {
@@ -778,7 +770,7 @@ const drop = createInbox(path.join(DATA, 'inbox'));
 setInterval(() => {
   try {
     const lead = listSquiggles().find((x) => x.lead);
-    if (!lead || R(lead.id).status === 'working' || limit.until > Date.now()) return; // files wait in inbox/ until the lead can take them
+    if (!lead || R(lead.id).status === 'working') return; // files wait in inbox/ until the lead can take them
     const notes = drop.take(); if (!notes.length) return;
     send(lead.id, `${User} dropped ${notes.length > 1 ? `${notes.length} notes` : 'a note'} in the inbox:\n\n${notes.map((n) => `--- ${n.name} ---\n${n.text.trim()}`).join('\n\n')}\n\nTreat ${notes.length > 1 ? 'these' : 'it'} as a message from ${USER}. Moved to inbox/read/.`, 'inbox');
   } catch (e) { console.error('inbox:', e.message); }
@@ -1041,7 +1033,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/config') { const { userName, model, codex, tailnet } = CONFIG; return json(res, { userName, model, codex, tailnet, call: fs.existsSync(CALL_DIR), version: VERSION, schema: CONFIG.schema }); }
     if (url.pathname === '/api/share') return json(res, req.method === 'POST' ? await share(!!(await body(req, res)).on) : await shareStatus());
     if (url.pathname === '/api/inbox') return json(res, { ...drop.list(), dir: path.join(DATA, 'inbox').replace(os.homedir(), '~') });
-    if (url.pathname === '/api/limit') return json(res, { until: limit.until > Date.now() ? limit.until : 0 });
+    if (url.pathname === '/api/limit') return json(res, { until: limit.until });
     if (url.pathname === '/api/quit' && req.method === 'POST') return json(res, quit(!!(await body(req, res)).now));
     if (url.pathname === '/api/restart' && req.method === 'POST') { restartPending = true; setTimeout(maybeRestart, 500); return json(res, 'restarting as soon as nobody is mid-turn'); }
     if (url.pathname === '/api/voice') return json(res, kokoro.status());

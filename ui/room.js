@@ -740,12 +740,10 @@ async function roomCommand(ev) {
   }
   savePrefs(); AUD.apply();
 }
-// Session limit banner: the server pauses scheduled wakes until the reset time plus 5 minutes.
-let limitTimer = null;
+// Session limit banner, display only (t1284): nothing is paused, and it stays until the server says a Claude turn went through.
 function showLimit(until) {
-  clearTimeout(limitTimer); const on = until > Date.now();
-  $('#limit').classList.toggle('on', on);
-  if (on) { $('#limit').textContent = `Session limit hit. Scheduled wakes resume at ${when(until)}. You can still message anyone.`; limitTimer = setTimeout(() => showLimit(0), until - Date.now() + 500); }
+  $('#limit').classList.toggle('on', !!until);
+  if (until) $('#limit').textContent = `Session limit hit, stated reset ${when(until)}. Wakes carry on.`;
 }
 async function load() {
   api('/limit').then((l) => showLimit(l.until || 0));

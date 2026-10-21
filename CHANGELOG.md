@@ -48,6 +48,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Shared prompt: no routine deploy or self-check chores in review notes or needs; checking your own work after a merge is the squiggle's job.
 - Merge merges every goal repo carrying the task's branch (Repo shows "api + web"; detail lists "Also merges"). `repo:branch` accepts a goal repo's bare name.
 ### Changed
+- Session limit is display only: wakes, team reports and meetings carry on; the banner shows the stated reset and clears when a Claude turn goes through. Not kept across restarts.
 - The merge listing sends a review branch that conflicts with its base back to doing, with the files, and tells its owner. Once per conflict: resubmitting the same commits keeps it in review.
 - Squiggle prompt: a reviewer's Ship or sign-off approves a change but is never a go to merge; only the user's word is.
 - More menu: Quit sits in its own group; with squiggles working, Quit when they finish is the default.
