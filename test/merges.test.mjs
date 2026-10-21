@@ -49,7 +49,7 @@ test('merge listing names the files that would conflict with the base (t783)', a
     { id: 't2', title: 'clean', goal: 'g', status: 'review', repo, branch: 'clean' } ] }));
   const b = createBoard(dir, () => {}), l = Object.fromEntries((await b.merges()).map((x) => [x.id, x]));
   assert.deepEqual(l.t1.conflicts, ['a']); assert.deepEqual(l.t2.conflicts, []);
-  await assert.rejects(b.merge('t1', 'james'), /conflicts merging clash into main/);
+  await assert.rejects(b.merge('t1', 'owner'), /conflicts merging clash into main/);
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
@@ -74,5 +74,17 @@ test('conflicting review branch goes back to doing once per conflict, owner told
   assert.deepEqual((await b.merges()).map((x) => x.id).sort(), ['t1', 't2']); assert.equal(told.length, 1);
   g('checkout', '-q', 'clash'); commit('y', 'more'); g('checkout', '-q', 'main'); // new commit, still conflicting: sent again
   await b.merges(); assert.equal(task('t1').status, 'doing'); assert.equal(told.length, 2);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('merge of a task committed straight on the base closes it, no git merge (t1251)', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'merges-')), repo = path.join(dir, 'repo');
+  const g = (...a) => execFileSync('git', ['-C', repo, ...a], { stdio: 'pipe', env: { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' } });
+  fs.mkdirSync(repo); g('init', '-q', '-b', 'main'); fs.writeFileSync(path.join(repo, 'a'), 'a'); g('add', 'a'); g('commit', '-q', '-m', 'a');
+  fs.writeFileSync(path.join(dir, 'goals.json'), JSON.stringify({ active: [{ id: 'g', title: 'G', merge: 'gated' }] }));
+  fs.writeFileSync(path.join(dir, 'tasks.json'), JSON.stringify({ tasks: [{ id: 't1', title: 'on main', goal: 'g', status: 'review', repo, branch: 'main', note: 'abc: done' }] }));
+  const b = createBoard(dir, () => {}), m = await b.merge('t1', 'owner');
+  assert.equal(m.task.status, 'done'); assert.match(m.task.note, /^already on main, closed by owner — abc: done/);
+  assert.equal(execFileSync('git', ['-C', repo, 'rev-list', '--count', 'HEAD'], { encoding: 'utf8' }).trim(), '1');
   fs.rmSync(dir, { recursive: true, force: true });
 });

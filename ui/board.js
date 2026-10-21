@@ -345,7 +345,7 @@ async function mergeBranch(m, btn) {
   if (!confirm(`Merge ${repoName(m.repo)}:${m.branch} into ${m.base}? The branch is deleted and the task marked done.`)) return false;
   btn.disabled = true; btn.textContent = 'Merging';
   const r = await api('/merges', { op: 'merge', id: m.id, by: me().id }).catch(() => ({ error: 'Merge request failed' })); if (r?.error) { toast(r.error); btn.disabled = false; btn.textContent = 'Merge'; loadMerges(); return false; }
-  AUD.ding(); toast(`Merged ${m.branch} ${r.merged?.length > 1 ? `into ${r.merged.length} repos` : `at ${r.sha}`}`); loadMerges(); return true;
+  AUD.ding(); toast(!r.merged?.length ? `Already on ${r.base}; task done` : `Merged ${m.branch} ${r.merged?.length > 1 ? `into ${r.merged.length} repos` : `at ${r.sha}`}`); loadMerges(); return true;
 }
 $('#diffBox').onclick = (e) => { if (e.target.id === 'diffBox') closeDiff(); };
 // Merge review now (t599): a meeting where the squiggles with branches in review present them. CLI: meet merges.

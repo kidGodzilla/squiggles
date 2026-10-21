@@ -417,6 +417,13 @@ export function createBoard(root, onChange, { onConflict } = {}) {
   async function merge(id, by) {
     const task = mergeTask(id), r = await mergeInfo(task, memo());
     mergeTask(id); // sent back while git ran
+    // Committed straight on the base (open goals, 'review main'): nothing to merge, it's already in (t1251).
+    if (r.base && r.branch === r.base && !r.others?.length) {
+      const t = tasks(), x = t.find((k) => k.id === id);
+      x.status = 'done'; x.finished = today(); x.confirmed = today(); if (by) x.mergedBy = by;
+      x.note = `already on ${r.base}${by ? `, closed by ${by}` : ''}${x.note ? ` — ${x.note}` : ''}`;
+      saveTasks(t); return { ...r, merged: [], task: x, worktrees: [] };
+    }
     if (r.error) throw new Error(r.error);
     if (r.conflicts?.length) throw new Error(`conflicts merging ${r.branch} into ${r.base}: ${r.conflicts.join(', ')}: send it back`);
     // Every repo was checked above before any merges (t1197). If a later one still fails, the task stays in review and says which went in.
