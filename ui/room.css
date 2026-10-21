@@ -426,6 +426,8 @@ body.v-one.v-meet #chats .cw.office { left: var(--mx) !important; top: var(--my)
 .wtab th:nth-child(1) { width: 92px } .wtab th:nth-child(2) { width: auto } .wtab th:nth-child(3) { width: 30% } .wtab th:nth-child(4) { width: 22% } .wtab th:nth-child(5) { width: 56px }
 .wtab td code { font: 12px var(--mono) } .wtab .wst { color: var(--dim) } .wtab .mid .mtag { margin-left: 0 }
 @media (max-width: 1100px) { .mtab .mrepo, .mtab .mown { display: none } }
+/* t1151: below 1000px Title gets the width; the test result is in the open row. */
+@media (max-width: 1000px) { .mtab .mres { display: none } .mtab th:nth-child(1) { width: 72px } }
 @media (max-width: 760px) { .mtab.wtab tr { display: flex; flex-wrap: wrap; gap: 2px 10px; padding: 8px 12px; border-bottom: 1px solid var(--line) } .mtab.wtab td { padding: 0 } .mtab.wtab .mid { display: block } .mtab.wtab .mown { display: none } .wtab td:nth-child(2) { flex-basis: 100% ; order: -1 } }
 @media (max-width: 760px) {
   .mtab, .mtab tbody, .mtab tr, .mtab td { display: block } .mtab thead { display: none }

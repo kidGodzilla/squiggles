@@ -55,6 +55,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 ### Changed
 - Squiggles describe code to you by when and what ("the fix from today 14:27"), not commit hash.
 - Squiggles treat a convenient cause ("user error", "intended") as likely until evidence shows it explains the symptom.
+- Merge tab below 1000px wide hides the Test result column so titles get the room; it stays in the opened row.
 - Squiggles stop only test servers they started, by pid, never by name or port. A change to a squiggle's prompt (role, team) relaunches its idle process on the next message.
 - Merging a task committed straight on its base closes it as already on main instead of refusing; the CLI and toast say so.
 - Session limit is display only: wakes, team reports and meetings carry on; the banner shows the stated reset and clears when a Claude turn goes through. Not kept across restarts.
