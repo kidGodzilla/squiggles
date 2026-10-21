@@ -525,9 +525,12 @@ function mentionMirror(ta) {
   if (ta._mirror) return ta._mirror;
   const wrap = document.createElement('span'), mir = document.createElement('div');
   wrap.className = 'mwrap'; mir.className = 'mmirror'; mir.setAttribute('aria-hidden', 'true');
+  // Moving the textarea blurs it, and this runs on its first focus (t1206).
+  const had = document.activeElement === ta;
   ta.parentNode.insertBefore(wrap, ta); wrap.append(mir, ta);
   ta.addEventListener('scroll', () => (mir.scrollTop = ta.scrollTop));
-  return (ta._mirror = mir);
+  ta._mirror = mir; if (had) ta.focus();
+  return mir;
 }
 function paintMirror(ta) { const mir = mentionMirror(ta); mir.innerHTML = mentionHtml(esc(ta.value)) + '\u200b'; mir.scrollTop = ta.scrollTop; }
 function mentionClose() { if (MN.el) MN.el.classList.remove('on'); MN.ta = null; MN.list = []; }
@@ -1106,11 +1109,12 @@ $('#joinBtn').onclick = () => {
   if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission().catch(() => {});
   const rejoin = !!AUD.ctx; lastActive = Date.now();
   AUD.init(); S.joined = true; $('#join').classList.remove('on'); document.body.classList.remove('locked'); AUD.join();
-  if (rejoin) { S.spokeAt = performance.now(); AUD.apply(); return; }
+  if (rejoin) { S.spokeAt = performance.now(); AUD.apply(); return focusOffice(); }
   const lead = leadId(), chat = new URLSearchParams(URL0).get('chat');
   // On phone the lead's chat would cover the room; its unread count sits on the Lead tab instead (t352).
   if (lead) { if (!PHONE.matches) openChat(lead); say(lead, pick(['Hey. Everyone’s here.', `${(h => h < 5 ? 'Late one' : h < 12 ? 'Morning' : h < 18 ? 'Afternoon' : 'Evening')(new Date().getHours())}. The team is in.`, 'Hi. We’re all set up.']), { priority: true }); }
   if (S.sq[chat]) openChat(chat);
+  focusOffice();
 };
 document.addEventListener('keydown', (e) => { if (e.key === '/' && S.joined && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) { e.preventDefault(); const l = leadId(); if (l) openChat(l); } });
 

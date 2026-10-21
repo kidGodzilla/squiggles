@@ -580,8 +580,11 @@ function setView(v, who, nav) {
   if (v === 'team') { renderTeam(); loadHumans(); }
   if (v === 'calendar') loadCal();
   if (v === 'settings') { if (typeof renderSettings === 'function') renderSettings(); loadHumans(); }
-  // Entering an office puts the cursor in its chat (t188). Not on touch screens: it would pop the keyboard.
-  if ((v === 'lead' || v === 'one') && matchMedia('(pointer: fine)').matches) requestAnimationFrame(() => document.querySelector(`#cw-${S.officeIds[0]} textarea`)?.focus());
+  focusOffice();
+}
+// Entering an office puts the cursor in its chat (t188), also after Join on a page opened on one (t1206). Not on touch screens: it would pop the keyboard.
+function focusOffice() {
+  if ((B.view === 'lead' || B.view === 'one') && matchMedia('(pointer: fine)').matches) requestAnimationFrame(() => document.querySelector(`#cw-${S.officeIds[0]} textarea`)?.focus());
 }
 // Phone bottom bar (t154): More opens Team, Calendar and Goals above the bar.
 const moreTabs = (on) => { $('.tabs').classList.toggle('open', on); $('.tabs .tmore').setAttribute('aria-expanded', String(on)); };

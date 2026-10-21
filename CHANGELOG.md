@@ -77,6 +77,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - The lead's "Handled." replies fold with the reports they answer into one line that opens to list them.
 
 ### Fixed
+- Opening the lead's office or a 1:1, including after Join, puts the cursor in its chat on desktop.
 - The meeting presenters example uses placeholder names.
 - With tailnet sharing off in config, the Sharing settings tab is hidden; before, it still showed when opened.
 - Codex squiggles no longer show idle mid-turn, so wakes aren't sent into a running turn.
