@@ -39,9 +39,18 @@ const TTS_DIR = path.join(RUNS, 'tts');
 for (const d of [SQ, RUNS, MEDIA, TTS_DIR]) fs.mkdirSync(d, { recursive: true });
 // Run by the login item (t1154)? Squiggles inherit XPC_SERVICE_NAME, so a server they start must also not be launchd's child.
 const LAUNCHD = process.env.XPC_SERVICE_NAME === 'local.squiggles.server' && process.ppid === 1;
+// Every exit says why in runs/shutdowns.log (t1293). Signals can't name their sender, so the parent is logged with it.
+const SHUTDOWNS = path.join(RUNS, 'shutdowns.log');
+let exitCause = '';
+function logExit(cause) {
+  if (exitCause) return; exitCause = cause;
+  try { fs.appendFileSync(SHUTDOWNS, `${new Date().toISOString()} pid ${process.pid} ${LAUNCHD ? 'login item' : `hand start, parent ${process.ppid}`}: ${cause}\n`); } catch {}
+}
+process.on('exit', (code) => logExit(`exit ${code}, cause not recorded`));
+process.on('uncaughtException', (e) => { logExit(`crash: ${String(e?.stack || e).split('\n').slice(0, 3).join(' | ')}`); console.error(e); process.exit(1); });
 // After Quit (runs/quit), the login item doesn't bring the server back; Squiggles.app deletes the file, or a hand start does.
 if (fs.existsSync(path.join(RUNS, 'quit'))) {
-  if (LAUNCHD) { try { execFileSync('launchctl', ['bootout', `gui/${process.getuid()}/local.squiggles.server`]); } catch {} process.exit(0); }
+  if (LAUNCHD) { logExit('quit file present at start, login item unloaded'); try { execFileSync('launchctl', ['bootout', `gui/${process.getuid()}/local.squiggles.server`]); } catch {} process.exit(0); }
   fs.rmSync(path.join(RUNS, 'quit'), { force: true });
 }
 
@@ -575,7 +584,7 @@ function broadcast(id, ev) {
 
 // Restart without killing anyone mid-turn: wait until nobody is working, then exit; the login item starts the server again.
 // Started by hand (no login item), start the replacement ourselves; it waits for this one to free the port.
-let restartPending = false, quitting = false;
+let restartPending = false, quitting = false, restartBy = '';
 const supervised = process.env.XPC_SERVICE_NAME === 'local.squiggles.server';
 const working = () => [...rt.values()].filter((r) => r.status === 'working' && (r.proc || r.cx)).length;
 function maybeRestart() {
@@ -583,27 +592,28 @@ function maybeRestart() {
   if (quitting) return quitNow();
   broadcast('*room', { k: 'room', action: 'restarting' });
   if (!supervised) spawn(process.execPath, process.argv.slice(1), { detached: true, stdio: 'inherit', env: { ...process.env, SQUIGGLES_RESPAWN: '1' } }).unref();
-  shutdown(0);
+  shutdown(0, false, `restart by ${restartBy || 'unknown'}${supervised ? '' : ', replacement started'}`);
 }
 // Quit (t1154): every squiggle process and the server end, and the login item stays off until Squiggles.app is opened
 // (it deletes runs/quit, then starts the job). Held turns go out on the next start, like a restart's.
 const QUIT = path.join(RUNS, 'quit');
-function quit(now) {
-  restartPending = quitting = true;
+function quit(now, by) {
+  restartBy = by || ''; restartPending = quitting = true;
   if (now || !working()) { quitNow(); return 'quitting now'; }
   return `quitting when ${working()} working turn${working() > 1 ? 's' : ''} finish${working() > 1 ? '' : 'es'}`;
 }
 function quitNow() {
   fs.writeFileSync(QUIT, new Date().toISOString() + '\n');
   broadcast('*room', { k: 'room', action: 'quit' });
-  shutdown(0, true);
+  shutdown(0, true, `quit by ${restartBy || 'unknown'}`);
 }
 // Turns held by a pending restart go out once the new server is up.
 setTimeout(() => {
   const held = persisted['*held'] || []; delete persisted['*held']; saveState();
   for (const h of held) try { send(h.id, h.text, h.from, { replay: true, human: h.human, images: h.images || [] }); } catch (e) { console.error('held', h.id, e.message); }
 }, 3000);
-function shutdown(code, unload) {
+function shutdown(code, unload, cause) {
+  logExit(cause || 'shutdown, cause not recorded');
   for (const r of rt.values()) { if (r.proc) r.proc.kill('SIGTERM'); if (r.cx) r.cx.proc.kill('SIGTERM'); if (r.caff) r.caff.kill(); }
   kokoro.shutdown(); saveState();
   // KeepAlive would start a quit server again; unloading the job (which also ends this process) keeps it off.
@@ -1048,8 +1058,8 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/share') return json(res, req.method === 'POST' ? await share(!!(await body(req, res)).on) : await shareStatus());
     if (url.pathname === '/api/inbox') return json(res, { ...drop.list(), dir: path.join(DATA, 'inbox').replace(os.homedir(), '~') });
     if (url.pathname === '/api/limit') return json(res, { until: limit.until });
-    if (url.pathname === '/api/quit' && req.method === 'POST') return json(res, quit(!!(await body(req, res)).now));
-    if (url.pathname === '/api/restart' && req.method === 'POST') { restartPending = true; setTimeout(maybeRestart, 500); return json(res, 'restarting as soon as nobody is mid-turn'); }
+    if (url.pathname === '/api/quit' && req.method === 'POST') { const b = await body(req, res); return json(res, quit(!!b.now, b.by || 'owner')); }
+    if (url.pathname === '/api/restart' && req.method === 'POST') { restartBy = (await body(req, res)).by || 'owner'; restartPending = true; setTimeout(maybeRestart, 500); return json(res, 'restarting as soon as nobody is mid-turn'); }
     if (url.pathname === '/api/voice') return json(res, kokoro.status());
     // Room controls (radio, voices, chatter, tabs, chat windows) so the lead can do whatever the user can.
     if (url.pathname === '/api/room' && req.method === 'POST') {
@@ -1143,4 +1153,4 @@ const server = http.createServer(async (req, res) => {
 let portTries = process.env.SQUIGGLES_RESPAWN ? 40 : 0; // a respawn waits up to 10s for the old server to exit
 server.on('error', (e) => { if (e.code === 'EADDRINUSE' && portTries-- > 0) setTimeout(() => server.listen(PORT, '127.0.0.1'), 250); else throw e; });
 server.listen(PORT, '127.0.0.1', () => console.log(`Squiggles ${VERSION} on http://127.0.0.1:${PORT}`));
-for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => shutdown(0));
+for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(sig, () => shutdown(0, false, `${sig}, parent ${process.ppid}`));

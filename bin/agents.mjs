@@ -190,7 +190,7 @@ const cmds = {
     const arg = a.slice(1).join(' '), r = await call(`/squiggles/${as}/screen`, { kind: a[0], arg: a[0] === 'file' && !/^[~/]/.test(arg) ? `${process.cwd()}/${arg}` : arg, by: process.env.AGENTS_ID || 'owner' });
     return r.kind === 'off' ? 'screen closed' : `on ${as}'s screen: ${r.title}`;
   },
-  restart: () => call('/restart', {}),
+  restart: () => call('/restart', { by: process.env.AGENTS_ID || 'owner' }),
   upgrade: async () => (await import('./upgrade.mjs')).upgrade(),
   // peers | peer invite [name] | peer join '<code>' | peer cancel | peer add|remove|send | peer on|off (t1171, t1177): lead-to-lead link to another room over the tailnet
   peers: async () => {
@@ -208,7 +208,7 @@ const cmds = {
     throw new Error("peer invite [name] | peer join '<code>' | peer cancel | peer add <name> <url> [key] | peer remove <name> | peer send <name> \"<text>\" | peer on|off");
   },
   // quit [now]: end every squiggle and the server; the login item stays off until Squiggles.app opens it (t1154). Only when the user says.
-  quit: () => call('/quit', { now: a[0] === 'now' }),
+  quit: () => call('/quit', { now: a[0] === 'now', by: process.env.AGENTS_ID || 'owner' }),
   // humans | human add "<name>" [avatar] | human edit <id> name|avatar <value> | human remove <id>
   humans: async () => (await call('/humans')).humans.map((h) => `${h.id}  ${h.name}${h.avatar ? `  ${h.avatar.length > 40 ? 'image' : h.avatar}` : ''}`).join('\n'),
   human: async () => {
