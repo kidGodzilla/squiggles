@@ -19,6 +19,7 @@ import { createSchedule } from './schedule.mjs';
 import { makeGuard, tailnetName } from './guard.mjs';
 import { makePasscode } from './passcode.mjs';
 import { createPeers, fence, checkName } from './peers.mjs';
+import { callerChain } from './caller.mjs';
 
 const home = (p) => String(p || '').replace(/^~(?=\/|$)/, os.homedir());
 // Code (ROOT) is written by git only; the room lives in DATA. See docs/upgrading.md.
@@ -937,6 +938,18 @@ const tailnet = CONFIG.tailnet ? tailnetName(TS) : { get: () => '', seen: () => 
 const refuse = makeGuard(PORT, tailnet.get);
 // Optional room passcode (t913): the page and its files always load (the lock screen asks); everything else needs it.
 const pass = makePasscode({ read: () => roomCfg().passcode, write: (v) => { const c = roomCfg(); if (v) c.passcode = v; else delete c.passcode; fs.writeFileSync(ROOMCFG, JSON.stringify(c, null, 2) + '\n'); } });
+// Gated merges (t1384): the user or the lead, never another squiggle. A squiggle sets `by` and AGENTS_ID itself; it can't
+// choose whose child its shell is, so a caller whose process chain runs through a squiggle's claude process is that squiggle.
+// With a passcode set, anyone else needs an unlocked browser session. Without one, callers outside every squiggle (the
+// user's browser or terminal) may merge; a squiggle's detached process would pass too, so set a passcode to close that.
+async function merger(req, b) {
+  if (pass.session(req)) return { by: String(b.by || 'owner').slice(0, 40) };
+  const procs = new Map([...rt].filter(([, r]) => r.proc?.pid).map(([id, r]) => [r.proc.pid, id]));
+  const id = (await callerChain(req)).map((p) => procs.get(p)).find(Boolean);
+  if (id) return loadSquiggle(id)?.lead ? { by: id } : { error: `${id} can't merge gated work: ${USER} presses Merge on the Merge tab` };
+  if (!pass.status(req).set) return { by: String(b.by || 'owner').slice(0, 40) };
+  return { error: 'Merging gated work needs an unlocked browser: Lock the room from the menu, then unlock it with the passcode' };
+}
 const peers = createPeers(path.join(DATA, 'peers.json'));
 // Off until the user turns it on (room.json peers: true). Off, nothing arrives and nothing pairs.
 const peersOn = () => roomCfg().peers === true;
@@ -1087,7 +1100,11 @@ const server = http.createServer(async (req, res) => {
     if (p[1] === 'merges' && p[2] && p[3] === 'diff') return json(res, await board.mergeDiff(p[2]));
     if (url.pathname === '/api/merges' && req.method === 'POST') {
       const b = await body(req, res);
-      if (b.op === 'merge') return json(res, await board.merge(b.id, b.by));
+      if (b.op === 'merge') {
+        if (!board.gated(b.id)) return json(res, await board.merge(b.id, b.by));
+        const m = await merger(req, b); if (m.error) return json(res, m, 403);
+        return json(res, await board.merge(b.id, m.by));
+      }
       if (b.op === 'back') return json(res, board.mergeBack(b.id, b.note, b.by));
       if (b.op === 'refresh') { const closed = await board.mergeSweep(); return json(res, { closed, merges: await board.merges() }); }
       return json(res, { error: 'op must be merge, back or refresh' }, 400);

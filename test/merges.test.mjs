@@ -88,3 +88,12 @@ test('merge of a task committed straight on the base closes it, no git merge (t1
   assert.equal(execFileSync('git', ['-C', repo, 'rev-list', '--count', 'HEAD'], { encoding: 'utf8' }).trim(), '1');
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test('gated: review tasks in gated goals (and goal-less ones) need the user or the lead (t1384)', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'merges-'));
+  fs.writeFileSync(path.join(dir, 'goals.json'), JSON.stringify({ active: [{ id: 'g', title: 'G', merge: 'gated' }, { id: 'o', title: 'O', merge: 'open' }, { id: 'd', title: 'D' }] }));
+  fs.writeFileSync(path.join(dir, 'tasks.json'), JSON.stringify({ tasks: [{ id: 't1', goal: 'g' }, { id: 't2', goal: 'o' }, { id: 't3', goal: 'd' }, { id: 't4' }] }));
+  const b = createBoard(dir, () => {});
+  assert.deepEqual(['t1', 't2', 't3', 't4', 'nope'].map(b.gated), [true, false, true, true, false]);
+  fs.rmSync(dir, { recursive: true, force: true });
+});

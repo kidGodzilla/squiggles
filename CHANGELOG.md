@@ -12,6 +12,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Settings escapes option values, and squiggle model and effort accept only allowed values.
 - Shared screen reads regular files only, capped in size, and its content isn't saved to the transcript.
 - Passcode limiter: empty codes don't count, and local scripts have their own bucket, so they can't lock out the browser.
+- Gated merges: squiggles other than the lead are refused. With a passcode set, only an unlocked browser or the lead merges.
 
 ### Added
 - Peer rooms (off by default; needs Share the room): leads of two Squiggles rooms can message each other. `peer on`, `peer invite [name]` gives a one-time code for the other room's `peer join '<code>'`, then `peer send <name> "<text>"`. Incoming messages need the pair's key and reach the lead fenced as untrusted.

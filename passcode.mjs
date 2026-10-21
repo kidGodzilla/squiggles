@@ -83,5 +83,7 @@ export function makePasscode({ read, write, now = () => Date.now() }) {
     throw err('op: unlock, lock, set, clear, local or status');
   }
 
-  return { ok, status, op };
+  // Gated merges (t1384): a live unlocked session cookie, i.e. a browser that typed the passcode. False when none is set.
+  const session = (req) => { const p = cfg(); return !!p?.hash && hasSession(req, p); };
+  return { ok, status, op, session };
 }

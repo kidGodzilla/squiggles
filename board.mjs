@@ -398,6 +398,8 @@ export function createBoard(root, onChange, { onConflict } = {}) {
     }
     return list.filter((r) => !sent.includes(r.id));
   }
+  // Merging this task needs the user or the lead (t1384). No task: board.merge says so.
+  const gated = (id) => { const t = tasks().find((x) => x.id === id); return !!t && (goalOf(t.goal)?.merge || 'gated') === 'gated'; };
   function mergeTask(id) {
     const t = tasks().find((x) => x.id === id);
     if (!t) throw new Error(`no task ${id}`);
@@ -488,5 +490,5 @@ export function createBoard(root, onChange, { onConflict } = {}) {
     return taskOp({ op: 'move', id, status: 'doing', note: `sent back${by ? ` by ${by}` : ''}: ${String(note).trim()}` });
   }
 
-  return { goals, tasks, goalOp, taskOp, suggestionNews, merges, mergeSweep, mergeDiff, merge, mergeBack, worktrees, orphanNotes, TIERS, STATUSES, MERGE };
+  return { goals, tasks, goalOp, taskOp, suggestionNews, merges, mergeSweep, mergeDiff, merge, gated, mergeBack, worktrees, orphanNotes, TIERS, STATUSES, MERGE };
 }
