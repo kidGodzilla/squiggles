@@ -48,6 +48,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Shared prompt: no routine deploy or self-check chores in review notes or needs; checking your own work after a merge is the squiggle's job.
 - Merge merges every goal repo carrying the task's branch (Repo shows "api + web"; detail lists "Also merges"). `repo:branch` accepts a goal repo's bare name.
 ### Changed
+- Squiggle prompt: a reviewer's Ship or sign-off approves a change but is never a go to merge; only the user's word is.
 - More menu: Quit sits in its own group; with squiggles working, Quit when they finish is the default.
 - A Codex usage limit no longer pauses wakes: the turn ends and the next wake tries again. `limit` shows the day as well as the time.
 - The bottom speaker caption shows only replies to you, blockers and presentations, not idle chatter.
