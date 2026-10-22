@@ -23,3 +23,13 @@ test('goal edit refuses an empty title (t1030)', () => {
   assert.equal(b.goals().active[0].title, 'Security');
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test('goal due: real dates only, clear removes it', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'goals-'));
+  const b = createBoard(dir, () => {});
+  const g = b.goalOp({ op: 'add', title: 'Launch', tier: 'active' });
+  assert.equal(b.goalOp({ op: 'edit', id: g.id, due: '2028-02-29' }).due, '2028-02-29');
+  for (const bad of ['2026-02-30', '2026-04-31', '2026-13-01', 'tomorrow']) assert.throws(() => b.goalOp({ op: 'edit', id: g.id, due: bad }), /YYYY-MM-DD/, bad);
+  assert.equal(b.goalOp({ op: 'edit', id: g.id, due: 'clear' }).due, undefined);
+  fs.rmSync(dir, { recursive: true, force: true });
+});

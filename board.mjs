@@ -128,9 +128,9 @@ export function createBoard(root, onChange, { onConflict } = {}) {
     // An area (t977) is an ongoing responsibility with no finish line; a goal finishes.
     if (kind !== undefined && !['goal', 'area'].includes(kind)) throw new Error('kind must be goal or area');
     if (merge !== undefined && !MERGE.includes(merge)) throw new Error(`merge must be one of ${MERGE.join(', ')}`);
-    // Due (t83): YYYY-MM-DD shows on the goal card and the calendar; '' or clear removes it.
+    // Due (t83): YYYY-MM-DD shows on the goal card and the calendar; '' or clear removes it. It must round-trip: Date.parse reads Feb 30 as Mar 2.
     if (due === 'clear') due = '';
-    if (due && !(/^\d{4}-\d{2}-\d{2}$/.test(due) && !isNaN(Date.parse(due)))) throw new Error('due must be YYYY-MM-DD or clear');
+    if (due && !(/^\d{4}-\d{2}-\d{2}$/.test(due) && !isNaN(Date.parse(due)) && new Date(due).toISOString().slice(0, 10) === due)) throw new Error('due must be YYYY-MM-DD or clear');
     if (op === 'add') {
       if (!title) throw new Error('a goal needs a title');
       const goal = { id: slug(id || title), title, last_confirmed: today(), ...(owner ? { owner } : {}), ...(note ? { note } : {}), ...(repos?.length ? { repos } : {}), merge: merge || 'gated' };
