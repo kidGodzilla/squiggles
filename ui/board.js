@@ -312,7 +312,14 @@ function renderMerges() {
       <div class="macts mdacts">${m.owner ? `<button data-a="owner">Discuss with ${esc(ownerName(m.owner))}</button>` : ''}${acts}</div></div></td></tr>` : ''}`;
   };
   $('#mq').innerHTML = `<table class="mtab"><thead><tr><th class="mid">Task</th><th>Title</th><th class="mrepo">Repo</th><th class="mab">Commits</th><th class="mres">Test result</th><th class="mown">Owner</th><th></th></tr></thead><tbody>${list.map(row).join('')}</tbody></table>` + afterHtml() + worktreesHtml();
+  fitDetail();
 }
+// An open row spans only the visible columns: spanning hidden ones adds columns that squeeze Title.
+function fitDetail() {
+  const n = [...document.querySelectorAll('#mq .mtab thead th')].filter((th) => getComputedStyle(th).display !== 'none').length;
+  document.querySelectorAll('#mq .mdet > td').forEach((td) => { td.colSpan = n || 7; });
+}
+addEventListener('resize', fitDetail);
 // The user's steps around the button (t766 needs, t1182 after), ticked here or with task needs|after <id> done <n>.
 // Only the checkbox ticks: clicking the text is reading it (t1366).
 const stepsHtml = (l, a, h) => l?.length ? `<div class="mneeds"><h5>${h}${l.some((x) => !x.done) ? '' : ': all done'}</h5>${l.map((x, i) => `<div class="mstep ${x.done ? 'done' : ''}"><label class="mtick"><input type="checkbox" data-a="${a}" data-n="${i + 1}" ${x.done ? 'checked' : ''} aria-label="${x.done ? 'Not done' : 'Done'}: ${esc(x.t)}" title="${x.done ? 'Not done' : 'Mark done'}"></label><span>${esc(x.t)}</span></div>`).join('')}</div>` : '';
