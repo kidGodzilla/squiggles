@@ -18,6 +18,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Changing, clearing or loosening a set passcode needs the current one, in Settings and the CLI.
 
 ### Added
+- Goals: click a column heading or Areas to fold it to its heading and count; each browser remembers. CLI: `room fold|unfold active|hold|next|done|areas`.
 - Every server exit writes its cause to `runs/shutdowns.log`: restart or quit and who asked, the signal and parent, or the crash.
 - Peer rooms (off by default; needs Share the room): leads of two Squiggles rooms can message each other. `peer on`, `peer invite [name]` gives a one-time code for the other room's `peer join '<code>'`, then `peer send <name> "<text>"`. Incoming messages need the pair's key and reach the lead fenced as untrusted.
 - Settings > Sharing > Peers: turn linking on, invite, paste a code, see and remove peers.

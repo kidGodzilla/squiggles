@@ -1,5 +1,6 @@
 // Goals (whiteboard) and Tasks (cork board), each in its own tab. Shares state with room.js (S, api, esc, avatarSVG, openChat).
 const B = { goals: { active: [], hold: [], todo: [], done: [] }, tasks: [], fresh: new Set(), seen: false, view: 'room',
+  gfold: (() => { try { return new Set(JSON.parse(localStorage.agentsGoalFold || '[]')); } catch { return new Set(); } })(),
   gq: '', tq: '', tgoal: '', towner: '', tshow: 'open', tidy: (() => { try { return localStorage.agentsTidy !== '0'; } catch { return true; } })() };
 const TIER_NAMES = { active: 'Active', hold: 'On hold', todo: 'Next up', done: 'Done' };
 const COLS = [['todo', 'To do'], ['doing', 'Doing'], ['review', 'Review'], ['blocked', 'Blocked'], ['done', 'Done']];
@@ -37,15 +38,24 @@ const isArea = (g) => g.kind === 'area';
 const openCount = (id) => B.tasks.filter((t) => t.goal === id && t.status !== 'done').length;
 // Areas strip shows short names: 'SEO: example.com' is SEO, 'Personal site: example.com' is example.com. The tooltip keeps the full title.
 const areaName = (t = '') => { const [a, b] = t.split(/:\s+/); t = (b && a.length > 4 ? b : a) || t; return !t || t.includes('.') ? t : t[0].toUpperCase() + t.slice(1); };
+// Folding (t1217): a column heading or Areas folds that column, remembered per browser. CLI: room fold|unfold <column>.
+const FOLDS = ['active', 'hold', 'todo', 'done', 'areas'];
+function foldGoals(tier, on = !B.gfold.has(tier)) {
+  tier = tier === 'next' ? 'todo' : tier; if (!FOLDS.includes(tier)) return;
+  if (on) B.gfold.add(tier); else B.gfold.delete(tier);
+  try { localStorage.agentsGoalFold = JSON.stringify([...B.gfold]); } catch {} renderGoals();
+}
+const foldHead = (tier, name, n) => `<button class="gfold" type="button" data-fold="${tier}" aria-expanded="${!B.gfold.has(tier)}" title="${B.gfold.has(tier) ? 'Show' : 'Fold'} ${name}"><span class="chev${B.gfold.has(tier) ? '' : ' on'}"><svg viewBox="0 0 12 12" width="12" height="12"><path d="M4.5 2.5 8 6l-3.5 3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>${name}${n == null ? '' : `<small>${n}</small>`}</button>`;
 function renderGoals() {
   const q = B.gq.toLowerCase(), found = (g) => hit(q, g.title, g.note, ownerName(g.owner)); let shown = 0;
   const areas = allGoals().filter(isArea).sort((a, b) => openCount(b.id) - openCount(a.id)), aShown = areas.filter(found);
   $('#areas').hidden = !aShown.length;
-  $('#areas').innerHTML = `<h3>Areas</h3>` + aShown.map((g, i) => { const n = openCount(g.id);
+  $('#areas').classList.toggle('folded', B.gfold.has('areas'));
+  $('#areas').innerHTML = `<h3>${foldHead('areas', 'Areas', B.gfold.has('areas') ? aShown.length : null)}</h3>` + (B.gfold.has('areas') ? [] : aShown).map((g, i) => { const n = openCount(g.id);
     return `<button class="area" type="button" data-goal="${esc(g.id)}" title="${esc(g.title)}${g.owner ? `, ${esc(ownerName(g.owner))}` : ''}">${g.owner && S.sq[g.owner] ? face(g.owner, 'ar' + i + '_') : ''}<span class="an">${hl(areaName(g.title), q)}</span><span class="ac ${n ? '' : 'none'}">${n ? `${n} open` : 'Nothing open'}</span></button>`; }).join('');
   $('#wbcols').innerHTML = Object.entries(TIER_NAMES).map(([tier, name]) => {
     const all = B.goals[tier].filter((g) => !isArea(g)), list = all.filter(found); shown += list.length;
-    return `<div class="wbcol ${tier}" data-tier="${tier}"><h3>${name}<small>${all.length}</small></h3><div class="glist">
+    return `<div class="wbcol ${tier}${B.gfold.has(tier) ? ' folded' : ''}" data-tier="${tier}"><h3>${foldHead(tier, name, all.length)}</h3><div class="glist">
       ${list.map((g) => {
         const stale = tier === 'active' && daysSince(g.last_confirmed) >= STALE_DAYS;
         const open = openCount(g.id);
@@ -55,6 +65,8 @@ function renderGoals() {
       }).join('')}
       ${tier !== 'done' ? `<button class="addg" data-addgoal="${tier}">+ add a goal</button>` : ''}</div></div>`;
   }).join('');
+  const cols = (w) => Object.keys(TIER_NAMES).map((t) => (B.gfold.has(t) ? 'max-content' : w)).join(' ');
+  $('#wbcols').style.setProperty('--gcols', cols('minmax(0, 1fr)')); $('#wbcols').style.setProperty('--gcols-m', cols('220px'));
   const goals = allGoals().length - areas.length, both = `${goals} goal${goals === 1 ? '' : 's'}${areas.length ? `, ${areas.length} area${areas.length === 1 ? '' : 's'}` : ''}`;
   $('#gcount').textContent = q ? `${shown + aShown.length} of ${both}` : both;
 }
@@ -117,6 +129,7 @@ function noteHtml(t) {
     ${t.kind === 'suggestion' ? sugHtml(t) : ''}${t.branch ? `<div class="nb" title="Branch">${esc(branchOf(t))}</div>` : ''}${t.split ? '<div class="nsplit">Needs splitting</div>' : ''}${subLine(t)}
     <div class="nf">${t.owner && S.sq[t.owner] ? `<span class="nown" data-owner="${esc(t.owner)}" title="Discuss with ${esc(ownerName(t.owner))}">${face(t.owner, 'nf' + t.id + '_')}</span>` : ''}<span class="age" title="Last confirmed ${esc(t.confirmed)}">${stale ? `${ago(t.confirmed)} old` : ago(t.created)}</span>${g ? `<span class="ng">${esc(g.title)}</span>` : ''}</div></div>`;
 }
+document.addEventListener('click', (e) => { const f = e.target.closest('[data-fold]'); if (f) foldGoals(f.dataset.fold); });
 $('#gq').oninput = (e) => { B.gq = e.target.value; renderGoals(); syncUrl(); };
 $('#tq').oninput = (e) => { B.tq = e.target.value; renderTasks(); syncUrl(); };
 $('#tgoal').onchange = (e) => { B.tgoal = e.target.value; renderTasks(); syncUrl(); };
