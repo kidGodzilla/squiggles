@@ -19,6 +19,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Changing, clearing or loosening a set passcode needs the current one, in Settings and the CLI.
 
 ### Added
+- A blocked note saying "for review <meeting id or title>" joins that meeting's agenda under "Deferred here" (listing, calendar, wake message, meeting view).
 - Shared screen plays videos (`screen file` with .mp4, .m4v, .mov or .webm): it fills the share area, the server streams the file and seeking works.
 - Goal due dates: set in the goal editor or `goal due <id> <YYYY-MM-DD>|clear`; cards say days left, or overdue in red.
 - Goals: click a column heading or Areas to fold it to its heading and count; each browser remembers. CLI: `room fold|unfold active|hold|next|done|areas`.

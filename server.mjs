@@ -665,7 +665,16 @@ setInterval(() => {
 // ---------- meetings: at the start time, wake the attendees with the agenda and open the meeting view ----------
 // One meeting at a time; it closes at its end time (or `meeting end`). Started occurrences are remembered so a restart doesn't repeat them.
 const meetingNow = () => persisted['*meeting'] || null;
+// Deferred questions (t1529): a blocked note saying "for review <meeting id or title>" joins that meeting's agenda.
+function withDeferred(m) {
+  let ts = []; try { ts = board.tasks(); } catch {}
+  const keys = [m.id, m.title].filter(Boolean).map((k) => `for review ${String(k).toLowerCase()}`);
+  const d = ts.filter((t) => t.status === 'blocked' && keys.some((k) => (t.note || '').toLowerCase().includes(k)));
+  if (!d.length) return m;
+  return { ...m, agenda: `${m.agenda ? `${m.agenda}\n` : ''}Deferred here:\n${d.map((t) => `- ${t.id} ${t.title}${t.owner ? ` (${t.owner})` : ''}`).join('\n')}` };
+}
 function startMeeting(m, by = 'calendar') {
+  m = withDeferred(m);
   if (meetingNow()) throw new Error(`${meetingNow().title} is still on: end it first`);
   const names = m.attendees.map((id) => loadSquiggle(id)?.name || id), pres = (m.presenters || []).filter((id) => m.attendees.includes(id));
   const showtell = pres.length && meetings.all().find((x) => x.id === m.id)?.showtell;
@@ -1104,7 +1113,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (url.pathname === '/api/meetings' && req.method === 'GET') {
       const days = Math.min(366, Number(url.searchParams.get('days')) || 7), from = url.searchParams.get('from') ? new Date(url.searchParams.get('from')) : new Date();
-      return json(res, { meetings: meetings.all(), upcoming: markPast(meetings.upcoming(from, new Date(from.getTime() + days * 864e5)), new Set(persisted['*started'] || []), readText(path.join(RUNS, 'meetings.log'))), current: meetingNow() });
+      return json(res, { meetings: meetings.all(), upcoming: markPast(meetings.upcoming(from, new Date(from.getTime() + days * 864e5)), new Set(persisted['*started'] || []), readText(path.join(RUNS, 'meetings.log'))).map((m) => (m.past ? m : withDeferred(m))), current: meetingNow() });
     }
     if (url.pathname === '/api/meetings' && req.method === 'POST') {
       const b = await body(req, res);
