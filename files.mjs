@@ -44,7 +44,7 @@ export function createFiles({ root, extra = {}, tasks = () => [] }) {
   }
   // The absolute path for /files/@<src>/<rel>, or null if it leaves the source folder.
   function resolve(src, rel) {
-    const dir = SOURCES[src]; if (!dir) return null;
+    if (!Object.hasOwn(SOURCES, src)) return null; const dir = SOURCES[src];
     const full = path.resolve(dir, rel);
     let real = ''; try { real = fs.realpathSync(full); } catch { return null; }
     const base = fs.realpathSync(dir);

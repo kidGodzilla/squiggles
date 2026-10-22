@@ -43,4 +43,5 @@ test('resolve stays inside its source', () => {
   assert.equal(f.resolve('research', '../../secret.txt'), null);
   assert.equal(f.resolve('files', '.meta.json'), null);
   assert.equal(f.resolve('nope', 'x'), null);
+  assert.equal(f.resolve('constructor', 'x'), null); assert.equal(f.resolve('__proto__', 'x'), null);
 });
