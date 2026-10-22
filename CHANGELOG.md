@@ -82,6 +82,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - The lead's "Handled." replies fold with the reports they answer into one line that opens to list them.
 
 ### Fixed
+- A dropped task's id is never handed out again; tasks.json keeps the highest id issued.
 - Merge tab between 760 and 1100px wide: opening a row no longer squeezes the titles.
 - Merge tab: clicking a step's text no longer ticks it; only the checkbox does. Clicking an After merging box shows its full title.
 - The Team tab puts the cursor in its search on desktop, unless you're typing in a chat.
@@ -113,6 +114,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - The scheduler staggers wakes per provider, 2 minutes apart (was 10 minutes across all).
 
 ### Fixed
+- A dropped task's id is never handed out again; tasks.json keeps the highest id issued.
 - Merge tab between 760 and 1100px wide: opening a row no longer squeezes the titles.
 - Installed on iPhone, the header is no longer blurred under the status bar.
 - Settings at 390: passcode buttons stay on one line, selects are 44px on touch, and a refused default puts the select back.

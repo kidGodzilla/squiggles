@@ -107,7 +107,10 @@ export function createBoard(root, onChange, { onConflict } = {}) {
   const tasks = () => read(TASKS, { tasks: [] }).tasks;
   const write = (f, v) => { fs.writeFileSync(f, JSON.stringify(v, null, 2) + '\n'); };
   const saveGoals = (g) => write(GOALS, g);
-  const saveTasks = (t) => write(TASKS, { tasks: t });
+  // Ids never come back (t1551): tasks.json keeps the highest number ever handed out, so a dropped task's id stays retired.
+  const num = (x) => parseInt(String(x.id).slice(1), 10) || 0;
+  const lastId = (t) => Math.max(Number(read(TASKS, {}).last) || 0, ...t.map(num), 0);
+  const saveTasks = (t) => write(TASKS, { last: lastId(t), tasks: t });
 
   // Agents edit these files directly too: any change on disk refreshes every open board.
   let timer;
@@ -157,13 +160,13 @@ export function createBoard(root, onChange, { onConflict } = {}) {
       if (!String(title || '').trim()) throw new Error('a suggestion needs one line saying what you noticed');
       const same = t.find((x) => x.kind === 'suggestion' && (x.status !== 'done' || x.decision === 'declined') && similar(x.title, title));
       if (same) { if (by && by !== same.by && !(same.also || []).includes(by)) { same.also = [...(same.also || []), by]; saveTasks(t); } return { ...same, dup: true }; }
-      const n = t.reduce((m, x) => Math.max(m, parseInt(String(x.id).slice(1), 10) || 0), 0) + 1;
+      const n = lastId(t) + 1;
       const task = { id: 't' + n, kind: 'suggestion', title: String(title).trim(), status: 'todo', created: today(), confirmed: today(), ...(by ? { by } : {}), ...(evidence ? { evidence: String(evidence).trim() } : {}) };
       t.push(task); saveTasks(t); return task;
     }
     if (op === 'add') {
       if (!title) throw new Error('a task needs a title');
-      const n = t.reduce((m, x) => Math.max(m, parseInt(String(x.id).slice(1), 10) || 0), 0) + 1;
+      const n = lastId(t) + 1;
       const task = { id: 't' + n, title, status: STATUSES.includes(status) ? status : 'todo', created: today(), confirmed: today(),
         ...(goal ? { goal } : {}), ...(owner ? { owner } : {}), ...(note ? { note } : {}), ...(by ? { by } : {}), ...(parent ? { parent } : {}), ...(split ? { split: true } : {}) };
       t.push(task); saveTasks(t); return task;
@@ -205,7 +208,7 @@ export function createBoard(root, onChange, { onConflict } = {}) {
       // One note becomes child notes that inherit its goal and owner; the parent stays as the umbrella.
       const list = (titles || []).map((x) => String(x).trim()).filter(Boolean);
       if (!list.length) throw new Error('split needs at least one subtask title');
-      let n = t.reduce((m, x) => Math.max(m, parseInt(String(x.id).slice(1), 10) || 0), 0);
+      let n = lastId(t);
       const kids = list.map((title) => ({ id: 't' + ++n, title, status: 'todo', created: today(), confirmed: today(), parent: task.id,
         ...(task.goal ? { goal: task.goal } : {}), ...(task.owner ? { owner: task.owner } : {}), ...(by ? { by } : {}) }));
       t.push(...kids); delete task.split; task.confirmed = today();
