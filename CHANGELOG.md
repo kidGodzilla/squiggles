@@ -78,6 +78,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - The lead's "Handled." replies fold with the reports they answer into one line that opens to list them.
 
 ### Fixed
+- Merge tab: clicking a step's text no longer ticks it; only the checkbox does. Clicking an After merging box shows its full title.
 - The Team tab puts the cursor in its search on desktop, unless you're typing in a chat.
 - Opening the lead's office or a 1:1, including after Join, puts the cursor in its chat on desktop.
 - The meeting presenters example uses placeholder names.

@@ -269,7 +269,7 @@ async function loadMerges() {
   const w = await wp; B.mloaded = true; B.merges = m; B.worktrees = Array.isArray(w) ? w : []; renderMerges();
 }
 const repoName = (p) => String(p || '').replace(/\/+$/, '').split('/').pop();
-B.mopen = new Set();
+B.mopen = new Set(); B.aopen = new Set();
 function renderMerges() {
   const list = B.merges, g = (id) => goalById(id)?.title || id || '', stale = list.filter((m) => m.stale).length;
   $('#mcount').textContent = list.length ? `${list.length} branch${list.length > 1 ? 'es' : ''} waiting${stale ? `, ${stale} stale` : ''}` : 'Nothing waiting';
@@ -301,11 +301,12 @@ function renderMerges() {
   $('#mq').innerHTML = `<table class="mtab"><thead><tr><th class="mid">Task</th><th>Title</th><th class="mrepo">Repo</th><th class="mab">Commits</th><th class="mres">Test result</th><th class="mown">Owner</th><th></th></tr></thead><tbody>${list.map(row).join('')}</tbody></table>` + afterHtml() + worktreesHtml();
 }
 // The user's steps around the button (t766 needs, t1182 after), ticked here or with task needs|after <id> done <n>.
-const stepsHtml = (l, a, h) => l?.length ? `<div class="mneeds"><h5>${h}${l.some((x) => !x.done) ? '' : ': all done'}</h5>${l.map((x, i) => `<label class="${x.done ? 'done' : ''}"><input type="checkbox" data-a="${a}" data-n="${i + 1}" ${x.done ? 'checked' : ''}><span>${esc(x.t)}</span></label>`).join('')}</div>` : '';
+// Only the checkbox ticks: clicking the text is reading it (t1366).
+const stepsHtml = (l, a, h) => l?.length ? `<div class="mneeds"><h5>${h}${l.some((x) => !x.done) ? '' : ': all done'}</h5>${l.map((x, i) => `<div class="mstep ${x.done ? 'done' : ''}"><label class="mtick"><input type="checkbox" data-a="${a}" data-n="${i + 1}" ${x.done ? 'checked' : ''} aria-label="${x.done ? 'Not done' : 'Done'}: ${esc(x.t)}" title="${x.done ? 'Not done' : 'Mark done'}"></label><span>${esc(x.t)}</span></div>`).join('')}</div>` : '';
 // Merged tasks with after-merge steps left (t1182). CLI: merges lists them too.
 function afterHtml() {
   const t = B.tasks.filter((x) => x.status === 'done' && x.after?.some((n) => !n.done)); if (!t.length) return '';
-  return `<h3 class="wth">After merging <span>${t.length}</span></h3><div class="mafter">${t.map((x) => `<div class="mabox" data-merge="${esc(x.id)}">${stepsHtml(x.after, 'after', `${esc(x.id)} ${esc(x.title)}`)}</div>`).join('')}</div>`;
+  return `<h3 class="wth">After merging <span>${t.length}</span></h3><div class="mafter">${t.map((x) => `<div class="mabox ${B.aopen.has(x.id) ? 'open' : ''}" data-merge="${esc(x.id)}">${stepsHtml(x.after, 'after', `${esc(x.id)} ${esc(x.title)}`)}</div>`).join('')}</div>`;
 }
 // Worktrees (t769): every extra worktree in the goals' repos and the task that owns it. CLI: worktrees.
 function worktreesHtml() {
@@ -362,7 +363,9 @@ $('#mrefresh').onclick = async () => {
 $('#mergeView').onclick = async (e) => {
   // Buttons in the expanded row (the only ones on phone) belong to the row above it.
   const a = e.target.closest('[data-a]')?.dataset.a, det = e.target.closest('.mdet'), row = e.target.closest('[data-merge]') || (a && det?.previousElementSibling); if (!row) return;
-  if (!a) { if (e.target.closest('button,a,label,.mabox')) return; const id = row.dataset.merge; B.mopen.has(id) ? B.mopen.delete(id) : B.mopen.add(id); return renderMerges(); }
+  // An After merging box opens to its full title (t1366); selecting text to read it doesn't toggle.
+  if (!a && e.target.closest('.mabox')) { if (e.target.closest('label') || getSelection().toString()) return; const id = row.dataset.merge; B.aopen.has(id) ? B.aopen.delete(id) : B.aopen.add(id); return renderMerges(); }
+  if (!a) { if (e.target.closest('button,a,label')) return; const id = row.dataset.merge; B.mopen.has(id) ? B.mopen.delete(id) : B.mopen.add(id); return renderMerges(); }
   const id = row.dataset.merge, m = B.merges.find((x) => x.id === id);
   if (a === 'diff') return openDiff(id);
   // The owner opens a 1:1 with the item in the message box (t627). CLI: room chat <id> "<text>".
