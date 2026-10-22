@@ -17,7 +17,7 @@
 <body class="locked">
 <header>
   <div class="brand"><span class="logo">〰</span><b>Squiggles</b></div>
-  <nav class="tabs"><button data-view="room" class="on">Room</button><button data-view="lead" title="The lead's office: just the two of you, everyone else quiet">Lead</button><button data-view="team" title="Everyone on the team: what they care about, what they guard, how they run">Team</button><button data-view="calendar" title="Meetings with squiggles and goal due dates">Calendar</button><button data-view="goals">Goals</button><button data-view="tasks">Tasks</button><button data-view="merge" title="Branches waiting for you to merge">Merge</button><button type="button" class="tmore" aria-expanded="false">More</button></nav>
+  <nav class="tabs"><button data-view="room" class="on">Room</button><button data-view="lead" title="The lead's office: just the two of you, everyone else quiet">Lead</button><button data-view="team" title="Everyone on the team: what they care about, what they guard, how they run">Team</button><button data-view="calendar" title="Meetings with squiggles and goal due dates">Calendar</button><button data-view="goals">Goals</button><button data-view="tasks">Tasks</button><button data-view="merge" title="Branches waiting for you to merge">Merge</button><button data-view="files" title="Shared files: your drops and the research folders">Files</button><button type="button" class="tmore" aria-expanded="false">More</button></nav>
   <div id="summary"></div>
   <div class="sp"></div>
   <button class="chip me" id="meBtn" hidden title="Who is using this browser"></button>
@@ -157,6 +157,10 @@
     <div class="btool"><span id="mcount"></span><span class="sp"></span><button class="chip" id="mmeet">Merge review now</button><button class="chip" id="mrefresh">Refresh</button></div>
     <div class="mq" id="mq"></div>
   </section>
+  <section id="filesView" class="bview">
+    <div class="btool"><input id="fq" type="search" placeholder="Search names and text"><span id="fcount"></span><span class="sp"></span><select id="ffor" title="Put a note on a squiggle's pile pointing at the file"></select><label class="chip primary" for="fpick">Add files</label><input id="fpick" type="file" multiple hidden></div>
+    <div class="fl" id="flist"></div>
+  </section>
   <div id="pop" class="pop"></div>
 
 </main>
@@ -186,6 +190,7 @@
 <script src="/ui/room.js"></script>
 <script src="/ui/board.js"></script>
 <script src="/ui/settings.js"></script>
+<script src="/ui/files.js"></script>
 <script src="/ui/peers.js"></script>
 </body>
 </html>

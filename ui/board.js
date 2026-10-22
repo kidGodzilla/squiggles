@@ -602,10 +602,10 @@ function setView(v, who, nav) {
   const office = v === 'lead' || v === 'one' || v === 'meeting';
   if (v === 'lead') who = leadId() || who; if (v === 'one' && !who) v = 'room'; if (v === 'meeting') who = meetOrder();
   B.view = v; B.who = who; closePop(); paintMeetOn(); if (v !== 'merge' && B.diff) closeDiff(false);
-  document.body.classList.toggle('v-goals', v === 'goals'); document.body.classList.toggle('v-tasks', v === 'tasks'); document.body.classList.toggle('v-merge', v === 'merge'); document.body.classList.toggle('v-team', v === 'team'); document.body.classList.toggle('v-settings', v === 'settings'); document.body.classList.toggle('v-cal', v === 'calendar');
+  document.body.classList.toggle('v-goals', v === 'goals'); document.body.classList.toggle('v-tasks', v === 'tasks'); document.body.classList.toggle('v-merge', v === 'merge'); document.body.classList.toggle('v-files', v === 'files'); document.body.classList.toggle('v-team', v === 'team'); document.body.classList.toggle('v-settings', v === 'settings'); document.body.classList.toggle('v-cal', v === 'calendar');
   document.body.classList.toggle('v-one', office); document.body.classList.toggle('v-meet', v === 'meeting'); if (v !== 'meeting') document.body.classList.remove('sharing'); document.body.classList.toggle('v-lead', v === 'lead'); if (v === 'lead') loadCall(); setOffice(office ? who : '');
   document.querySelectorAll('.tabs button').forEach((b) => b.classList.toggle('on', b.dataset.view === v));
-  $('.tabs .tmore').classList.toggle('on', ['team', 'calendar', 'goals'].includes(v)); moreTabs(false);
+  $('.tabs .tmore').classList.toggle('on', ['team', 'calendar', 'goals', 'files'].includes(v)); moreTabs(false);
   try { localStorage.agentsView = v === 'one' ? 'one:' + who : v; } catch {}
   // The view lives in the URL (?view=tasks, ?view=one&with=<id>): back, forward, new tabs and copied links (t348).
   const q = viewUrl(v, who);
@@ -614,6 +614,7 @@ function setView(v, who, nav) {
   if (v === 'merge') loadMerges();
   if (v === 'team') { renderTeam(); loadHumans(); }
   if (v === 'calendar') loadCal();
+  if (v === 'files' && typeof loadFiles === 'function') loadFiles();
   if (v === 'settings') { if (typeof renderSettings === 'function') renderSettings(); loadHumans(); }
   focusOffice();
 }
@@ -647,7 +648,7 @@ function viewUrl(v = B.view, who = B.who) {
 // Opening, raising or closing a floating chat updates the URL in place, without a history step.
 function syncUrl() { const q = viewUrl(); if (location.search !== q) history.replaceState(null, '', location.pathname + q); }
 const SET_TABS = ['room', 'characters', 'squiggles', 'people', 'sharing', 'defaults', 'security'], setTab = (t) => (SET_TABS.includes(t) ? t : 'room');
-const VIEWS = ['room', 'lead', 'meeting', 'one', 'team', 'calendar', 'goals', 'tasks', 'merge', 'settings'];
+const VIEWS = ['room', 'lead', 'meeting', 'one', 'team', 'calendar', 'goals', 'tasks', 'merge', 'files', 'settings'];
 function viewFromUrl(search, nav) {
   const q = new URLSearchParams(search), v = q.get('view');
   if (!VIEWS.includes(v)) return false;
@@ -666,7 +667,7 @@ window.addEventListener('popstate', () => {
 setTimeout(() => {
   if (viewFromUrl(URL0, 'replace')) return;
   let v = ''; try { v = localStorage.agentsView || ''; } catch {}
-  if (['goals', 'tasks', 'lead', 'merge', 'team', 'calendar', 'settings'].includes(v)) setView(v, '', 'replace'); else if (v.startsWith('one:')) setView('one', v.slice(4), 'replace');
+  if (['goals', 'tasks', 'lead', 'merge', 'files', 'team', 'calendar', 'settings'].includes(v)) setView(v, '', 'replace'); else if (v.startsWith('one:')) setView('one', v.slice(4), 'replace');
 }, 0);
 loadBoard();
 document.querySelector('.brand').onclick = () => setView('room');
