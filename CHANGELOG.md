@@ -19,6 +19,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Changing, clearing or loosening a set passcode needs the current one, in Settings and the CLI.
 
 ### Added
+- A review branch cut from another branch merges into that branch, not main: detected on `task move <id> review`, shown on the Merge tab (Base, with Change) and in `tasks`; set it with `task base <id> <branch>|auto`. Merge no longer needs the base checked out, only the review branch not checked out.
 - Files: `files [query]` lists the shared drop folder plus `research/` and any `fileSources` folders, newest first, searching names and text; `file add <path> [for <id>]` (never overwrites; `for` puts a note on that squiggle's pile) and `file rm <name>` (drop folder only). Squiggles are told where shared files live.
 - A blocked note saying "for review <meeting id or title>" joins that meeting's agenda under "Deferred here" (listing, calendar, wake message, meeting view).
 - Shared screen plays videos (`screen file` with .mp4, .m4v, .mov or .webm): it fills the share area, the server streams the file and seeking works.

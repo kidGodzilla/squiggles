@@ -97,3 +97,28 @@ test('gated: review tasks in gated goals (and goal-less ones) need the user or t
   assert.deepEqual(['t1', 't2', 't3', 't4', 'nope'].map(b.gated), [true, false, true, true, false]);
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test('a branch cut from another branch merges into that one, not main (t1638)', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'merges-')), repo = path.join(dir, 'repo');
+  const g = (...a) => execFileSync('git', ['-C', repo, ...a], { stdio: 'pipe', env: { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' } }).toString().trim();
+  const commit = (f, m) => { fs.writeFileSync(path.join(repo, f), m); g('add', f); g('commit', '-q', '-m', m); };
+  fs.mkdirSync(repo); g('init', '-q', '-b', 'main'); commit('a', 'base');
+  g('checkout', '-q', '-b', 'splash'); commit('s1', 's1'); commit('s2', 's2');
+  g('checkout', '-q', '-b', 't9-other'); commit('o', 'other task');
+  g('checkout', '-q', '-b', 't5-fix', 'splash'); commit('f', 'fix'); g('checkout', '-q', 'main');
+  fs.writeFileSync(path.join(dir, 'goals.json'), JSON.stringify({ active: [{ id: 'g', title: 'G', merge: 'gated', repos: [repo] }] }));
+  fs.writeFileSync(path.join(dir, 'tasks.json'), JSON.stringify({ tasks: [{ id: 't5', title: 'fix', goal: 'g', status: 'doing' }] }));
+  const b = createBoard(dir, () => {});
+  assert.equal(b.taskOp({ op: 'move', id: 't5', status: 'review', branch: `${repo}:t5-fix` }).base, 'splash');
+  let [m] = await b.merges(); assert.equal(m.base, 'splash'); assert.equal(m.into, 'splash'); assert.equal(m.ahead, 1);
+  assert.equal(b.taskOp({ op: 'base', id: 't5', branch: 'main' }).base, undefined);
+  [m] = await b.merges(); assert.equal(m.base, 'main'); assert.equal(m.ahead, 3);
+  assert.throws(() => b.taskOp({ op: 'base', id: 't5', branch: 'nope' }), /no branch nope/);
+  assert.equal(b.taskOp({ op: 'base', id: 't5', branch: 'auto' }).base, 'splash');
+  const r = await b.merge('t5', 'owner');
+  assert.equal(r.base, 'splash'); assert.match(r.task.note, /^merged into splash/);
+  assert.equal(g('log', '-1', '--format=%s', 'splash'), 'fix'); assert.equal(g('log', '-1', '--format=%s', 'main'), 'base');
+  assert.equal(g('branch', '--list', 't5-fix'), '');
+  assert.throws(() => b.taskOp({ op: 'base', id: 't5', branch: 'auto' }), /branch t5-fix is gone/);
+  fs.rmSync(dir, { recursive: true, force: true });
+});

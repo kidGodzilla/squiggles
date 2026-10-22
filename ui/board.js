@@ -294,8 +294,8 @@ function renderMerges() {
   $('#mcount').textContent = list.length ? `${list.length} branch${list.length > 1 ? 'es' : ''} waiting${stale ? `, ${stale} stale` : ''}` : 'Nothing waiting';
   if (!list.length) { $('#mq').innerHTML = '<div class="empty">Nothing in review. Squiggles put branches here with task move &lt;id&gt; review &lt;branch&gt; "&lt;test result&gt;".</div>' + afterHtml() + worktreesHtml(); return; }
   const row = (m) => {
-    const nc = m.conflicts?.length || 0, open = B.mopen.has(m.id), why = m.error || (nc ? `Conflicts with ${m.base}: send it back` : m.head !== m.base ? `${repoName(m.repo)} is on ${m.head}: check out ${m.base} first` : '');
-    const ab = m.error ? '' : `${m.ahead} ahead${m.behind ? `, ${m.behind} behind` : ''}`, left = (m.needs || []).filter((x) => !x.done).length;
+    const nc = m.conflicts?.length || 0, open = B.mopen.has(m.id), why = m.error || (nc ? `Conflicts with ${m.base}: send it back` : m.head === m.branch ? `${repoName(m.repo)} has ${m.branch} checked out: switch it away first` : '');
+    const ab = m.error ? '' : `${m.ahead} ahead${m.behind ? `, ${m.behind} behind` : ''}${m.into ? ` of ${m.into}` : ''}`, left = (m.needs || []).filter((x) => !x.done).length;
     const acts = `<button data-a="diff" ${m.error ? 'disabled' : ''}>Diff</button><button data-a="back">Send back</button><button class="go" data-a="merge" ${why ? 'disabled' : ''} title="${esc(why || `Merge into ${m.base}, delete the branch, mark done`)}">Merge</button>`;
     return `<tr class="mrow ${open ? 'open' : ''} ${m.error ? 'err' : ''}" data-merge="${esc(m.id)}">
       <td class="mid">${esc(m.id)}${m.stale ? ` <span class="mtag" title="In review ${m.age} days">Stale</span>` : ''}</td>
@@ -311,7 +311,7 @@ function renderMerges() {
       <dl><dt>Goal</dt><dd>${esc(g(m.goal))}</dd><dt>Branch</dt><dd><code>${esc(m.repo)}:${esc(m.branch)}</code></dd>
       ${m.others?.length ? `<dt>Also merges</dt><dd>${m.others.map((o) => `<code>${esc(o.repo)}:${esc(o.branch)}</code>${o.error ? ` ${esc(o.error)}` : `, ${o.ahead} ahead of ${esc(o.base)}`}`).join('<br>')}</dd>` : ''}
       ${nc ? `<dt>Conflicts</dt><dd>${m.conflicts.map((f) => `<code>${esc(f)}</code>`).join(', ')}</dd>` : ''}
-      ${m.error ? '' : `<dt>Base</dt><dd>${esc(m.base)}, ${ab}${m.dirty ? `, ${m.dirty} uncommitted file${m.dirty > 1 ? 's' : ''} in the repo` : ''}</dd>`}
+      ${m.error ? '' : `<dt>Base</dt><dd>${esc(m.base)}${m.into ? ' (the branch it was cut from)' : ''} <button class="quiet mbase" data-a="base" title="Merge into another branch">Change</button>, ${ab}${m.dirty ? `, ${m.dirty} uncommitted file${m.dirty > 1 ? 's' : ''} in the repo` : ''}</dd>`}
       <dt>Test result</dt><dd>${esc(m.error || m.result || 'None on the note')}</dd><dt>In review</dt><dd>since ${esc(m.reviewed || '')} (${m.age <= 0 ? 'today' : `${m.age}d`})${m.owner ? `, by ${esc(ownerName(m.owner))}` : ''}</dd>
       ${m.log?.length ? `<dt>Commits</dt><dd><code class="mlog">${esc(m.log.join('\n'))}</code></dd>` : ''}</dl>
       ${m.desktop || m.compare ? `<p class="mlinks">${m.desktop ? `<a href="${esc(m.desktop)}">Open in GitHub Desktop</a>` : ''}${m.compare ? `<a href="${esc(m.compare)}" target="_blank" rel="noopener">View on GitHub</a>` : m.desktop ? '<span title="The branch is not on GitHub; nobody pushes it from here">Not on GitHub yet</span>' : ''}</p>` : ''}
@@ -352,7 +352,7 @@ function diffHtml(text) {
 const fold = (lines, cls) => `<div class="dfold ${cls}">${lines.length > 5 ? `<pre class="dl">${esc(lines.slice(0, 5).join('\n'))}</pre><pre class="dl dall">${esc(lines.join('\n'))}</pre><button data-a="more" data-n="${lines.length}">Show all ${lines.length}</button>` : `<pre class="dl">${esc(lines.join('\n'))}</pre>`}</div>`;
 async function openDiff(id) {
   const d = await api(`/merges/${encodeURIComponent(id)}/diff`); if (d?.error) return toast(d.error);
-  const m = B.merges.find((x) => x.id === id), why = m && (m.error || (m.head !== m.base ? `${repoName(m.repo)} is on ${m.head}: check out ${m.base} first` : ''));
+  const m = B.merges.find((x) => x.id === id), why = m && (m.error || (m.head === m.branch ? `${repoName(m.repo)} has ${m.branch} checked out: switch it away first` : ''));
   const stat = String(d.stat || '').split('\n').filter(Boolean), sum = stat.pop() || '';
   const box = $('#diffBody');
   box.innerHTML = `<div class="dh"><h2>${esc(d.title)}</h2>${m ? `<button class="go" data-a="dmerge" ${why ? 'disabled' : ''} title="${esc(why || `Merge into ${m.base}, delete the branch, mark done`)}">Merge</button>` : ''}<span class="sp"></span><button data-a="close">Close</button></div>
@@ -401,6 +401,12 @@ $('#mergeView').onclick = async (e) => {
     const note = prompt(`Send "${m.title}" back to ${ownerName(m.owner)}. What should change?`, pre); if (!note || !note.trim()) return;
     const r = await api('/merges', { op: 'back', id, note: note.trim(), by: me().id }); if (r?.error) return toast(r.error);
     toast(`Sent back to ${ownerName(m.owner)}`); return loadMerges();
+  }
+  // CLI: task base <id> <branch>|auto (t1638).
+  if (a === 'base') {
+    const b = prompt(`Merge ${m.branch} into which branch? "auto" picks the one it was cut from.`, m.base); if (!b || !b.trim() || b.trim() === m.base) return;
+    const r = await api('/tasks', { op: 'base', id, branch: b.trim() }); if (r?.error) return toast(r.error);
+    toast(`${id} merges into ${r.base || 'the default branch'}`); return loadMerges();
   }
   if (a === 'merge') return mergeBranch(m, e.target);
   if (a === 'need' || a === 'after') { const r = await api('/tasks', { op: a === 'need' ? 'needs' : 'after', id, act: e.target.checked ? 'done' : 'undo', n: e.target.dataset.n }); if (r?.error) toast(r.error); else if (a === 'after') { const t = B.tasks.find((x) => x.id === id); if (t && r?.id) { t.after = r.after; renderMerges(); } } return a === 'after' ? loadBoard() : loadMerges(); }

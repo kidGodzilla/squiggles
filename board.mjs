@@ -56,6 +56,17 @@ function baseOf(repo) {
   for (const b of ['main', 'master']) if (hasBranch(repo, b)) return b;
   throw new Error(`no main or master branch in ${repo}`);
 }
+// The branch a review branch was cut from (t1638): the local branch leaving the fewest commits to merge, if that is fewer
+// than the default base leaves (a branch off a feature branch must not drag that branch into main). Task branches don't count.
+function detectBase(repo, branch) {
+  const def = baseOf(repo), n = (b) => Number(git(repo, ['rev-list', '--count', `${b}..${branch}`]));
+  let best = def, min = n(def);
+  for (const b of git(repo, ['for-each-ref', '--format=%(refname:short)', 'refs/heads']).split('\n').filter(Boolean)) {
+    if (b === branch || b === def || /^t\d+-/.test(b)) continue;
+    const k = n(b); if (k > 0 && k < min) { best = b; min = k; }
+  }
+  return best;
+}
 const daysSince = (d) => (d ? Math.floor((Date.now() - Date.parse(d + 'T12:00:00')) / 864e5) : 0);
 const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
 
@@ -85,8 +96,8 @@ export function dropWorktrees(repo, branch, paths = []) {
   return out;
 }
 // branch -d, never -D: git refuses if it isn't merged. -d checks against HEAD, so run it where the base is checked out, else in a temp worktree.
-function deleteMerged(repo, branch) {
-  const base = baseOf(repo); if (!branch || branch === base || !hasBranch(repo, branch)) return false;
+function deleteMerged(repo, branch, into) {
+  const base = into || baseOf(repo); if (!branch || branch === base || !hasBranch(repo, branch)) return false;
   if (Number(git(repo, ['rev-list', '--count', `${base}..${branch}`])) > 0) return false;
   const onBase = git(repo, ['worktree', 'list', '--porcelain']).split(/\n\n+/).find((b) => b.match(/^branch (.+)$/m)?.[1] === `refs/heads/${base}`)?.match(/^worktree (.+)$/m)?.[1];
   let tmp;
@@ -225,11 +236,21 @@ export function createBoard(root, onChange, { onConflict } = {}) {
         const spec = branch || (task.repo ? `${task.repo}:${task.branch}` : task.branch);
         const goal = task.goal ? TIERS.flatMap((x) => goals()[x]).find((g) => g.id === task.goal) : null;
         Object.assign(task, resolveBranch(spec, goal)); task.reviewed = today();
+        try { const b = detectBase(task.repo, task.branch); if (b !== baseOf(task.repo)) task.base = b; else delete task.base; } catch {}
       } else if (branch) Object.assign(task, resolveBranch(branch, task.goal ? TIERS.flatMap((x) => goals()[x]).find((g) => g.id === task.goal) : null));
       task.status = status; task.confirmed = today(); if (status === 'done') task.finished = today(); else delete task.finished;
       if (note !== undefined) task.note = note;
       if (status === 'done') retire(task);
     } else if (op === 'confirm') task.confirmed = today();
+    // task base <id> <branch>|auto: the branch the Merge tab merges into; auto re-detects, the default base clears it.
+    else if (op === 'base') {
+      if (!task.repo || !task.branch) throw new Error(`${task.id} has no branch yet`);
+      if (!hasBranch(task.repo, task.branch)) throw new Error(`branch ${task.branch} is gone from ${task.repo}`);
+      const b = branch === 'auto' || !branch ? detectBase(task.repo, task.branch) : String(branch);
+      if (b === task.branch) throw new Error('a branch cannot merge into itself');
+      if (!hasBranch(task.repo, b)) throw new Error(`no branch ${b} in ${task.repo}`);
+      if (b !== baseOf(task.repo)) task.base = b; else delete task.base;
+    }
     // The user's steps around the Merge button, { t, done } each: needs before merging (t766: stacked tasks, deploy
     // order, syncs) and after merging (t1182: e.g. a one-time migration). A squiggle's own checks go on neither.
     else if (op === 'needs' || op === 'after') {
@@ -260,8 +281,8 @@ export function createBoard(root, onChange, { onConflict } = {}) {
   function retire(task) {
     if (!task.repo || (!task.branch && !task.worktrees?.length)) return;
     try {
-      if (task.branch === baseOf(task.repo)) return;
-      const w = dropWorktrees(task.repo, task.branch, task.worktrees || []), gone = !w.kept.length && deleteMerged(task.repo, task.branch);
+      if (task.branch === (task.base || baseOf(task.repo))) return;
+      const w = dropWorktrees(task.repo, task.branch, task.worktrees || []), gone = !w.kept.length && deleteMerged(task.repo, task.branch, task.base);
       task.worktrees = (task.worktrees || []).filter((p) => w.kept.includes(p)); if (!task.worktrees.length) delete task.worktrees;
       if (w.kept.length) task.note = `worktree with uncommitted work kept: ${w.kept.join(', ')}${task.note ? ` — ${task.note}` : ''}`;
       return { ...w, branchDeleted: gone };
@@ -298,11 +319,12 @@ export function createBoard(root, onChange, { onConflict } = {}) {
   // ---------- merge queue: review tasks of gated goals ----------
   const goalOf = (id) => (id ? TIERS.flatMap((x) => goals()[x]).find((g) => g.id === id) : null);
   // One repo's side of a review branch: base, ahead/behind, conflicts, log, links.
-  async function repoInfo(repo, branch, q) {
+  async function repoInfo(repo, branch, q, into) {
     const r = { repo, branch };
     try {
       if (!(await okA(gitA(repo, ['rev-parse', '--verify', '--quiet', `refs/heads/${branch}`])))) throw new Error(`branch ${branch} is gone from ${repo}`);
-      const base = await q(`base ${repo}`, () => baseOfA(repo));
+      const base = into || await q(`base ${repo}`, () => baseOfA(repo));
+      if (into && !(await okA(gitA(repo, ['rev-parse', '--verify', '--quiet', `refs/heads/${into}`])))) throw new Error(`base branch ${into} is gone from ${repo}: task base <id> <branch>|auto`);
       r.base = base; r.head = await q(`head ${repo}`, () => gitA(repo, ['rev-parse', '--abbrev-ref', 'HEAD']));
       r.ahead = Number(await gitA(repo, ['rev-list', '--count', `${base}..${branch}`]));
       r.behind = Number(await gitA(repo, ['rev-list', '--count', `${branch}..${base}`]));
@@ -333,10 +355,10 @@ export function createBoard(root, onChange, { onConflict } = {}) {
   async function mergeInfo(task, q) {
     const goal = goalOf(task.goal), reviewed = task.reviewed || task.confirmed, age = daysSince(reviewed);
     const r = { id: task.id, title: task.title, goal: task.goal, goalTitle: goal?.title || '', owner: task.owner || '', repo: task.repo || '', branch: task.branch || '',
-      result: task.note || '', needs: task.needs || [], after: task.after || [], reviewed, age, stale: age >= 7 };
+      result: task.note || '', ...(task.base ? { into: task.base } : {}), needs: task.needs || [], after: task.after || [], reviewed, age, stale: age >= 7 };
     if (!task.branch) return { ...r, error: 'no branch on the task' };
     if (!task.repo) return { ...r, error: 'no repo on the task: set it with task edit <id> branch repo:branch' };
-    const { repo: _r, branch: _b, ...one } = await repoInfo(task.repo, task.branch, q);
+    const { repo: _r, branch: _b, ...one } = await repoInfo(task.repo, task.branch, q, task.base);
     Object.assign(r, one);
     if (r.error) return r;
     const others = await otherRepos(task, q);
@@ -356,7 +378,7 @@ export function createBoard(root, onChange, { onConflict } = {}) {
     if (!task.repo || !task.branch || !fs.existsSync(expand(task.repo))) return '';
     try {
       if (!(await okA(gitA(task.repo, ['rev-parse', '--verify', '--quiet', `refs/heads/${task.branch}`])))) return 'branch gone';
-      const base = await q(`base ${task.repo}`, () => baseOfA(task.repo));
+      const base = task.base || await q(`base ${task.repo}`, () => baseOfA(task.repo));
       // A branch nobody committed to sits on base too; only a moved branch can have been merged.
       const reflog = (await gitA(task.repo, ['reflog', 'show', '--format=%H', `refs/heads/${task.branch}`])).split('\n').filter(Boolean);
       if (reflog.length === 1) return '';
