@@ -323,6 +323,7 @@ function pinModel(id) {
   const v = S.pin[id], rows = String(v.text || '').split('\n').slice(0, 4000);
   if (v.kind === 'url') return { view: 'page', title: v.title, url: v.url, stat: v.url };
   if (v.kind === 'image') return { view: 'image', title: v.title, imgs: [v.url], stat: v.title };
+  if (v.kind === 'video') return { view: 'video', title: v.title, url: v.url, stat: v.title };
   if (v.kind === 'diff') { const files = parseDiff(rows), sum = v.stat?.split('\n').pop()?.trim() || `${files.length} file${files.length === 1 ? '' : 's'} changed`; return { view: 'diff', title: v.title, html: diffView(files), stat: (v.cut ? 'Cut short · ' : '') + sum }; }
   const lines = rows.map((t, i) => ({ c: '', n: i + 1, t }));
   return { view: 'editor', title: v.title, tab: { file: v.title.split(/[/ ]/).pop(), path: v.kind === 'diff' ? v.stat?.split('\n').pop()?.trim() || '' : v.title }, lines, stat: (v.cut ? 'Cut short · ' : '') + (v.kind === 'diff' ? v.stat?.split('\n').pop()?.trim() || '' : `${rows.length} lines`) };
@@ -338,12 +339,13 @@ function renderPresent() {
   const id = S.present, s = S.sq[id]; if (!s) return; const pinned = document.body.classList.contains('screen') && pinOne() === id && !!S.pin[id], m = pinned ? pinModel(id) : termModel(id), p = P(id);
   if (pinned && $('#present')._pin === S.pin[id]) return; // unchanged: keep the user's scroll
   $('#present')._pin = pinned ? S.pin[id] : null; $('#present').classList.toggle('pinned', pinned);
-  $('#present .pwin').className = 'pwin ' + m.view; $('#present').classList.toggle('pic', m.view === 'image' || m.view === 'page');
+  $('#present .pwin').className = 'pwin ' + m.view; $('#present').classList.toggle('pic', ['image', 'page', 'video'].includes(m.view));
   $('#ptitle').textContent = m.view === 'term' ? `${s.name} — ${s.cwd}` : m.title;
   const pb = $('#pbody');
   if (m.view === 'diff') pb.innerHTML = m.html;
   else if (m.view === 'page') { if (pb.firstChild?.dataset?.u !== m.url) pb.innerHTML = `<iframe data-u="${esc(m.url)}" src="${esc(m.url)}" sandbox="allow-scripts allow-same-origin allow-forms allow-popups" referrerpolicy="no-referrer"></iframe>`; }
   else if (m.view === 'image') pb.innerHTML = m.imgs.map((u) => `<img src="${esc(u)}" alt="">`).join('');
+  else if (m.view === 'video') { if (pb.firstChild?.dataset?.u !== m.url) pb.innerHTML = `<video data-u="${esc(m.url)}" src="${esc(m.url)}" controls autoplay muted loop playsinline></video>`; } // t1503: fills the share area
   else pb.innerHTML = (m.view === 'editor' ? `<div class="ptab"><span>${esc(m.tab.file)}</span><em>${esc(m.tab.path)}</em></div>` : '') + m.lines.map((l) => lineHtml(l, m.view)).join('') + (m.view === 'term' ? '<div class="tl"><span class="ps">❯</span> <span class="cursor"></span></div>' : '');
   pb.scrollTop = m.view === 'term' ? pb.scrollHeight : 0; $('#pstat').textContent = m.stat;
   const td = S.todos[id]; $('#present').classList.toggle('has-todo', !!td?.length);
@@ -682,7 +684,7 @@ function apply(id, ev, live) {
       if (live && !HANDLED.test(ev.text.replace(/^\s*(DONE|IDLE):.*$/gim, '').trim())) say(id, presenter() === id ? firstSentences(ev.text, 40, 1400) : firstSentences(ev.text, s.lead ? 2 : 1, s.lead ? 260 : 180), { priority: s.lead || presenter() === id, cap: S.forUser[id] || presenter() === id || /^\s*(BLOCKED|RETHINK):/m.test(ev.text) }); break;
     case 'screen':
       if (ev.kind === 'off' || ev.gone) delete S.pin[id]; else S.pin[id] = ev;   // gone: content not kept past a restart (t854)
-      if (!ev.gone && (ev.kind === 'image' || ev.kind === 'url')) seen(id, ev.kind === 'url' ? { view: 'page', title: ev.title, url: ev.url } : { view: 'image', title: ev.title, imgs: [ev.url] }, ev.ts);
+      if (!ev.gone && (ev.kind === 'image' || ev.kind === 'url' || ev.kind === 'video')) seen(id, ev.kind === 'image' ? { view: 'image', title: ev.title, imgs: [ev.url] } : { view: ev.kind === 'url' ? 'page' : 'video', title: ev.title, url: ev.url }, ev.ts);
       if (pinOne() === id) syncPin(); else if (live && S.vis[id]) showPresent(id); break;
     case 'state':
       s.status = ev.status; s.note = ev.note; paintTile(id); renderSummary();

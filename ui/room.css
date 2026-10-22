@@ -569,6 +569,7 @@ body.v-meet #meetThread { display: flex; flex-direction: column; position: fixed
 #pclose { display: none; flex: none; align-items: center; justify-content: center; width: 24px; height: 24px; border: 0; border-radius: 6px; background: none; color: #9aa0b4; font-size: 18px; cursor: pointer } #pclose:hover { background: #2a2d3d; color: #fff } #present.pinned #pclose { display: inline-flex } #present.pinned #pbadge { margin-left: auto }
 #present.pinned #pcam, #present.pinned #ptodo { display: none }
 #present.pinned #pbody { overflow: auto } .pwin.page #pbody { padding: 0; background: #fff } .pwin.page iframe { width: 100%; height: 100%; border: 0; display: block }
+.pwin.video #pbody { padding: 0; background: #000 } .pwin.video video { width: 100%; height: 100%; object-fit: contain; display: block } /* t1503 */
 body.v-one.screen:not(.v-meet) #stage { display: none }
 body.v-one.screen:not(.v-meet) #present.on { display: flex; position: fixed; z-index: 5; left: 16px; top: calc(68px + env(safe-area-inset-top) + var(--bh, 0px)); right: calc(min(36vw, 460px) + 32px); bottom: 64px; height: auto; padding: 0; background: none; border: 0 }
 body.v-one.screen:not(.v-meet) #present .pwin { flex: 1 }

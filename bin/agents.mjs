@@ -184,7 +184,7 @@ const cmds = {
     const r = await call('/call', { op: 'join', url: a[0], ...(until ? { until } : {}) });
     return `joining as ${r.name} (pid ${r.pid})${r.ends ? `; leaves at ${r.ends.slice(11)} + 5 min` : ''}; call status to follow it, call leave to hang up`;
   },
-  // screen diff <task> | url <url> | file <path> | off [--as <id>]: pin it on the shared screen beside your 1:1 (t664)
+  // screen diff <task> | url <url> | file <path> | off [--as <id>]: pin it on the shared screen beside your 1:1 (t664); a .mp4/.mov/.webm file plays as video (t1503)
   screen: async () => {
     const i = a.indexOf('--as'), as = i >= 0 ? a.splice(i, 2)[1] : process.env.AGENTS_ID;
     if (!as) throw new Error('screen needs --as <id> outside a squiggle');

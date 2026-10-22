@@ -466,7 +466,8 @@ function relayMentions(id, text, from, human) {
 // Shared screen in a 1:1 (t664): what a squiggle pins beside its chat until it (or the user) closes it or pins something else.
 // diff <task> from the merge queue, url <http(s) page> in a frame, file <path> (text, or an image), off.
 const SCREEN_MAX = 400000, IMG = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp' };
-const liveScreen = new Map();
+const VIDEO = { '.mp4': 'video/mp4', '.m4v': 'video/mp4', '.mov': 'video/quicktime', '.webm': 'video/webm' };
+const liveScreen = new Map(), mediaFile = new Map();
 async function screen(id, { kind, arg, by } = {}) {
   let ev;
   if (kind === 'off') ev = { k: 'screen', kind: 'off' };
@@ -475,7 +476,9 @@ async function screen(id, { kind, arg, by } = {}) {
   else if (kind === 'file') {
     const f = path.resolve(home(String(arg || ''))), ext = path.extname(f).toLowerCase(), st = fs.statSync(f);
     if (!st.isFile()) throw new Error('not a regular file');
-    if (IMG[ext]) { if (st.size > 5e6) throw new Error('image over 5 MB'); ev = { k: 'screen', kind: 'image', title: path.basename(f), url: `data:${IMG[ext]};base64,${fs.readFileSync(f).toString('base64')}` }; }
+    // Videos (t1503) stream from the file through /api/squiggles/<id>/media (Range requests); the path stays on the server.
+    if (VIDEO[ext]) ev = { k: 'screen', kind: 'video', title: path.basename(f), file: f, type: VIDEO[ext] };
+    else if (IMG[ext]) { if (st.size > 5e6) throw new Error('image over 5 MB'); ev = { k: 'screen', kind: 'image', title: path.basename(f), url: `data:${IMG[ext]};base64,${fs.readFileSync(f).toString('base64')}` }; }
     else {
       if (st.size > SCREEN_MAX * 4) throw new Error(`file over ${SCREEN_MAX * 4 / 1e6} MB`);
       const fd = fs.openSync(f, 'r'), buf = Buffer.alloc(Math.min(st.size, SCREEN_MAX));
@@ -485,8 +488,21 @@ async function screen(id, { kind, arg, by } = {}) {
   } else throw new Error('screen diff <task> | url <url> | file <path> | off');
   // Content goes out live only; the transcript keeps {kind,title}, and the full event stays in memory for reloads (t854).
   ev = { ts: Date.now(), ...ev, ...(by && { by }) };
-  if (ev.kind === 'off') { liveScreen.delete(id); emit(id, ev); } else { liveScreen.set(id, ev); emit(id, ev, { k: 'screen', kind: ev.kind, title: ev.title, ...(by && { by }), gone: true }); }
+  if (ev.kind === 'video') { const { file, ...pub } = ev; mediaFile.set(id, file); ev = { ...pub, url: `/api/squiggles/${encodeURIComponent(id)}/media?v=${ev.ts}` }; }
+  if (ev.kind === 'off') { liveScreen.delete(id); mediaFile.delete(id); emit(id, ev); } else { liveScreen.set(id, ev); emit(id, ev, { k: 'screen', kind: ev.kind, title: ev.title, ...(by && { by }), gone: true }); }
   return { ok: true, kind: ev.kind, title: ev.title || '' };
+}
+
+// The shared video, with Range support so the player can seek and Safari plays it (t1503).
+function serveMedia(req, res, f) {
+  let st; try { st = f && fs.statSync(f); } catch {}
+  if (!st?.isFile()) { res.writeHead(404); return res.end(); }
+  const type = VIDEO[path.extname(f).toLowerCase()], m = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '');
+  if (!m || (!m[1] && !m[2])) { res.writeHead(200, { 'content-type': type, 'content-length': st.size, 'accept-ranges': 'bytes', 'cache-control': 'no-store' }); return fs.createReadStream(f).pipe(res); }
+  let a = m[1] ? Number(m[1]) : Math.max(0, st.size - Number(m[2])), z = m[1] && m[2] ? Math.min(Number(m[2]), st.size - 1) : st.size - 1;
+  if (a >= st.size || a > z) { res.writeHead(416, { 'content-range': `bytes */${st.size}` }); return res.end(); }
+  res.writeHead(206, { 'content-type': type, 'content-length': z - a + 1, 'content-range': `bytes ${a}-${z}/${st.size}`, 'accept-ranges': 'bytes', 'cache-control': 'no-store' });
+  fs.createReadStream(f, { start: a, end: z }).pipe(res);
 }
 
 function wake(id, why = 'scheduled') {
@@ -1123,6 +1139,7 @@ const server = http.createServer(async (req, res) => {
     if (p[0] === 'api' && p[1] === 'squiggles' && p[2]) {
       const id = p[2], s = loadSquiggle(id);
       if (!s) return json(res, { error: 'no such squiggle' }, 404);
+      if (p[3] === 'media' && req.method === 'GET') return serveMedia(req, res, liveScreen.get(id)?.kind === 'video' ? mediaFile.get(id) : null);
       if (!['events', 'journal'].includes(p[3]) && req.method !== 'POST') return json(res, { error: 'POST only' }, 405);
       const b = req.method === 'POST' ? await body(req, res) : {};
       switch (p[3]) {
