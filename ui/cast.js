@@ -233,7 +233,8 @@ function castSVG(p, o, uid = '') {   // uid keeps SVG ids unique per instance: d
 }
 // The room around a figure, shared by every generator: backdrop, desk, decor, and the laptop, hands and sparks state layers.
 // fig is drawn inside <g class="fig">; MODE must already be set (static renders) or null (live).
-function scene(p, o, u, fig, { paw, defs = '', float = false }) {
+// desk: false is for heads without shoulders: no table, shadow, laptop, hands or desk item, so the neck runs off the frame.
+function scene(p, o, u, fig, { paw, defs = '', float = false, desk = true }) {
   const room = ROOMS[p.room], d0 = -((hash(p.id) % 45) / 10);
   const laptop = `<rect x="35" y="49" width="30" height="15" rx="2.6" fill="#e7eaf3"/><rect x="35" y="49" width="30" height="2" rx="1" fill="#fff" opacity=".7"/>${star(57.5, 56, 2.6, '#ffb347')}<circle cx="43" cy="58.5" r="2" fill="#7c8cff"/>`;
   const hands = `<ellipse class="hand l" cx="40.5" cy="49.4" rx="3.2" ry="2.3" fill="${paw}"/><ellipse class="hand r" cx="59.5" cy="49.4" rx="3.2" ry="2.3" fill="${paw}"/>`;
@@ -241,9 +242,9 @@ function scene(p, o, u, fig, { paw, defs = '', float = false }) {
   return `<svg viewBox="0 0 100 75" preserveAspectRatio="xMidYMid slice"${o ? ' xmlns="http://www.w3.org/2000/svg" width="400" height="300"' : ''}>
     <defs>${g(u + 't', room.table[0], room.table[1])}${defs}</defs>${room.svg(u + 'r')}
     <g class="fig${float ? ' float' : ''}" style="--d:${d0}s">${fig}</g>
-    <path d="M-2 75V63Q50 57 102 63V75Z" fill="url(#${u}t)"/><path d="M-2 63Q50 57 102 63" fill="none" stroke="#fff" stroke-width=".8" opacity=".45"/>
+    ${desk ? `<path d="M-2 75V63Q50 57 102 63V75Z" fill="url(#${u}t)"/><path d="M-2 63Q50 57 102 63" fill="none" stroke="#fff" stroke-width=".8" opacity=".45"/>
     <ellipse cx="50" cy="64.5" rx="17" ry="1.6" fill="#000" opacity=".12"/>${p.decor ? DECOR[p.decor]() : ''}
-    ${V('laptop', MODE && MODE.working, laptop)}${V('hands', MODE && MODE.working, hands)}${V('sparks', MODE && MODE.done, `<g class="sparks">${sparks}</g>`)}
+    ${V('laptop', MODE && MODE.working, laptop)}${V('hands', MODE && MODE.working, hands)}` : ''}${V('sparks', MODE && MODE.done, `<g class="sparks">${sparks}</g>`)}
   </svg>`;
 }
 

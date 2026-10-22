@@ -27,3 +27,12 @@ Permission is hereby granted, free of charge, to any person obtaining a copy of 
 The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+---
+
+The Notionists and Lorelei character generators (ui/gen/notionists.js, ui/gen/lorelei.js) use the component artwork from the DiceBear "notionists" and "lorelei" styles (@dicebear/notionists and @dicebear/lorelei 9.4.2, https://github.com/dicebear/dicebear). Only the component SVG is vendored; the renderers are original to this project and do not use @dicebear/core.
+
+Design: Notionists by Zoish (https://heyzoish.gumroad.com/l/notionists), CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/).
+Design: Lorelei by Lisa Wischofsky (https://www.figma.com/community/file/1198749693280469639), CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/).
+
+Code (DiceBear notionists and lorelei styles): the MIT License above, Copyright (c) 2024 Florian Körner.

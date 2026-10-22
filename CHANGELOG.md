@@ -21,6 +21,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - An ask cut off by a server restart is marked interrupted at boot and its filer is told; its output is lost.
 
 ### Added
+- Two more character styles, Notionists and Lorelei (CC0 art via DiceBear's parts): `look <id> notionists|lorelei` or the room's character setting. Both talk; Lorelei has no desk.
 - Ask cards: pending asks show in the lead's chat and the filer's 1:1 with Copy, Run and Deny, plus an asks count in the header. Hidden characters, padding and risky shapes are spelled out; Run confirms with the exact command and shows only on the room's own computer. Squiggles are told to file an ask when auto mode blocks a write.
 - Command approvals (groundwork): a squiggle files a command auto mode blocked with `ask run "<cmd>" "<why>"`; `asks` lists them, `ask show`/`ask deny` inspect or refuse. Only an unlocked browser on the room's own computer can run one, once, for the exact command shown; secrets are masked in the output sent back. Page buttons come later.
 - Files preview: click a file to see images, PDFs, markdown and text inline (first 512 KB), with Open and Download; anything else offers Download. `room view files <name>` opens one.
