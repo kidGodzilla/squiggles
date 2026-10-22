@@ -601,6 +601,8 @@ function broadcast(id, ev) {
 // Restart without killing anyone mid-turn: wait until nobody is working, then exit; the login item starts the server again.
 // Started by hand (no login item), start the replacement ourselves; it waits for this one to free the port.
 let restartPending = false, quitting = false, restartBy = '';
+// Self-reported, so one short line: no control chars to forge log lines (t1436).
+const whoAsked = (by) => String(by || '').replace(/[\x00-\x1f\x7f]+/g, ' ').trim().slice(0, 40);
 const supervised = process.env.XPC_SERVICE_NAME === 'local.squiggles.server';
 const working = () => [...rt.values()].filter((r) => r.status === 'working' && (r.proc || r.cx)).length;
 function maybeRestart() {
@@ -614,7 +616,7 @@ function maybeRestart() {
 // (it deletes runs/quit, then starts the job). Held turns go out on the next start, like a restart's.
 const QUIT = path.join(RUNS, 'quit');
 function quit(now, by) {
-  restartBy = by || ''; restartPending = quitting = true;
+  restartBy = whoAsked(by); restartPending = quitting = true;
   if (now || !working()) { quitNow(); return 'quitting now'; }
   return `quitting when ${working()} working turn${working() > 1 ? 's' : ''} finish${working() > 1 ? '' : 'es'}`;
 }
@@ -1075,7 +1077,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/inbox') return json(res, { ...drop.list(), dir: path.join(DATA, 'inbox').replace(os.homedir(), '~') });
     if (url.pathname === '/api/limit') return json(res, { until: limit.until });
     if (url.pathname === '/api/quit' && req.method === 'POST') { const b = await body(req, res); return json(res, quit(!!b.now, b.by || 'owner')); }
-    if (url.pathname === '/api/restart' && req.method === 'POST') { restartBy = (await body(req, res)).by || 'owner'; restartPending = true; setTimeout(maybeRestart, 500); return json(res, 'restarting as soon as nobody is mid-turn'); }
+    if (url.pathname === '/api/restart' && req.method === 'POST') { restartBy = whoAsked((await body(req, res)).by) || 'owner'; restartPending = true; setTimeout(maybeRestart, 500); return json(res, 'restarting as soon as nobody is mid-turn'); }
     if (url.pathname === '/api/voice') return json(res, kokoro.status());
     // Room controls (radio, voices, chatter, tabs, chat windows) so the lead can do whatever the user can.
     if (url.pathname === '/api/room' && req.method === 'POST') {
