@@ -1129,6 +1129,10 @@ const server = http.createServer(async (req, res) => {
     // its own; anyone else's needs the owner's unlocked session. Run: never a squiggle, only pass.owner (this computer, live
     // cookie), id + the sha the page showed; the output (masked) goes back to the filer.
     if (url.pathname === '/api/asks' && req.method === 'GET') return json(res, asks.list({ all: url.searchParams.get('all') === '1' }));
+    // Whether this browser may Run: the page shows Run only where the server would take it. The server still decides.
+    if (url.pathname === '/api/asks/can' && req.method === 'GET') {
+      try { pass.owner(req); return json(res, { run: true }); } catch (e) { return json(res, { run: false, local: e.code !== 403, why: e.message }); }
+    }
     if (p[1] === 'asks' && p[2] && req.method === 'GET') { try { return json(res, asks.get(p[2])); } catch (e) { return json(res, { error: e.message }, e.code || 400); } }
     if (url.pathname === '/api/asks' && req.method === 'POST') {
       const b = await body(req, res), who = await callerSquiggle(req);

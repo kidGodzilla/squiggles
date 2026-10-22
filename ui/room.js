@@ -500,7 +500,7 @@ function openChat(id) {
   Object.assign(cw.style, { left: Math.max(8, Math.min(innerWidth - 200, x)) + 'px', top: Math.max(60, Math.min(innerHeight - 80, y)) + 'px', width: (saved?.w || W) + 'px', height: (saved?.h || H) + 'px' });
   $('#chats').appendChild(cw); pinChat(cw.querySelector('.msgs'));
   for (const line of S.hist[id] || []) appendLine(cw, line, false);
-  wireChat(cw, id); paintTile(id); front(cw); clearUnread(id);
+  wireChat(cw, id); paintTile(id); front(cw); clearUnread(id); window.paintAsks?.(cw);
   cw.querySelector('textarea').focus();
   return cw;
 }
@@ -742,6 +742,7 @@ async function roomCommand(ev) {
     case 'meetingSoon': meetingSoon(ev.value); break;
     case 'share': paintShare(ev.value); break;
     case 'peers': loadPeers(); return;
+    case 'asks': loadAsks(); return;
     case 'characters': roomGen(v); S.order.forEach(reskin); if (B.view === 'settings') renderSettings(); break;
   }
   savePrefs(); AUD.apply();
