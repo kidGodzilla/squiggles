@@ -123,11 +123,14 @@ export function createBoard(root, onChange, { onConflict } = {}) {
     for (const t of TIERS) { const i = g[t].findIndex((x) => x.id === id); if (i >= 0) return { tier: t, i, goal: g[t][i] }; }
     throw new Error(`no goal ${id}`);
   }
-  function goalOp({ op, id, title, tier, owner, note, index, repos, merge, kind }) {
+  function goalOp({ op, id, title, tier, owner, note, index, repos, merge, kind, due }) {
     const g = goals();
     // An area (t977) is an ongoing responsibility with no finish line; a goal finishes.
     if (kind !== undefined && !['goal', 'area'].includes(kind)) throw new Error('kind must be goal or area');
     if (merge !== undefined && !MERGE.includes(merge)) throw new Error(`merge must be one of ${MERGE.join(', ')}`);
+    // Due (t83): YYYY-MM-DD shows on the goal card and the calendar; '' or clear removes it.
+    if (due === 'clear') due = '';
+    if (due && !(/^\d{4}-\d{2}-\d{2}$/.test(due) && !isNaN(Date.parse(due)))) throw new Error('due must be YYYY-MM-DD or clear');
     if (op === 'add') {
       if (!title) throw new Error('a goal needs a title');
       const goal = { id: slug(id || title), title, last_confirmed: today(), ...(owner ? { owner } : {}), ...(note ? { note } : {}), ...(repos?.length ? { repos } : {}), merge: merge || 'gated' };
@@ -148,6 +151,7 @@ export function createBoard(root, onChange, { onConflict } = {}) {
       if (repos !== undefined) { const r = (Array.isArray(repos) ? repos : String(repos).split(/[\s,]+/)).filter(Boolean); if (r.length) f.goal.repos = r; else delete f.goal.repos; }
       if (merge !== undefined) f.goal.merge = merge;
       if (kind !== undefined) { if (kind === 'area') f.goal.kind = 'area'; else delete f.goal.kind; }
+      if (due !== undefined) { if (due) f.goal.due = due; else delete f.goal.due; }
     } else throw new Error(`unknown goal op ${op}`);
     saveGoals(g); return f.goal;
   }

@@ -18,6 +18,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Changing, clearing or loosening a set passcode needs the current one, in Settings and the CLI.
 
 ### Added
+- Goal due dates: set in the goal editor or `goal due <id> <YYYY-MM-DD>|clear`; cards say days left, or overdue in red.
 - Goals: click a column heading or Areas to fold it to its heading and count; each browser remembers. CLI: `room fold|unfold active|hold|next|done|areas`.
 - Every server exit writes its cause to `runs/shutdowns.log`: restart or quit and who asked, the signal and parent, or the crash.
 - Peer rooms (off by default; needs Share the room): leads of two Squiggles rooms can message each other. `peer on`, `peer invite [name]` gives a one-time code for the other room's `peer join '<code>'`, then `peer send <name> "<text>"`. Incoming messages need the pair's key and reach the lead fenced as untrusted.
@@ -108,6 +109,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Upgrade now: before 0.1.1, a web page open in your browser could send commands to your room. The server now refuses requests from other sites and hosts, and squiggle actions accept POST only.
 
 ### Added
+- Goal due dates: set in the goal editor or `goal due <id> <YYYY-MM-DD>|clear`; cards say days left, or overdue in red.
 - Views, the open chat, board filters, merge diff and calendar week live in the URL: back, forward, reload and copied links work.
 
 ### Changed
@@ -131,6 +133,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 First public release. Data schema 1.
 
 ### Added
+- Goal due dates: set in the goal editor or `goal due <id> <YYYY-MM-DD>|clear`; cards say days left, or overdue in red.
 - The room: squiggles with charters, journals and scheduled wakes; a lead you talk to; task board, goals, meetings, inbox, voice.
 - First run seeds only the lead, which onboards you and proposes hires.
 - `~/.squiggles` data directory (`SQUIGGLES_HOME`), separate from the code.

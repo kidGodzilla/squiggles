@@ -46,6 +46,11 @@ function foldGoals(tier, on = !B.gfold.has(tier)) {
   try { localStorage.agentsGoalFold = JSON.stringify([...B.gfold]); } catch {} renderGoals();
 }
 const foldHead = (tier, name, n) => `<button class="gfold" type="button" data-fold="${tier}" aria-expanded="${!B.gfold.has(tier)}" title="${B.gfold.has(tier) ? 'Show' : 'Fold'} ${name}"><span class="chev${B.gfold.has(tier) ? '' : ' on'}"><svg viewBox="0 0 12 12" width="12" height="12"><path d="M4.5 2.5 8 6l-3.5 3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>${name}${n == null ? '' : `<small>${n}</small>`}</button>`;
+// Due (t83): days left in words; past due says so.
+function dueLine(d) {
+  const n = Math.round((new Date(d + 'T00:00') - new Date(new Date().toDateString())) / 864e5), day = new Date(d + 'T00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  return `<span class="gn gdue${n < 0 ? ' over' : ''}">${n < 0 ? `Overdue since ${day}` : n === 0 ? 'Due today' : n === 1 ? 'Due tomorrow' : `Due ${day}, in ${n} days`}</span>`;
+}
 function renderGoals() {
   const q = B.gq.toLowerCase(), found = (g) => hit(q, g.title, g.note, ownerName(g.owner)); let shown = 0;
   const areas = allGoals().filter(isArea).sort((a, b) => openCount(b.id) - openCount(a.id)), aShown = areas.filter(found);
@@ -60,7 +65,7 @@ function renderGoals() {
         const stale = tier === 'active' && daysSince(g.last_confirmed) >= STALE_DAYS;
         const open = openCount(g.id);
         return `<div class="g ${stale ? 'stale' : ''}" draggable="true" data-goal="${esc(g.id)}">
-          <span class="gt">${hl(g.title, q)}${g.note ? `<span class="gn">${hl(g.note, q)}</span>` : ''}${open ? `<span class="gn">${open} open note${open > 1 ? 's' : ''}</span>` : ''}</span>
+          <span class="gt">${hl(g.title, q)}${g.note ? `<span class="gn">${hl(g.note, q)}</span>` : ''}${open ? `<span class="gn">${open} open note${open > 1 ? 's' : ''}</span>` : ''}${g.due && tier !== 'done' ? dueLine(g.due) : ''}</span>
           <span class="gm">${tier === 'done' ? '' : `<span class="gmerge ${g.merge}" title="${g.merge === 'open' ? 'Open: commits go to main' : 'Gated: a branch per task, merged from the Merge tab'}">${g.merge === 'open' ? 'Open' : 'Gated'}</span>`}${g.owner && S.sq[g.owner] ? `<span class="nown" data-owner="${esc(g.owner)}" title="Ask ${esc(ownerName(g.owner))} about this goal">${face(g.owner, 'gf' + hash(g.id) + '_')}</span>` : ''}${ago(g.last_confirmed)}</span></div>`;
       }).join('')}
       ${tier !== 'done' ? `<button class="addg" data-addgoal="${tier}">+ add a goal</button>` : ''}</div></div>`;
@@ -221,13 +226,14 @@ function editGoal(el) {
     <label>Owner</label><select id="pgO">${ownerOptions(g.owner)}</select>
     <label>Note</label><textarea id="pgN" class="grow" rows="6" placeholder="Optional">${esc(g.note || '')}</textarea>
     <label>Repos (space separated)</label><input id="pgR" value="${esc((g.repos || []).join(' '))}" placeholder="~/project">
+    ${area ? '' : `<label>Due</label><input id="pgD" type="date" value="${esc(g.due || '')}">`}
     <label>Merge policy</label><select id="pgM"><option value="gated" ${g.merge !== 'open' ? 'selected' : ''}>Gated: branch per task, you merge</option><option value="open" ${g.merge === 'open' ? 'selected' : ''}>Open: commits go to main</option></select>
     <div class="row"><button class="go" data-a="save">Save</button>${area ? '' : '<button data-a="confirm">Still on</button>'}<button data-a="notes">Its notes (${open})</button></div>
     <div class="row">${area ? '' : '<button data-a="done">Mark done</button>'}<button data-a="chat">${g.owner ? 'Chat with owner' : 'Ask the lead'}</button><button class="bad" data-a="drop">Erase</button></div>`, (pop) => {
     pop.onclick = async (e) => {
       const k = e.target.closest('[data-k]'); if (k) { pop.querySelectorAll('[data-k]').forEach((b) => b.classList.toggle('on', b === k)); return; }
       const a = e.target.dataset.a; if (!a) return;
-      if (a === 'save') await api('/goals', { op: 'edit', id: g.id, title: pop.querySelector('#pgT').value.trim() || g.title, owner: pop.querySelector('#pgO').value, note: pop.querySelector('#pgN').value.trim(), repos: pop.querySelector('#pgR').value.trim(), merge: pop.querySelector('#pgM').value, kind: pop.querySelector('#pgK .on').dataset.k });
+      if (a === 'save') await api('/goals', { op: 'edit', id: g.id, title: pop.querySelector('#pgT').value.trim() || g.title, owner: pop.querySelector('#pgO').value, note: pop.querySelector('#pgN').value.trim(), repos: pop.querySelector('#pgR').value.trim(), merge: pop.querySelector('#pgM').value, kind: pop.querySelector('#pgK .on').dataset.k, ...(pop.querySelector('#pgD') ? { due: pop.querySelector('#pgD').value } : {}) });
       if (a === 'confirm') { await api('/goals', { op: 'confirm', id: g.id }); toast(`Confirmed: ${g.title}`); }
       if (a === 'done') { await api('/goals', { op: 'move', id: g.id, tier: 'done' }); AUD.ding(); }
       if (a === 'drop') await api('/goals', { op: 'drop', id: g.id });
