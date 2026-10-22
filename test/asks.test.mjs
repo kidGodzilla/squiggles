@@ -129,3 +129,24 @@ test('mask: full fake-value probe, 33 shapes; shas, uuids, paths and plain confi
   for (const [k, v] of Object.entries(cases)) { const m = mask(v); assert.ok(![F, B64.slice(0, 40), CA.slice(0, 40), TOK].some((x) => m.includes(x)), `${k}: ${m}`); }
   for (const keep of ['commit 4b3d681a5779212b9e31e1492666ac73b4c1ad25', 'KEY_COUNT=3', 'NODE_ENV=production', 'PORT=5000', `sha256 ${'a'.repeat(64)}`, '550e8400-e29b-41d4-a716-446655440000', '/Users/someone/projects/app/docs/design.md', 'author: Someone', "Merge branch 'main' into t42"]) assert.equal(mask(keep), keep);
 });
+
+test('mask: ANSI colour, tab separator, mysql -pPASS, token%3D; short values', async () => {
+  const { mask } = await import('../asks.mjs');
+  const leaks = { '\x1b[32mSMS_KEY:\x1b[0m   shortv1': 'shortv1', '\x1b[1mAUTH_KEYS\x1b[0m=abc,def': 'abc,def', 'MAIL_KEY\tpm-short': 'pm-short',
+    'mysql -uroot -pS3cret db': 'S3cret', "mysqldump -p'pw w' x": 'pw w', 'GET /cb?state=token%3Dshortv%26x=1': 'shortv', 'next=%2Fx%3Ftoken%3Dabc12&y=2': 'abc12' };
+  for (const [s, leak] of Object.entries(leaks)) assert.ok(!mask(s).includes(leak), `${JSON.stringify(s)} -> ${JSON.stringify(mask(s))}`);
+  for (const keep of ['mkdir -p dir', 'ssh -p 22 h', 'ssh -p2222 h', 'ls -pla']) assert.equal(mask(keep), keep);
+  assert.equal(mask('\x1b[31mred error\x1b[0m'), 'red error');
+});
+
+test('interrupted: a run the old server left is marked, logged and handed back once', () => {
+  const { d, asks, log } = setup();
+  const a = asks.file({ by: 'ops', cwd: d, cmd: 'sleep 99' }), b = asks.file({ by: 'ops', cwd: d, cmd: 'echo b' });
+  asks.claim(a.id, a.sha, 'owner'); asks.pid(a.id, 999999);
+  const hit = asks.interrupted();
+  assert.deepEqual(hit.map((x) => x.id), [a.id]); assert.equal(hit[0].stillRunning, undefined);
+  assert.equal(asks.get(a.id).status, 'interrupted'); assert.equal(asks.get(b.id).status, 'pending');
+  assert.throws(() => asks.finish(a.id, { exit: 0, ms: 1 }), (e) => e.code === 409);
+  assert.equal(asks.interrupted().length, 0);
+  assert.equal(log().filter((x) => x.ev === 'interrupted').length, 1);
+});

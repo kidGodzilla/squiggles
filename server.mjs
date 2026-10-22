@@ -634,6 +634,11 @@ function quitNow() {
 setTimeout(() => {
   const held = persisted['*held'] || []; delete persisted['*held']; saveState();
   for (const h of held) try { send(h.id, h.text, h.from, { replay: true, human: h.human, images: h.images || [] }); } catch (e) { console.error('held', h.id, e.message); }
+  // Asks the old server was running when it stopped.
+  for (const a of asks.interrupted()) {
+    try { send(a.by, `Your ask ${a.id} was cut off: the server restarted while it ran${a.stillRunning ? ` (pid ${a.pid} still running)` : ''}. Its output is lost. Check what it did before filing it again:\n$ ${a.cmd}`, 'harness'); } catch (e) { console.error('ask interrupted', a.id, e.message); }
+  }
+  broadcast('*room', { k: 'room', action: 'asks' });
 }, 3000);
 function shutdown(code, unload, cause) {
   logExit(cause || 'shutdown, cause not recorded');
@@ -1142,7 +1147,7 @@ const server = http.createServer(async (req, res) => {
           if (who) return json(res, { error: `only ${USER} runs an ask, with Run on the page` }, 403);
           try { pass.owner(req); } catch (e) { return json(res, { error: e.message, ...(e.unlock && { unlock: true }) }, e.code || 401); }
           const a = asks.claim(String(b.id || ''), b.sha, 'owner'); broadcast('*room', { k: 'room', action: 'asks' });
-          runAsk(a).then((r) => {
+          runAsk(a, { onSpawn: (n) => asks.pid(a.id, n) }).then((r) => {
             const f = asks.finish(a.id, r); broadcast('*room', { k: 'room', action: 'asks' });
             try { send(a.by, `${User} ran your ask ${a.id} (exit ${r.exit}, ${Math.round(r.ms / 1000)}s):\n$ ${a.cmd}\n${(r.out.length > 16e3 ? `${r.out.slice(0, 16e3)}\n[first 16 KB; all of it: ask show ${a.id}]` : r.out).trim() || '(no output)'}`, 'harness'); } catch (e) { console.error('ask result', a.id, e.message); }
             return f;

@@ -17,6 +17,8 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Gated merges check the caller's process first: a squiggle holding an unlocked session cookie is still refused.
 - Passcode hash loads at boot and sessions stay in memory, so editing room.json can't forge an unlock. Unlocks end on restart.
 - Changing, clearing or loosening a set passcode needs the current one, in Settings and the CLI.
+- Ask output masking also catches secrets split by colour codes or a tab, `mysql -pPASS`, and URL-encoded `token%3D` values.
+- An ask cut off by a server restart is marked interrupted at boot and its filer is told; its output is lost.
 
 ### Added
 - Command approvals (groundwork): a squiggle files a command auto mode blocked with `ask run "<cmd>" "<why>"`; `asks` lists them, `ask show`/`ask deny` inspect or refuse. Only an unlocked browser on the room's own computer can run one, once, for the exact command shown; secrets are masked in the output sent back. Page buttons come later.

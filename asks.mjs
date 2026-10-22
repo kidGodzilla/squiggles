@@ -29,10 +29,15 @@ const SECRET_WORD = String.raw`(?:^|(?<=[\s"'{,;&?(]))[A-Za-z0-9_.-]*(?:key|keys
 // Fallback: long random-looking runs. Mixed case plus digits, so hex shas, uuids and words stay readable.
 const randomish = (w) => /[a-z]/.test(w) && /[A-Z]/.test(w) && /[0-9]/.test(w) && (w.match(/\//g) || []).length <= w.length / 16;
 export function mask(text) {
-  let t = String(text);
+  // Colour codes would split a name from its value; the output is shown as plain text anyway.
+  let t = String(text).replace(/\x1b\[[0-9;?]*[ -\/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[@-Z\\-_]/g, '');
   for (const re of SECRETS) t = t.replace(re, '[masked]');
   t = t.replace(new RegExp(`(${SECRET_NAME}["']?[ \\t]*[:=][ \\t]*)("[^"\\n]*"|'[^'\\n]*'|[^\\s"'][^\\n]*)`, 'g'), (_, k, v) => `${k}${/^["']/.test(v) ? v[0] + '[masked]' + v[0] : '[masked]'}`);
   t = t.replace(new RegExp(`(${SECRET_WORD}["']?[ \\t]*[:=][ \\t]*)("[^"\\n]*"|'[^'\\n]*'|[^\\s"',;&}]+)`, 'gim'), (_, k, v) => `${k}${/^["']/.test(v) ? v[0] + '[masked]' + v[0] : '[masked]'}`);
+  t = t.replace(new RegExp(`^([ \\t]*${SECRET_NAME}\\t+)[^\\n]+`, 'gm'), '$1[masked]'); // NAME_KEY<tab>value
+  t = t.replace(/(\b[A-Za-z0-9_.-]*(?:key|keys|secret|token|pass|password|passwd|auth|sig|signature|dsn)%3D)[^&\s"'%]+/gi, '$1[masked]'); // token%3Dvalue
+  t = t.replace(/((?:^|\s)-p)(["'])[^\n]*?\2/g, '$1$2[masked]$2');
+  t = t.replace(/((?:^|\s)-p)(?=[^\s]*[^\d\s])[^\s-][^\s]{3,}/g, '$1[masked]'); // mysql -pPASS (not -p 22, not -p2222)
   t = t.replace(/((?:^|\s)(?:-u|--user)(?:[ \t]+|=)["']?)[^\s"']+/g, '$1[masked]'); // curl -u user:pass
   // Auth headers: custom x-*auth* ones and the standard ones.
   t = t.replace(/(\b(?:x-[\w-]*auth[\w-]*|authorization|proxy-authorization|cookie|set-cookie|x-api-key)["']?[ \t]*:[ \t]*)[^\s"'][^\n]*/gi, '$1[masked]');
@@ -45,7 +50,7 @@ export function mask(text) {
 }
 // Runs a claimed ask once: zsh -c (sh where there's no zsh) in the frozen cwd, the server's env minus the squiggle markers, stdin closed,
 // SIGTERM at the timeout then SIGKILL, output capped. Resolves { exit, ms, out } with out masked.
-export function runAsk(a, { spawn = spawn_, ms: limit = RUN_MS, cap = MAX_OUT } = {}) {
+export function runAsk(a, { spawn = spawn_, ms: limit = RUN_MS, cap = MAX_OUT, onSpawn } = {}) {
   return new Promise((resolve) => {
     const t0 = Date.now(), env = { ...process.env }; delete env.AGENTS_ID; delete env.CLAUDE_ENV_FILE;
     let out = '', size = 0, cut = false, timedOut = false, done = false;
@@ -54,6 +59,7 @@ export function runAsk(a, { spawn = spawn_, ms: limit = RUN_MS, cap = MAX_OUT } 
       resolve({ exit, ms: Date.now() - t0, out: mask(out + (cut ? `\n[output cut at ${cap / 1024} KB]` : '') + (timedOut ? `\n[stopped after ${Math.round(limit / 1000)}s]` : '') + extra) });
     };
     let p; try { p = spawn(SH, ['-c', a.cmd], { cwd: a.cwd, env, stdio: ['ignore', 'pipe', 'pipe'], detached: true }); } catch (e) { return end(127, e.message); }
+    onSpawn?.(p.pid);
     const take = (d) => { if (size >= cap) { cut = true; return; } const s = d.toString('utf8'); size += d.length; out += size > cap ? s.slice(0, cap - (size - d.length)) : s; if (size > cap) cut = true; };
     p.stdout.on('data', take); p.stderr.on('data', take);
     const group = (sig) => { try { process.kill(-p.pid, sig); } catch { try { p.kill(sig); } catch {} } };
@@ -119,5 +125,16 @@ export function createAsks({ file, log, now = () => Date.now() }) {
     note(a.status, a, { exit, ms, outSha: crypto.createHash('sha256').update(out).digest('hex') });
     return a;
   }
-  return { file: file_, list, get, deny, claim, finish };
+  const pid = (id, n) => { const s = load(), a = s.asks.find((x) => x.id === id); if (a?.status === 'running') { a.pid = n; save(s); } };
+  // At boot: a run the old server started can't be finished by this one. Mark it, log it, hand back for the filer.
+  function interrupted() {
+    const s = load(), hit = s.asks.filter((a) => a.status === 'running');
+    for (const a of hit) {
+      let alive = false; try { if (a.pid) { process.kill(-a.pid, 0); alive = true; } } catch {}
+      Object.assign(a, { status: 'interrupted', ended: now(), ...(alive && { stillRunning: true }) }); note('interrupted', a, { pid: a.pid, alive });
+    }
+    if (hit.length) save(s);
+    return hit;
+  }
+  return { file: file_, list, get, deny, claim, finish, pid, interrupted };
 }
