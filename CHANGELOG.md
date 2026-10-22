@@ -54,6 +54,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Merge merges every goal repo carrying the task's branch (Repo shows "api + web"; detail lists "Also merges"). `repo:branch` accepts a goal repo's bare name.
 ### Changed
 - Squiggles describe code to you by when and what ("the fix from today 14:27"), not commit hash.
+- Squiggles treat a convenient cause ("user error", "intended") as likely until evidence shows it explains the symptom.
 - Squiggles stop only test servers they started, by pid, never by name or port. A change to a squiggle's prompt (role, team) relaunches its idle process on the next message.
 - Merging a task committed straight on its base closes it as already on main instead of refusing; the CLI and toast say so.
 - Session limit is display only: wakes, team reports and meetings carry on; the banner shows the stated reset and clears when a Claude turn goes through. Not kept across restarts.
