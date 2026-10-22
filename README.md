@@ -39,7 +39,7 @@ Later, open the room from Spotlight ("Squiggles"). Server log: `~/Library/Logs/s
 | `~/squiggles` | the code; `upgrade` updates it (below) |
 | `~/.squiggles` | your room: `config.json`, squiggles, charters, journals, board (override with `SQUIGGLES_HOME`) |
 
-`config.json` settings: `port`, `userName`, `tailnet` (show "Share on tailnet"), `model` (`opus` or `sonnet`), `codex` (allow Codex models). Restart after editing: `node ~/squiggles/bin/agents.mjs restart`.
+`config.json` settings: `port`, `userName`, `tailnet` (show "Share on tailnet"), `model` (`opus` or `sonnet`), `codex` (allow Codex models), `fileSources` (extra read-only folders for `files`, e.g. `{"notes": "~/notes"}`). Restart after editing: `node ~/squiggles/bin/agents.mjs restart`.
 
 The lead and you share one CLI: `node ~/squiggles/bin/agents.mjs` (run it with no arguments for usage).
 

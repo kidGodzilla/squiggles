@@ -11,6 +11,7 @@ export const DEFAULTS = {
   tailnet: false,   // offer "Share on tailnet" (needs Tailscale)
   model: 'opus',    // default for new squiggles: opus or sonnet. Anything else runs on Opus.
   codex: false,     // allow squiggles on Codex models (needs the Codex CLI)
+  fileSources: {},  // extra read-only folders listed by `files`: { "name": "/path" }
 };
 
 export const dataDir = () => path.resolve(String(process.env.SQUIGGLES_HOME || '~/.squiggles').replace(/^~(?=\/|$)/, os.homedir()));

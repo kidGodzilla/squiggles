@@ -9,6 +9,7 @@ import path from 'node:path';
 import os from 'node:os';
 import vm from 'node:vm';
 import { createBoard } from './board.mjs';
+import { createFiles } from './files.mjs';
 import { modelFor as pickModel, DEFAULT_MODELS, EFFORTS, checkModelEffort } from './models.mjs';
 import { createMeetings, local, markPast, meetingNotes, parseWhen } from './meetings.mjs';
 import { createInbox } from './inbox.mjs';
@@ -33,7 +34,7 @@ const USER = CONFIG.userName || 'the user', User = CONFIG.userName || 'The user'
 const SQ = path.join(DATA, 'squiggles');
 const RUNS = path.join(DATA, 'runs');
 const MEDIA = path.join(RUNS, 'media');
-const FILES = path.join(DATA, 'files'); // chat images land here
+const FILES = path.join(DATA, 'files'); // shared drop folder; chat images land here
 const STATE = path.join(RUNS, 'state.json');
 const TTS_DIR = path.join(RUNS, 'tts');
 for (const d of [SQ, RUNS, MEDIA, TTS_DIR]) fs.mkdirSync(d, { recursive: true });
@@ -139,6 +140,8 @@ const humans = createHumans(DATA, () => {
   const line = `data: ${JSON.stringify({ id: '*board', ev: { k: 'humans' } })}\n\n`;
   for (const res of clients) res.write(line);
 }, { ownerName: CONFIG.userName || 'You' });
+const tilde = (v) => path.resolve(String(v).replace(/^~(?=\/|$)/, os.homedir()));
+const files = createFiles({ root: DATA, extra: Object.fromEntries(Object.entries(CONFIG.fileSources || {}).map(([k, v]) => [k, tilde(v)])), tasks: () => { try { return board.tasks(); } catch { return []; } } });
 // Awake squiggles (t294): while one with awake: true is working, caffeinate keeps the display on and the Mac from idle sleep or locking.
 // -w ties it to this server, so a crash can't leave the Mac awake for good.
 function keepAwake(id, on) {
@@ -212,7 +215,7 @@ if (!listSquiggles().length) {
 function systemPrompt(s) {
   const dir = sqDir(s.id);
   const base = prompt(s.lead ? 'lead.md' : 'squiggle.md');
-  return `${base}\n\nYou are ${s.name} (id: ${s.id}). Your role: ${s.role}.\nCharter: ${dir}/charter.md\nJournal: ${dir}/journal.md\nHarness CLI: node ${ROOT}/bin/agents.mjs\n\nThe team:\n${TEAM()}`;
+  return `${base}\n\nYou are ${s.name} (id: ${s.id}). Your role: ${s.role}.\nCharter: ${dir}/charter.md\nJournal: ${dir}/journal.md\nHarness CLI: node ${ROOT}/bin/agents.mjs\nShared files: ${FILES} (${USER}'s drops; \`files [query]\` lists them with the research folders)\n\nThe team:\n${TEAM()}`;
 }
 // Always pass a model: unset would inherit the CLI default, which may be Fable; squiggles never run on Fable.
 // Sonnet is the floor (Haiku has no auto mode); Opus is the default and the ceiling. config.model sets the default.
@@ -1055,7 +1058,8 @@ const server = http.createServer(async (req, res) => {
     if (p[0] === 'ui' && p[1] === 'gen') return serveFile(res, path.join(ROOT, 'ui', 'gen', path.basename(p[2] || '')), UI_CSP);
     if (p[0] === 'ui') return serveFile(res, path.join(ROOT, 'ui', path.basename(p[1] || '')), UI_CSP);
     if (p[0] === 'media') return serveFile(res, path.join(MEDIA, path.basename(p[1] || '')));
-    if (p[0] === 'files') return serveFile(res, path.join(FILES, path.basename(decodeURIComponent(p[1] || ''))));
+    if (p[0] === 'files' && (p[1] || '').startsWith('@')) { const f = files.resolve(decodeURIComponent(p[1].slice(1)), p.slice(2).map(decodeURIComponent).join('/')); return f ? serveFile(res, f) : json(res, { error: 'not found' }, 404); }
+    if (p[0] === 'files') { const f = path.basename(decodeURIComponent(p[1] || '')); return f.startsWith('.') ? json(res, { error: 'not found' }, 404) : serveFile(res, path.join(FILES, f)); }
     if (url.pathname === '/api/stream') {
       res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' });
       res.write(': hi\n\n');
@@ -1110,6 +1114,17 @@ const server = http.createServer(async (req, res) => {
       // A new suggestion rides along with the next team report to the lead; it never wakes anyone on its own (t825).
       if (b.op === 'suggest' && !r.dup) inbox.push(`[${(r.by && loadSquiggle(r.by)?.name) || r.by || 'Someone'} · SUGGESTION] ${r.id} ${r.title}${r.evidence ? ` (evidence: ${r.evidence})` : ''}`);
       return json(res, r);
+    }
+    if (url.pathname === '/api/files' && req.method === 'GET') return json(res, { files: files.list(url.searchParams.get('q') || '') });
+    if (url.pathname === '/api/files' && req.method === 'POST') {
+      const b = await body(req, res);
+      if (b.op === 'rm') return json(res, files.rm(b.name));
+      if (b.op !== 'add') return json(res, { error: 'op must be add or rm' }, 400);
+      if (b.for && !loadSquiggle(b.for)) return json(res, { error: `no squiggle ${b.for}` }, 400);
+      const f = files.add({ name: b.name, data: b.data, by: b.by });
+      // for <squiggle>: a note on its pile pointing at the file.
+      if (b.for) { const t = board.taskOp({ op: 'add', title: `Shared file for you: ${f.name}`, owner: b.for, by: b.by || 'owner', note: f.path }); files.setTask(f.name, t.id); f.task = t.id; }
+      return json(res, f);
     }
     if (url.pathname === '/api/meetings' && req.method === 'GET') {
       const days = Math.min(366, Number(url.searchParams.get('days')) || 7), from = url.searchParams.get('from') ? new Date(url.searchParams.get('from')) : new Date();
