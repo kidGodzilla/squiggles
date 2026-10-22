@@ -350,13 +350,13 @@ body:not(.v-goals):not(.v-tasks):not(.v-merge):not(.v-files):not(.v-team):not(.v
 #lockBtn { display: flex; align-items: center; gap: 6px } #lockBtn svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round }
 .joinbox .locked { margin: -12px 0 18px; color: var(--dim); font-size: 13px } .joinbox .locked:empty { display: none }
 body.locked #chats { display: none }
-.m.lead .tbl { overflow-x: auto; margin: 4px 0 10px; border: 1px solid var(--line); border-radius: 10px }
-.m.lead table { border-collapse: collapse; width: 100%; font-size: 12.5px }
-.m.lead th, .m.lead td { padding: 6px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top }
-.m.lead th { background: var(--panel2); font-weight: 600; white-space: nowrap } .m.lead tr:last-child td { border-bottom: 0 }
-.m.lead tbody tr:nth-child(even) td { background: rgba(255,255,255,.02) }
+.m.lead .tbl, .fprev .fmd .tbl { overflow-x: auto; margin: 4px 0 10px; border: 1px solid var(--line); border-radius: 10px }
+.m.lead table, .fprev .fmd table { border-collapse: collapse; width: 100%; font-size: 12.5px }
+.m.lead th, .m.lead td, .fprev .fmd th, .fprev .fmd td { padding: 6px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top }
+.m.lead th, .fprev .fmd th { background: var(--panel2); font-weight: 600; white-space: nowrap } .m.lead tr:last-child td, .fprev .fmd tr:last-child td { border-bottom: 0 }
+.m.lead tbody tr:nth-child(even) td, .fprev .fmd tbody tr:nth-child(even) td { background: rgba(255,255,255,.02) }
 .m.lead h3, .m.lead h4 { margin: 10px 0 6px; font-size: 13.5px } .m.lead h3 { font-size: 14.5px }
-.m.lead blockquote { margin: 4px 0 8px; padding: 2px 0 2px 12px; border-left: 3px solid var(--line); color: var(--dim) }
+.m.lead blockquote, .fprev .fmd blockquote { margin: 4px 0 8px; padding: 2px 0 2px 12px; border-left: 3px solid var(--line); color: var(--dim) }
 .m.lead hr { border: 0; border-top: 1px solid var(--line); margin: 10px 0 }
 
 /* ---------- Lead tab: the lead's office. The lead alone on the left, its chat filling the rest, everyone else quiet ---------- */
@@ -745,3 +745,14 @@ body.v-one.screen:not(.v-meet) #chats .cw.office { left: auto !important; width:
 .askb { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 6px }
 .asksb { font-weight: 600 }
 @media (pointer: coarse) { .askb .chip, .asksb { min-height: 44px } .ask summary { line-height: 44px } }
+/* Files preview */
+.fprev .dh { align-items: center } .fprev .dh h2 { flex: 0 1 auto; margin: 0; font-size: 16px } .fprev .dh .chip { height: 28px; display: inline-flex; align-items: center; padding: 0 10px; text-decoration: none }
+.fprev .fpb { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column }
+.fprev .fpb img { max-width: 100%; max-height: 100%; object-fit: contain; margin: auto; background: repeating-conic-gradient(#2a2d38 0 25%, #1f2129 0 50%) 0 0 / 16px 16px; border-radius: 8px }
+.fprev .fpb iframe { flex: 1; width: 100%; border: 0; border-radius: 10px; background: #fff }
+.fprev .fpb pre { margin: 0; padding: 10px 12px; background: #0d1017; border: 1px solid var(--line); border-radius: 10px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; line-height: 1.5 }
+.fprev .fpb pre.fcode { font: 12px/1.5 var(--mono) } .fprev .fpb pre.ftxt { font-family: inherit }
+.fprev .fmd { max-width: 760px; line-height: 1.55 }
+.fprev .fmd h3, .fprev .fmd h4 { margin: 18px 0 8px; font-size: 20px; letter-spacing: 0; text-transform: none; color: var(--text) } .fprev .fmd h4 { font-size: 16px } .fprev .fmd h3:first-child { margin-top: 0 }
+@media (max-width: 760px) { #fprevBox { padding: 10px 10px calc(var(--tabh) + 10px) } .fprev .dh .chip { height: 44px; min-width: 44px; justify-content: center } }
+@media (pointer: coarse) { .fprev .dh button, .fprev .dh .chip { min-height: 44px; min-width: 44px } }

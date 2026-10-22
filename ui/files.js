@@ -35,6 +35,8 @@ async function addFiles(list) {
 $('#fpick').onchange = (e) => { const l = [...e.target.files]; e.target.value = ''; if (l.length) addFiles(l); };
 $('#fq').oninput = (e) => { clearTimeout(B.fqt); B.fqt = setTimeout(() => { B.fq = e.target.value.trim(); loadFiles(); }, 250); };
 $('#flist').onclick = async (e) => {
+  const a = e.target.closest('a.fname');
+  if (a && !(e.metaKey || e.ctrlKey || e.shiftKey || e.button)) { e.preventDefault(); return previewFile(B.files.find((f) => f.name === a.closest('.frow').dataset.name)); }
   if (e.target.dataset.a !== 'rm') return;
   const name = e.target.closest('.frow').dataset.name; if (!confirm(`Delete ${name} from files?`)) return;
   const r = await api('/files', { op: 'rm', name }); if (r?.error) return toast(r.error);
@@ -44,3 +46,25 @@ const fv = $('#filesView');
 fv.addEventListener('dragover', (e) => { if ([...e.dataTransfer.types].includes('Files')) { e.preventDefault(); fv.classList.add('drop'); } });
 fv.addEventListener('dragleave', (e) => { if (!fv.contains(e.relatedTarget)) fv.classList.remove('drop'); });
 fv.addEventListener('drop', (e) => { e.preventDefault(); fv.classList.remove('drop'); const l = [...e.dataTransfer.files]; if (l.length) addFiles(l); });
+// Preview: images, PDF, markdown and text inline; anything else offers Download. Files stay on their sandboxed URL.
+const FIMG = /\.(png|jpe?g|gif|webp|svg)$/i, FCODE = /\.(json|csv|log|html|js|mjs|ts|sh|ya?ml|xml|ics)$/i, FMAX = 512e3;
+async function previewFile(f) {
+  if (!f) return;
+  const ext = (f.name.match(/\.[^.]+$/) || [''])[0].toLowerCase(), url = esc(f.url);
+  $('#fprevBody').innerHTML = `<div class="dh"><h2>${esc(f.name)}</h2><span class="sp"></span><a class="chip" href="${url}" target="_blank" rel="noopener">Open</a><a class="chip" href="${url}" download="${esc(f.name.split('/').pop())}">Download</a><button data-a="close">Close</button></div><div class="fpb"><div class="empty">Loading…</div></div>`;
+  $('#fprevBox').classList.add('on'); B.fprev = f.name;
+  const body = $('#fprevBody .fpb');
+  if (FIMG.test(ext)) body.innerHTML = `<img src="${url}" alt="${esc(f.name)}">`;
+  else if (ext === '.pdf') body.innerHTML = `<iframe src="${url}" title="${esc(f.name)}"></iframe>`;
+  else if (ext === '.md' || ext === '.txt' || FCODE.test(ext)) {
+    const r = await fetch(f.url).catch(() => null); if (B.fprev !== f.name) return;
+    if (!r?.ok) { body.innerHTML = '<div class="empty">Could not load the file.</div>'; return; }
+    let t = await r.text(); const cut = t.length > FMAX; if (cut) t = t.slice(0, FMAX);
+    body.innerHTML = (ext === '.md' ? `<div class="fmd">${md(t.replace(/\r\n/g, "\n").trimEnd())}</div>` : `<pre class="${ext === '.txt' ? 'ftxt' : 'fcode'}">${esc(t)}</pre>`) + (cut ? '<div class="empty">Showing the first 512 KB. Download for the rest.</div>' : '');
+  } else body.innerHTML = `<div class="empty">No preview for this kind of file. <a href="${url}" download="${esc(f.name.split('/').pop())}">Download it</a>.</div>`;
+}
+function closePreview() { $('#fprevBox').classList.remove('on'); $('#fprevBody').innerHTML = ''; B.fprev = ''; }
+$('#fprevBox').onclick = (e) => { if (e.target.id === 'fprevBox' || e.target.dataset.a === 'close') closePreview(); };
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && B.fprev) closePreview(); });
+// room view files <name> (CLI parity): open the Files tab with that file previewed.
+async function previewByName(name) { await loadFiles(); const n = String(name).toLowerCase(); previewFile(B.files.find((f) => f.name.toLowerCase() === n || f.path.toLowerCase() === n) || B.files.find((f) => f.name.toLowerCase().endsWith(n))); }
