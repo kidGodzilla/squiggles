@@ -19,6 +19,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Changing, clearing or loosening a set passcode needs the current one, in Settings and the CLI.
 
 ### Added
+- Command approvals (groundwork): a squiggle files a command auto mode blocked with `ask run "<cmd>" "<why>"`; `asks` lists them, `ask show`/`ask deny` inspect or refuse. Only an unlocked browser on the room's own computer can run one, once, for the exact command shown; secrets are masked in the output sent back. Page buttons come later.
 - Files tab (More > Files, `room view files`): list and search shared files and research, add by picking or dropping (optionally for a squiggle), delete your drops.
 - A review branch cut from another branch merges into that branch, not main: detected on `task move <id> review`, shown on the Merge tab (Base, with Change) and in `tasks`; set it with `task base <id> <branch>|auto`. Merge no longer needs the base checked out, only the review branch not checked out.
 - Files: `files [query]` lists the shared drop folder plus `research/` and any `fileSources` folders, newest first, searching names and text; `file add <path> [for <id>]` (never overwrites; `for` puts a note on that squiggle's pile) and `file rm <name>` (drop folder only). Squiggles are told where shared files live.

@@ -152,3 +152,17 @@ test('boot loads the hash, drops stored sessions; set and clear update memory (t
   assert.deepEqual(pc.status(remote()), { set: true, ok: false, localSkips: false });
   store = null; assert.equal(pc.status(remote()).set, true, 'clearing room.json by hand does not turn it off');
 });
+
+test('owner: Run needs a live cookie on this computer; tailnet, CLI and local skips are refused', () => {
+  const s = setup();
+  assert.throws(() => s.pc.owner(cli), (e) => e.code === 401);
+  s.pc.op(cli, { op: 'set', code: '2468' }); s.pc.op(cli, { op: 'local', on: true, old: '2468' });
+  const c = `agents_s=${tok(s.pc.op(localBrowser(), { op: 'unlock', code: '2468' }).cookie)}`;
+  assert.throws(() => s.pc.owner(cli), (e) => e.code === 401, 'CLI');
+  assert.throws(() => s.pc.owner(localBrowser()), (e) => e.code === 401, 'local skips');
+  const proxied = { socket: { remoteAddress: '127.0.0.1' }, headers: { host: 'mac.tail1234.ts.net', 'x-forwarded-for': '100.64.0.9', 'sec-fetch-site': 'same-origin', cookie: c } };
+  assert.throws(() => s.pc.owner(proxied), (e) => e.code === 403, '127.0.0.1 + ts.net Host + XFF + valid cookie');
+  assert.throws(() => s.pc.owner({ ...proxied, headers: { ...proxied.headers, 'x-forwarded-for': undefined } }), (e) => e.code === 403, 'ts.net Host alone');
+  assert.throws(() => s.pc.owner(remote(c)), (e) => e.code === 403, 'XFF alone');
+  assert.equal(s.pc.owner(localBrowser(c)), true);
+});

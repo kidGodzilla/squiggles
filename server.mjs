@@ -10,6 +10,7 @@ import os from 'node:os';
 import vm from 'node:vm';
 import { createBoard } from './board.mjs';
 import { createFiles } from './files.mjs';
+import { createAsks, runAsk } from './asks.mjs';
 import { modelFor as pickModel, DEFAULT_MODELS, EFFORTS, checkModelEffort } from './models.mjs';
 import { createMeetings, local, markPast, meetingNotes, parseWhen } from './meetings.mjs';
 import { createInbox } from './inbox.mjs';
@@ -141,6 +142,7 @@ const humans = createHumans(DATA, () => {
   for (const res of clients) res.write(line);
 }, { ownerName: CONFIG.userName || 'You' });
 const tilde = (v) => path.resolve(String(v).replace(/^~(?=\/|$)/, os.homedir()));
+const asks = createAsks({ file: path.join(RUNS, 'asks.json'), log: path.join(RUNS, 'asks.log') });
 const files = createFiles({ root: DATA, extra: Object.fromEntries(Object.entries(CONFIG.fileSources || {}).map(([k, v]) => [k, tilde(v)])), tasks: () => { try { return board.tasks(); } catch { return []; } } });
 // Awake squiggles (t294): while one with awake: true is working, caffeinate keeps the display on and the Mac from idle sleep or locking.
 // -w ties it to this server, so a crash can't leave the Mac awake for good.
@@ -983,9 +985,12 @@ const pass = makePasscode({ read: () => roomCfg().passcode, write: (v) => { cons
 // Anyone else needs a browser session unlocked with the room passcode, so gated merges need one set. Unknown callers are
 // refused: a squiggle's detached process looks like the user's terminal.
 // Process tree before the cookie (t1423): a squiggle holding a session cookie is still a squiggle.
-async function merger(req, b) {
+async function callerSquiggle(req) {
   const procs = new Map([...rt].filter(([, r]) => r.proc?.pid).map(([id, r]) => [r.proc.pid, id]));
-  const id = (await callerChain(req)).map((p) => procs.get(p)).find(Boolean);
+  return (await callerChain(req)).map((p) => procs.get(p)).find(Boolean) || '';
+}
+async function merger(req, b) {
+  const id = await callerSquiggle(req);
   if (id) return loadSquiggle(id)?.lead ? { by: id } : { error: `${id} can't merge gated work: ${USER} presses Merge on the Merge tab` };
   let why; try { pass.session(req); return { by: String(b.by || 'owner').slice(0, 40) }; } catch (e) { why = e; }
   if (!/Mozilla\//.test(req.headers['user-agent'] || '')) return { error: `Only ${USER} and the lead merge gated work: ${USER} presses Merge on the Merge tab` };
@@ -1114,6 +1119,38 @@ const server = http.createServer(async (req, res) => {
       // A new suggestion rides along with the next team report to the lead; it never wakes anyone on its own (t825).
       if (b.op === 'suggest' && !r.dup) inbox.push(`[${(r.by && loadSquiggle(r.by)?.name) || r.by || 'Someone'} · SUGGESTION] ${r.id} ${r.title}${r.evidence ? ` (evidence: ${r.evidence})` : ''}`);
       return json(res, r);
+    }
+    // Command approvals. The filer is the calling squiggle's process tree, never a body field. Deny: a squiggle withdraws
+    // its own; anyone else's needs the owner's unlocked session. Run: never a squiggle, only pass.owner (this computer, live
+    // cookie), id + the sha the page showed; the output (masked) goes back to the filer.
+    if (url.pathname === '/api/asks' && req.method === 'GET') return json(res, asks.list({ all: url.searchParams.get('all') === '1' }));
+    if (p[1] === 'asks' && p[2] && req.method === 'GET') { try { return json(res, asks.get(p[2])); } catch (e) { return json(res, { error: e.message }, e.code || 400); } }
+    if (url.pathname === '/api/asks' && req.method === 'POST') {
+      const b = await body(req, res), who = await callerSquiggle(req);
+      try {
+        if (b.op === 'file') {
+          const s = who && loadSquiggle(who);
+          const a = asks.file({ by: who, cwd: b.cwd ? path.resolve(home(String(b.cwd))) : home(s?.cwd || '~'), cmd: b.cmd, why: b.why });
+          broadcast('*room', { k: 'room', action: 'asks' }); return json(res, a);
+        }
+        if (b.op === 'deny') {
+          let owner = false;
+          if (!who) { try { pass.session(req, "denying another squiggle's ask"); owner = true; } catch (e) { return json(res, { error: e.message, ...(e.unlock && { unlock: true }) }, e.code || 403); } }
+          const a = asks.deny(String(b.id || ''), { by: who, owner, note: b.note }); broadcast('*room', { k: 'room', action: 'asks' }); return json(res, a);
+        }
+        if (b.op === 'run') {
+          if (who) return json(res, { error: `only ${USER} runs an ask, with Run on the page` }, 403);
+          try { pass.owner(req); } catch (e) { return json(res, { error: e.message, ...(e.unlock && { unlock: true }) }, e.code || 401); }
+          const a = asks.claim(String(b.id || ''), b.sha, 'owner'); broadcast('*room', { k: 'room', action: 'asks' });
+          runAsk(a).then((r) => {
+            const f = asks.finish(a.id, r); broadcast('*room', { k: 'room', action: 'asks' });
+            try { send(a.by, `${User} ran your ask ${a.id} (exit ${r.exit}, ${Math.round(r.ms / 1000)}s):\n$ ${a.cmd}\n${(r.out.length > 16e3 ? `${r.out.slice(0, 16e3)}\n[first 16 KB; all of it: ask show ${a.id}]` : r.out).trim() || '(no output)'}`, 'harness'); } catch (e) { console.error('ask result', a.id, e.message); }
+            return f;
+          }).catch((e) => console.error('ask run', a.id, e));
+          return json(res, a);
+        }
+        return json(res, { error: 'op must be file, deny or run' }, 400);
+      } catch (e) { return json(res, { error: e.message }, e.code || 400); }
     }
     if (url.pathname === '/api/files' && req.method === 'GET') return json(res, { files: files.list(url.searchParams.get('q') || '') });
     if (url.pathname === '/api/files' && req.method === 'POST') {

@@ -67,9 +67,18 @@ export function makePasscode({ read, write, now = () => Date.now() }) {
   }
   // Gated merges (t1384): a live unlocked session cookie, from a browser that typed the passcode.
   // Not ok(): local non-browser callers and local skips pass that. No passcode set means no sessions, so no.
-  function session(req) {
-    const p = cfg(); if (!p?.hash) throw err('Set a room passcode first (Settings > Security): merging gated work needs it', 403);
+  function session(req, what = 'merging gated work') {
+    const p = cfg(); if (!p?.hash) throw err(`Set a room passcode first (Settings > Security): ${what} needs it`, 403);
     if (!hasSession(req, p)) throw Object.assign(err('Unlock with the room passcode first', 403), { unlock: true });
+    return true;
+  }
+
+  // Running an ask: the room's own computer only. isLocal (no x-forwarded-for, Host not .ts.net: tailscale serve proxies
+  // tailnet requests to 127.0.0.1) and a live cookie. No CLI pass, no local skips, so tailnet sessions and peers get Copy only.
+  function owner(req) {
+    const p = cfg(); if (!p?.hash) throw err('Set a room passcode first (Settings > Security): running an ask needs it', 401);
+    if (!isLocal(req)) throw err('Run works only on the computer running the room: copy the command instead', 403);
+    if (!hasSession(req, p)) throw Object.assign(err('Unlock with the room passcode first', 401), { unlock: true });
     return true;
   }
 
@@ -104,5 +113,5 @@ export function makePasscode({ read, write, now = () => Date.now() }) {
     throw err('op: unlock, lock, set, clear, local or status');
   }
 
-  return { ok, status, op, session };
+  return { ok, status, op, session, owner };
 }
