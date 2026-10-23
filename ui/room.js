@@ -445,7 +445,7 @@ function chatEvent(id, ev, live) {
 }
 function appendLine(cw, line, keepPlace) {
   const box = cw.querySelector('.msgs'), d = document.createElement('div');
-  d.className = line.cls; if (line.html) d.innerHTML = line.html; else d.textContent = line.text; line.el = d;
+  d.className = line.cls; if (line.ts) d.dataset.ts = line.ts; if (line.html) d.innerHTML = line.html; else d.textContent = line.text; line.el = d;
   if (line.fold) d.onclick = (e) => { if (e.target.closest('.fhead')) d.classList.toggle('open'); };
   box.querySelector('.empty')?.remove();
   box.appendChild(d); if (typeof linkTasks === 'function') linkTasks(d); if (box.pinned !== false || !keepPlace) pinBottom(box);
@@ -699,7 +699,7 @@ function apply(id, ev, live) {
     case 'cleared': {
       S.hist[id] = []; S.unread[id] = 0;
       const box = document.querySelector(`#cw-${id} .msgs`);
-      if (box) box.innerHTML = '<div class="empty">Chat cleared. It still remembers everything.</div>';
+      if (box) { box.innerHTML = '<div class="empty">Chat cleared. It still remembers everything.</div>'; const cw = box.closest('.cw'); cw.dataset.cleared = +new Date(ev.ts || Date.now()); window.paintAsks?.(cw); }
       if (live) paintTile(id);
       break;
     }
@@ -765,6 +765,7 @@ async function load() {
   renderStage(); if (B.view === 'settings' && typeof renderSettings === 'function') renderSettings();
   await Promise.all(S.order.map(async (id) => { for (const ev of await api(`/squiggles/${id}/events?n=${S.sq[id].lead ? 300 : 150}`)) apply(id, ev, false); }));
   for (const id of S.order) paintTile(id);
+  document.querySelectorAll('.cw').forEach((cw) => window.paintAsks?.(cw));
   window.onBoard?.();
   renderJoinCast();
 }

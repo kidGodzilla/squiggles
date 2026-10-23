@@ -62,34 +62,40 @@ function askCard(a) {
   const run = ASK.can.run || ASK.can.local
     ? '<button class="chip primary" data-a="run">Run</button>'
     : '<span class="asknote">Run works only on the computer running the room. Copy it there.</span>';
-  return `<div class="ask" data-id="${esc(a.id)}">
-    <div class="askh"><b>${esc(askWho(a.by))}</b> asks to run this <small>${esc(a.id)}, filed ${esc(askTime(a.created))}</small></div>
+  return `<div class="ask" data-id="${esc(a.id)}" data-ts="${+new Date(a.created)}">
+    <div class="askh"><b>${esc(askWho(a.by))}</b> asks to run this <small>${esc(a.id)}, ${esc(askTime(a.created))}, in <code>${d.html}</code>${c.lines > 1 ? `, ${c.lines} lines` : ''}</small></div>
     ${a.why ? `<p class="askwhy">${esc(a.why)}</p>` : ''}
     ${r.length ? `<p class="askrisk">Careful: ${esc(r.join(', '))}.</p>` : ''}
     ${c.hidden || d.hidden ? `<p class="askrisk">Contains ${c.hidden + d.hidden} hidden or control character${c.hidden + d.hidden === 1 ? '' : 's'}, shown in brackets.</p>` : ''}
     ${c.blank || c.pad ? `<p class="askrisk">Padded with ${c.blank ? `${c.blank} blank lines in a row` : 'long runs of spaces'}, shown in brackets.</p>` : ''}
     ${c.other ? `<p class="asknote">Contains ${c.other} non-ASCII character${c.other === 1 ? '' : 's'}.</p>` : ''}
-    <div class="askcwd">In <code>${d.html}</code>${c.lines > 1 ? `, ${c.lines} lines` : ''}</div>
     <pre class="askcmd"><code>${c.html}</code></pre>
     <div class="askb"><button class="chip" data-a="copy">Copy</button>${run}<button class="chip" data-a="deny">Deny</button></div>
   </div>`;
 }
 function askDone(a) {
   const st = a.status === 'done' ? 'ran' : a.status === 'failed' ? `failed, exit ${a.exit}` : a.status;
-  return `<div class="ask past" data-id="${esc(a.id)}"><div class="askh"><b>${esc(askWho(a.by))}</b>'s ask ${esc(a.id)} ${esc(st)}${a.ms != null ? ` in ${Math.max(1, Math.round(a.ms / 1000))}s` : ''}</div>
+  return `<details class="ask past" data-id="${esc(a.id)}" data-ts="${+new Date(a.created)}"><summary><b>${esc(askWho(a.by))}</b>'s ask ${esc(a.id)} ${esc(st)}${a.ms != null ? ` in ${Math.max(1, Math.round(a.ms / 1000))}s` : ''}</summary>
     <pre class="askcmd"><code>${showCmd(a.cmd).html}</code></pre>
-    ${a.out != null ? `<details><summary>Output</summary><pre class="askout">${esc(a.out || '(no output)')}</pre></details>` : ''}</div>`;
+    ${a.out != null ? `<pre class="askout">${esc(a.out || '(no output)')}</pre>` : ''}</details>`;
 }
-// One chat window: the lead's shows every ask, a squiggle's 1:1 its own.
+// Asks sit in the chat stream where they were filed: the lead's chat shows every ask, a 1:1 its own.
+// Past asks from before a clear stay cleared; pending ones always show.
 function paintAsks(cw) {
-  const id = cw.dataset.id, lead = S.sq[id]?.lead, mine = (a) => lead || a.by === id;
-  let box = cw.querySelector('.asks');
-  const html = [...ASK.list.filter(mine).map(askCard), ...ASK.recent.filter(mine).map(askDone)].join('');
-  if (!html) { box?.remove(); return; }
-  if (!box) { box = document.createElement('div'); box.className = 'asks'; cw.querySelector('.act').before(box); }
-  const open = new Set([...box.querySelectorAll('details[open]')].map((x) => x.closest('.ask').dataset.id));
-  box.innerHTML = html;
-  for (const dt of box.querySelectorAll('details')) if (open.has(dt.closest('.ask').dataset.id)) dt.open = true;
+  const id = cw.dataset.id, lead = S.sq[id]?.lead, mine = (a) => lead || a.by === id, box = cw.querySelector('.msgs');
+  if (!box) return;
+  const cut = +cw.dataset.cleared || 0, at = (a) => +new Date(a.created);
+  const want = [...ASK.list.filter(mine).map((a) => [a, askCard(a)]), ...ASK.recent.filter((a) => mine(a) && at(a) > cut).map((a) => [a, askDone(a)])];
+  const keep = new Set(want.map(([a]) => a.id));
+  for (const el of box.querySelectorAll(':scope > .ask')) if (!keep.has(el.dataset.id)) el.remove();
+  for (const [a, html] of want) {
+    const t = document.createElement('template'); t.innerHTML = html.trim(); const el = t.content.firstChild;
+    const old = box.querySelector(`:scope > .ask[data-id="${CSS.escape(a.id)}"]`);
+    if (old) { if (old.open) el.open = true; if (old.outerHTML !== el.outerHTML) old.replaceWith(el); continue; }
+    const next = [...box.children].find((x) => x.dataset.ts && +x.dataset.ts > at(a));
+    box.querySelector('.empty')?.remove(); box.insertBefore(el, next || null);
+  }
+  if (box.pinned !== false) pinBottom(box);
 }
 function paintAskBadge() {
   const b = $('#asksBtn'), n = ASK.list.length;
@@ -99,8 +105,8 @@ function paintAskBadge() {
 async function loadAsks() {
   const [list, all, can] = await Promise.all([api('/asks'), api('/asks?all=1'), api('/asks/can')]).catch(() => [null]);
   if (!Array.isArray(list)) return;
-  const hour = Date.now() - 36e5;
-  ASK.list = list; ASK.can = can || { run: false }; ASK.recent = (all || []).filter((a) => a.status !== 'pending' && a.ended > hour && ['done', 'failed', 'interrupted'].includes(a.status));
+  const day = Date.now() - 864e5;
+  ASK.list = list; ASK.can = can || { run: false }; ASK.recent = (all || []).filter((a) => a.status !== 'pending' && a.ended > day && ['done', 'failed', 'interrupted'].includes(a.status));
   paintAskBadge(); document.querySelectorAll('.cw').forEach(paintAsks);
 }
 // Run uses a raw fetch: api() reloads the page on a 401, and a locked Run is one.

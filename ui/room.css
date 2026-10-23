@@ -732,18 +732,16 @@ body.v-one.screen:not(.v-meet) #chats .cw.office { left: auto !important; width:
 @media (max-width: 760px) { .frow { flex-wrap: wrap; row-gap: 2px } .fmeta { flex-basis: 100%; order: 3 } #fq { width: 100% } }
 @media (pointer: coarse) { .fdel, #filesView .btool label, #ffor, #fq { min-height: 44px } .frow { min-height: 44px } }
 /* Ask cards: the exact command, hidden characters drawn, risky shapes in words */
-.asks { border-top: 1px solid var(--line); max-height: 55%; overflow: auto; padding: 8px 10px; display: flex; flex-direction: column; gap: 8px; flex: none }
-.ask { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; background: var(--panel) }
-.ask.past { opacity: .85 }
-.askh { font-size: 13px } .askh small { color: var(--dim); margin-left: 4px }
+.ask { flex: none; max-width: 720px; border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; background: var(--panel) } /* inline in .msgs */
+.ask.past { opacity: .85; font-size: 13px; padding: 2px 10px } .ask.past summary { cursor: pointer; padding: 2px 0 }
+.askh { font-size: 13px } .askh small { color: var(--dim); margin-left: 4px; overflow-wrap: anywhere }
 .askwhy { margin: 4px 0; font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere }
 .askrisk { margin: 4px 0; font-size: 12px; font-weight: 600; color: var(--red) }
 .asknote { font-size: 12px; color: var(--dim) }
-.askcwd { font-size: 12px; margin: 4px 0; overflow-wrap: anywhere }
 .askcmd { margin: 4px 0; padding: 6px 8px; background: var(--panel2); border-radius: 6px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px }
 .ask.past .askcmd { max-height: 240px; overflow: auto }
 .dask { max-height: 90vh; overflow: auto }
-.askcmd .inv, .askcwd .inv, .dask .inv { background: #fde68a; color: #7c2d12; border-radius: 3px; padding: 0 2px }
+.askcmd .inv, .askh .inv, .dask .inv { background: #fde68a; color: #7c2d12; border-radius: 3px; padding: 0 2px }
 .askout { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; max-height: 240px; overflow: auto }
 .askb { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 6px }
 .asksb { font-weight: 600 }
