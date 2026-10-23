@@ -111,7 +111,7 @@ const STOP = new Set('the a an and or of to in on for with is are be no not it i
 const words = (s) => new Set(String(s).toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').split(/\s+/).filter((w) => w.length > 2 && !STOP.has(w)));
 // Two titles name the same thing when most of their words overlap (Jaccard over content words).
 export function similar(a, b) { const x = words(a), y = words(b); if (!x.size || !y.size) return false; let i = 0; for (const w of x) if (y.has(w)) i++; return i / (x.size + y.size - i) >= 0.5; }
-export function createBoard(root, onChange, { onConflict } = {}) {
+export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {}) {
   const GOALS = path.join(root, 'goals.json'), TASKS = path.join(root, 'tasks.json');
   const read = (f, d) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return d; } };
   const goals = () => { const g = read(GOALS, {}); for (const t of TIERS) { g[t] = g[t] || []; for (const x of g[t]) x.merge = x.merge === 'open' ? 'open' : 'gated'; } return g; };
@@ -122,6 +122,29 @@ export function createBoard(root, onChange, { onConflict } = {}) {
   const num = (x) => parseInt(String(x.id).slice(1), 10) || 0;
   const lastId = (t) => Math.max(Number(read(TASKS, {}).last) || 0, ...t.map(num), 0);
   const saveTasks = (t) => write(TASKS, { last: lastId(t), tasks: t });
+  // Merge steps name their owner: "Ada: …", "@ops …" or "Owner: …" (the user, or their name). whoIs(word, namesOnly) gives a squiggle id or 'owner'.
+  // loose (steps filed before tags): the first squiggle named anywhere in the text.
+  function tagStep(text, loose) {
+    const m = whoIs && text.match(/^(\d+\.\s*)?@?([\w-]+)\s*:\s+|^(\d+\.\s*)?@([\w-]+)\s+/), w = m && whoIs(m[2] || m[4]);
+    if (w) return { t: (m[1] || m[3] || '') + text.slice(m[0].length), who: w };
+    for (const x of whoIs ? text.matchAll(loose ? /\b([A-Z][\w-]*)\b/g : /@([\w-]+)/g) : []) { const v = whoIs(x[1], loose); if (v) return { t: text, who: v }; }
+    return { t: text };
+  }
+  // Each tagged squiggle hears its open steps; the user's stay theirs, in the Merge tab. Untagged ones go to the task's owner to tag.
+  const told = [];
+  function tellSteps(task, list, only) {
+    if (!onSteps) return;
+    const per = new Map();
+    (task[list] || []).forEach((x, i) => {
+      if (x.done || (only && !only.includes(i)) || x.who === 'owner') return;
+      const k = x.who || (task.owner && `?${task.owner}`); if (!k) return;
+      per.set(k, [...(per.get(k) || []), { n: i + 1, t: x.t }]);
+    });
+    for (const [k, steps] of per) told.push(() => { try { onSteps({ id: task.id, title: task.title, list, who: k.replace(/^\?/, ''), untagged: k[0] === '?', steps }); } catch {} });
+  }
+  const flushTold = () => { for (const f of told.splice(0)) f(); };
+  // Tag untagged steps (from older versions) once, from the names in them.
+  if (whoIs) { const t = tasks(); let n = 0; for (const x of t) for (const k of ['needs', 'after']) for (const y of x[k] || []) if (!y.who && !y.done) { const g = tagStep(y.t).who ? tagStep(y.t) : tagStep(y.t, true); if (g.who) { Object.assign(y, g); n++; } } if (n) saveTasks(t); }
 
   // Agents edit these files directly too: any change on disk refreshes every open board.
   let timer;
@@ -167,7 +190,7 @@ export function createBoard(root, onChange, { onConflict } = {}) {
     saveGoals(g); return f.goal;
   }
 
-  function taskOp({ op, id, title, goal, owner, status, note, by, parent, split, titles, branch, act, text, n, repo: repoArg, evidence, why }) {
+  function taskOp({ op, id, title, goal, owner, status, note, by, parent, split, titles, branch, act, text, n, who, repo: repoArg, evidence, why }) {
     const t = tasks();
     // Suggestions (t825): a squiggle notices something outside its task and files it for the lead, unowned and off every goal.
     // Similar titles (open or declined) count as the same suggestion. accept turns it into a normal task; decline closes it.
@@ -238,6 +261,7 @@ export function createBoard(root, onChange, { onConflict } = {}) {
         Object.assign(task, resolveBranch(spec, goal)); task.reviewed = today();
         try { const b = detectBase(task.repo, task.branch); if (b !== baseOf(task.repo)) task.base = b; else delete task.base; } catch {}
       } else if (branch) Object.assign(task, resolveBranch(branch, task.goal ? TIERS.flatMap((x) => goals()[x]).find((g) => g.id === task.goal) : null));
+      if (status === 'review' && task.status !== 'review') tellSteps(task, 'needs');
       task.status = status; task.confirmed = today(); if (status === 'done') task.finished = today(); else delete task.finished;
       if (note !== undefined) task.note = note;
       if (status === 'done') retire(task);
@@ -257,14 +281,23 @@ export function createBoard(root, onChange, { onConflict } = {}) {
       const list = task[op] || [], i = Number(n) - 1, what = op === 'needs' ? 'need' : 'after-merge step';
       if (act === 'add') {
         const t = String(text || '').trim();
-        if (!t) throw new Error(op === 'needs' ? 'needs add "<what the user must do before merging>"' : 'after add "<what the user must do after merging>"');
-        if (op === 'needs' && /^after\b/i.test(t)) throw new Error(`that is after merging: task after ${task.id} add "<step>", only if the user must do it`);
-        list.push({ t, done: false });
+        if (!t) throw new Error(op === 'needs' ? 'needs add "<owner>: <what they must do before merging>"' : 'after add "<owner>: <what they must do after merging>"');
+        if (op === 'needs' && /^after\b/i.test(t)) throw new Error(`that is after merging: task after ${task.id} add "<owner>: <step>"`);
+        const g = tagStep(t);
+        if (whoIs && !g.who) throw new Error(`tag the step's owner first, a squiggle or Owner: task ${op} ${task.id} add "Owner: ${t.replace(/"/g, "'")}"`);
+        list.push({ t: g.t, done: false, ...(g.who ? { who: g.who } : {}) });
+        if (op === 'needs' ? task.status === 'review' : task.status === 'done') { task[op] = list; tellSteps(task, op, [list.length - 1]); }
+      }
+      else if (act === 'tag') {
+        if (!list[i]) throw new Error(`no ${what} ${n} on ${task.id}`);
+        const w = whoIs?.(String(who || '').replace(/^@/, '')); if (!w) throw new Error(`tag ${n} with a squiggle's id or name, or Owner`);
+        list[i].who = w;
+        if (op === 'needs' ? task.status === 'review' : task.status === 'done') { task[op] = list; tellSteps(task, op, [i]); }
       }
       else if (act === 'done' || act === 'undo') { if (!list[i]) throw new Error(`no ${what} ${n} on ${task.id}`); list[i].done = act === 'done'; }
       else if (act === 'drop') { if (!list[i]) throw new Error(`no ${what} ${n} on ${task.id}`); list.splice(i, 1); }
       else if (act === 'clear') list.length = 0;
-      else throw new Error(`${op} add|done|undo|drop|clear`);
+      else throw new Error(`${op} add|done|undo|drop|tag|clear`);
       if (list.length) task[op] = list; else delete task[op];
     }
     else if (op === 'edit') {
@@ -274,7 +307,7 @@ export function createBoard(root, onChange, { onConflict } = {}) {
       if (split !== undefined) { if (split === true || split === 'true') task.split = true; else delete task.split; }
       task.confirmed = today();
     } else throw new Error(`unknown task op ${op}`);
-    saveTasks(t); return task;
+    saveTasks(t); flushTold(); return task;
   }
 
   // A finished or dropped task takes its worktrees with it (t769): clean ones go, merged branches are deleted (-d). Dirty ones stay, and say so.
@@ -453,7 +486,7 @@ export function createBoard(root, onChange, { onConflict } = {}) {
       const t = tasks(), x = t.find((k) => k.id === id);
       x.status = 'done'; x.finished = today(); x.confirmed = today(); if (by) x.mergedBy = by;
       x.note = `already on ${r.base}${by ? `, closed by ${by}` : ''}${x.note ? ` — ${x.note}` : ''}`;
-      saveTasks(t); return { ...r, merged: [], task: x, worktrees: [] };
+      tellSteps(x, 'after'); saveTasks(t); flushTold(); return { ...r, merged: [], task: x, worktrees: [] };
     }
     if (r.error) throw new Error(r.error);
     if (r.conflicts?.length) throw new Error(`conflicts merging ${r.branch} into ${r.base}: ${r.conflicts.join(', ')}: send it back`);
@@ -476,7 +509,7 @@ export function createBoard(root, onChange, { onConflict } = {}) {
     x.worktrees = (x.worktrees || []).filter((p) => kept.includes(p)); if (!x.worktrees.length) delete x.worktrees;
     const k = kept.length ? `; branch kept, worktree with uncommitted work: ${kept.join(', ')}` : '';
     x.note = `merged into ${where}${by ? ` by ${by}` : ''}${k}${x.note ? ` — ${x.note}` : ''}`;
-    saveTasks(t); return { ...r, sha: main.sha, merged: done, task: x, worktrees: removed };
+    tellSteps(x, 'after'); saveTasks(t); flushTold(); return { ...r, sha: main.sha, merged: done, task: x, worktrees: removed };
   }
   // Merge one repo's side of a review branch into its base; returns { sha, removed, kept } worktrees.
   function mergeRepo(id, r) {

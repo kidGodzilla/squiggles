@@ -328,11 +328,15 @@ function fitDetail() {
 addEventListener('resize', fitDetail);
 // The user's steps around the button (t766 needs, t1182 after), ticked here or with task needs|after <id> done <n>.
 // Only the checkbox ticks: clicking the text is reading it (t1366).
-const stepsHtml = (l, a, h) => l?.length ? `<div class="mneeds"><h5>${h}${l.some((x) => !x.done) ? '' : ': all done'}</h5>${l.map((x, i) => `<div class="mstep ${x.done ? 'done' : ''}"><label class="mtick"><input type="checkbox" data-a="${a}" data-n="${i + 1}" ${x.done ? 'checked' : ''} aria-label="${x.done ? 'Not done' : 'Done'}: ${esc(x.t)}" title="${x.done ? 'Not done' : 'Mark done'}"></label><span>${esc(x.t)}</span></div>`).join('')}</div>` : '';
+// Each step says whose it is: a squiggle's waits on them, only the user's (and untagged) read as theirs.
+const stepWho = (x) => x.who === 'owner' ? 'You' : x.who ? (S.sq?.[x.who]?.name || x.who) : 'Untagged';
+const stepHis = (x) => !x.who || x.who === 'owner';
+const stepsHtml = (l, a, h) => l?.length ? `<div class="mneeds"><h5>${h}${l.some((x) => !x.done) ? '' : ': all done'}</h5>${l.map((x, i) => `<div class="mstep ${x.done ? 'done' : ''} ${stepHis(x) ? '' : 'theirs'}"><label class="mtick"><input type="checkbox" data-a="${a}" data-n="${i + 1}" ${x.done ? 'checked' : ''} aria-label="${x.done ? 'Not done' : 'Done'}: ${esc(x.t)}" title="${x.done ? 'Not done' : 'Mark done'}"></label><span><b class="mwho">${esc(stepWho(x))}${x.done ? ', done' : stepHis(x) ? '' : ', waiting'}:</b> ${esc(x.t)}</span></div>`).join('')}</div>` : '';
 // Merged tasks with after-merge steps left (t1182). CLI: merges lists them too.
 function afterHtml() {
   const t = B.tasks.filter((x) => x.status === 'done' && x.after?.some((n) => !n.done)); if (!t.length) return '';
-  return `<h3 class="wth">After merging <span>${t.length}</span></h3><div class="mafter">${t.map((x) => `<div class="mabox ${B.aopen.has(x.id) ? 'open' : ''}" data-merge="${esc(x.id)}">${stepsHtml(x.after, 'after', `${esc(x.id)} ${esc(x.title)}`)}</div>`).join('')}</div>`;
+  const his = t.reduce((n, x) => n + x.after.filter((y) => !y.done && stepHis(y)).length, 0);
+  return `<h3 class="wth">After merging <span>${his ? `${his} yours` : 'none yours'}</span></h3><div class="mafter">${t.map((x) => `<div class="mabox ${B.aopen.has(x.id) ? 'open' : ''}" data-merge="${esc(x.id)}">${stepsHtml(x.after, 'after', `${esc(x.id)} ${esc(x.title)}`)}</div>`).join('')}</div>`;
 }
 // Worktrees (t769): every extra worktree in the goals' repos and the task that owns it. CLI: worktrees.
 function worktreesHtml() {

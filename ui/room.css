@@ -425,7 +425,7 @@ body.v-one.v-meet #chats .cw.office { left: var(--mx) !important; top: var(--my)
 .mneeds { margin: 0 0 10px; padding: 8px 10px; border: 1px solid rgba(217,162,74,.45); border-radius: 10px; font-size: 12.5px }
 .mneeds h5 { margin: 0 0 4px; font-size: 11.5px; font-weight: 600; color: #d9a24a }
 .mafter { display: grid; gap: 8px; margin: 0 0 14px } .mabox .mneeds { margin: 0 } .mabox { min-width: 0 } .mabox h5 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis } /* t1182 */
-.mstep { display: flex; gap: 8px; align-items: baseline; padding: 2px 0 } .mstep.done span { color: var(--dim); text-decoration: line-through } .mtick { cursor: pointer }
+.mstep { display: flex; gap: 8px; align-items: baseline; padding: 2px 0 } .mstep.done span { color: var(--dim); text-decoration: line-through } .mtick { cursor: pointer } .mwho { font-weight: 600 } .mstep.theirs:not(.done) span { color: var(--dim) }
 .mabox { cursor: pointer } .mabox.open h5 { white-space: normal } /* click reads, the box ticks (t1366) */
 @media (pointer: coarse) { .mstep { min-height: 44px; align-items: center } .mtick { display: flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; margin: 0 -10px } } /* tick a step with a thumb (t1182) */
 .mdbox dl { display: grid; grid-template-columns: 100px 1fr; gap: 4px 12px; margin: 0; font-size: 12.5px } .mdbox dt { color: var(--dim) } .mdbox dd { margin: 0; word-break: break-word }

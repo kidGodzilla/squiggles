@@ -132,6 +132,15 @@ const board = createBoard(DATA, () => {
 }, { onConflict: ({ id, owner, title, note }) => { // t1189: the owner hears at once (a wake, or a message if it's mid-turn)
   const s = owner && loadSquiggle(owner); if (!s || s.paused) return;
   send(owner, `The merge listing sent ${id} "${String(title).slice(0, 80)}" back to doing: ${note}. If you're idle, fix it now, journal it and end with a status line.`, 'harness');
+}, whoIs: (w, namesOnly) => { // a merge step's owner tag: a squiggle, or the user ('owner', 'me' or their name)
+  const k = String(w || '').toLowerCase(); if (['owner', 'me', 'user', String(CONFIG.userName || '').toLowerCase()].includes(k)) return 'owner';
+  const s = listSquiggles().find((x) => (!namesOnly && x.id === k) || String(x.name || '').toLowerCase() === k); return s?.id || null;
+}, onSteps: ({ id, title, list, who, untagged, steps }) => { // tagged steps go to their squiggle, not the user
+  const s = loadSquiggle(who); if (!s || s.paused) return;
+  const when = list === 'needs' ? `before ${USER} merges it` : 'now that it is merged', l = steps.map((x) => `${x.n}. ${x.t}`).join('\n');
+  send(who, untagged
+    ? `${id} "${String(title).slice(0, 80)}" has merge steps with no owner:\n${l}\nTag each: task ${list} ${id} tag <n> <squiggle or owner>.`
+    : `${id} "${String(title).slice(0, 80)}" has a step for you ${when}:\n${l}\nDo it, then task ${list} ${id} done <n>. It shows in the Merge tab until then. Journal it and end with a status line.`, 'harness');
 } });
 const meetings = createMeetings(DATA, () => {
   const line = `data: ${JSON.stringify({ id: '*board', ev: { k: 'meetings' } })}\n\n`;
