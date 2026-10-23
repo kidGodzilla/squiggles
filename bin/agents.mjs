@@ -146,8 +146,6 @@ const cmds = {
     if (op === 'base') return call('/tasks', { op, id: x, branch: y || 'auto' }).then((t) => `${t.id} merges into ${t.base || 'the default branch'}`);
     if (op === 'worktree') return call('/tasks', { op, id: x, ...(y ? { repo: y } : {}) }).then((t) => `${t.created ? 'created' : 'already there'}: ${t.path} on ${t.branch}`);
     if (op === 'needs' || op === 'after' || (op === 'edit' && (y === 'needs' || y === 'after'))) { const [list, act, v] = op === 'edit' ? [y, z, a[4]] : [op, y, z]; return call('/tasks', { op: list, id: x, act, ...(/^\d+$/.test(v || '') ? { n: v } : { text: v }), ...(act === 'tag' ? { who: op === 'edit' ? a[5] : a[4] } : {}) }); }
-    // task ship <id> [note] (t1922): a guardian's sign-off, pinned to the commit under review.
-    if (op === 'ship') return call('/tasks', { op, id: x, note: y, by: process.env.AGENTS_ID }).then((t) => `${t.id} shipped at ${t.shipped.at(-1).sha.slice(0, 7)}`);
     // task ship <id> [note]: a guardian's sign-off, pinned to the commit under review.
     if (op === 'ship') return call('/tasks', { op, id: x, note: y, by: process.env.AGENTS_ID }).then((t) => `${t.id} shipped at ${t.shipped.at(-1).sha.slice(0, 7)}`);
     if (op === 'edit') return call('/tasks', { op, id: x, [y]: z ?? '' });
