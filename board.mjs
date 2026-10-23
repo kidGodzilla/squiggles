@@ -190,6 +190,18 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
     saveGoals(g); return f.goal;
   }
 
+  // A worktree gets its own node_modules: a symlink to main's let npm ci in the worktree empty the main checkout.
+  // An APFS clone (cp -c) copies no data and shares nothing after; old symlinks are swapped for one when the worktree is asked for again.
+  async function ownModules(repo, at) {
+    const src = path.join(expand(repo), 'node_modules'), dst = path.join(at, 'node_modules');
+    if (fs.lstatSync(dst, { throwIfNoEntry: false })?.isSymbolicLink()) fs.unlinkSync(dst);
+    if (fs.existsSync(dst) || !fs.existsSync(src) || !fs.existsSync(path.join(at, 'package.json'))) return;
+    try {
+      await pexec('cp', ['-cR', src, dst]);
+      // Some mains hold node_modules/node_modules -> main (left by an old ln -s); the copy must not point back.
+      const self = path.join(dst, 'node_modules'); if (fs.lstatSync(self, { throwIfNoEntry: false })?.isSymbolicLink()) fs.unlinkSync(self);
+    } catch { fs.rmSync(dst, { recursive: true, force: true }); } // not APFS: the squiggle installs its own
+  }
   // Checkouts run async (10-23): a sync worktree add froze every chat for a minute while Xcode builds loaded the disk.
   const adding = new Map();
   async function addWorktree(id, repo, at, br) {
@@ -197,9 +209,9 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
     if (!have) {
       fs.mkdirSync(WT, { recursive: true });
       await gitA(repo, hasBranch(repo, br) ? ['worktree', 'add', '--quiet', at, br] : ['worktree', 'add', '--quiet', '-b', br, at, baseOf(repo)]);
-      if (fs.existsSync(path.join(expand(repo), 'node_modules')) && fs.existsSync(path.join(at, 'package.json'))) fs.symlinkSync(path.join(expand(repo), 'node_modules'), path.join(at, 'node_modules'));
     }
     const p = have?.path || fs.realpathSync(at);
+    await ownModules(repo, p);
     // Re-read: the board may have changed while git ran.
     const t = tasks(), task = t.find((x) => x.id === id);
     if (!task) throw new Error(`no task ${id}`);

@@ -31,3 +31,23 @@ test('a board edit made during the checkout survives it', async () => {
   await p;
   assert.ok(b.tasks().some((x) => x.title === 'meanwhile'));
 });
+
+test('a worktree gets its own node_modules: emptying it leaves main\'s alone', async () => {
+  const n = path.join(dir, 'web'), h = (...a) => execFileSync('git', ['-C', n, ...a], { stdio: 'pipe', env });
+  fs.mkdirSync(path.join(n, 'node_modules', 'dep'), { recursive: true }); fs.writeFileSync(path.join(n, 'node_modules', 'dep', 'index.js'), 'main');
+  fs.symlinkSync(path.join(n, 'node_modules'), path.join(n, 'node_modules', 'node_modules')); // a self-link some mains carry
+  fs.writeFileSync(path.join(n, 'package.json'), '{}'); fs.writeFileSync(path.join(n, '.gitignore'), 'node_modules\n');
+  h('init', '-q', '-b', 'main'); h('add', '.'); h('commit', '-q', '-m', 'base');
+  fs.writeFileSync(path.join(dir, 'tasks.json'), JSON.stringify({ tasks: [{ id: 't3', title: 'Web', goal: 'g', status: 'doing', owner: 'x', repo: n }, { id: 't4', title: 'Old', goal: 'g', status: 'doing', owner: 'x', repo: n }] }));
+  const w = await b.taskOp({ op: 'worktree', id: 't3' }), nm = path.join(w.path, 'node_modules');
+  assert.ok(!fs.lstatSync(nm).isSymbolicLink());
+  assert.equal(fs.readFileSync(path.join(nm, 'dep', 'index.js'), 'utf8'), 'main');
+  assert.equal(fs.lstatSync(path.join(nm, 'node_modules'), { throwIfNoEntry: false }), undefined, 'no link back to main');
+  fs.rmSync(nm, { recursive: true }); // what npm ci does first
+  assert.equal(fs.readFileSync(path.join(n, 'node_modules', 'dep', 'index.js'), 'utf8'), 'main');
+  // An older worktree has a symlink; asking for it again swaps in a copy.
+  const old = await b.taskOp({ op: 'worktree', id: 't4' }), onm = path.join(old.path, 'node_modules');
+  fs.rmSync(onm, { recursive: true }); fs.symlinkSync(path.join(n, 'node_modules'), onm);
+  await b.taskOp({ op: 'worktree', id: 't4' });
+  assert.ok(!fs.lstatSync(onm).isSymbolicLink()); assert.ok(fs.existsSync(path.join(n, 'node_modules', 'dep', 'index.js')));
+});

@@ -103,6 +103,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - The lead's "Handled." replies fold with the reports they answer into one line that opens to list them.
 
 ### Fixed
+- Worktrees get their own copy of node_modules (an APFS clone) instead of a link to main's, so installing in a worktree no longer empties the main checkout's.
 - A double-clicked Merge joins the running merge; send back, move and drop wait until git finishes writing.
 - Unsent chat text survives a page reload or restart, per chat, until you send or clear it.
 - `task worktree` and merges run git in the background, so a slow disk no longer freezes every chat while a checkout runs.
