@@ -735,7 +735,9 @@ async function roomCommand(ev) {
     case 'lock': lock(); break;
     case 'reload': location.reload(); break;
     case 'quit': if (!$('#offnote')) document.body.insertAdjacentHTML('beforeend', '<div id="offnote"><b>Squiggles is off</b><p>Open Squiggles to start it again.</p></div>'); break;
-    case 'restarting': toast('Server restarting with the latest code…'); setTimeout(() => location.reload(), 4000); break;
+    case 'restarting': restartAsk(); toast('Server restarting with the latest code…'); setTimeout(() => location.reload(), 4000); break;
+    case 'restartAsk': restartAsk(ev.until); break;
+    case 'restartLater': restartAsk(); break;
     case 'limit': showLimit(+ev.value || 0); break;
     case 'call': window.onCall?.(); break;
     case 'meeting': meetingNow(ev.value, true); break;
@@ -1125,6 +1127,27 @@ $('#quitBtn').onclick = () => {
     : '<p>Stop every squiggle and the server? Open Squiggles to start again.</p><button class="chip" data-q="now">Quit</button><button class="chip" data-q="no">Cancel</button>';
   a.hidden = false; a.querySelector('.primary')?.focus(); // the safe choice is the default (t1154)
 };
+// A due restart counts down 10s here. Not yet lets the team work on; this page asks again after 2 idle minutes.
+let restartLater = false;
+function restartAsk(until) {
+  let box = $('#restartAsk'); clearInterval(restartAsk.t);
+  if (!until) { box?.remove(); return; }
+  if (!box) {
+    box = document.createElement('div'); box.id = 'restartAsk'; box.setAttribute('role', 'alertdialog'); box.setAttribute('aria-label', 'Restart');
+    box.innerHTML = '<p>Restarting in <b>10s</b> with the latest code.</p><div><button class="chip primary" data-r="now">Restart now</button><button class="chip" data-r="later">Not yet</button></div>';
+    box.onclick = async (e) => {
+      const op = e.target.dataset?.r; if (!op) return; box.remove(); clearInterval(restartAsk.t);
+      const r = await api('/restart', { op, by: 'owner' }).catch(() => null); if (r?.error) return toast(r.error);
+      if (op === 'later') { restartLater = true; toast('Restart postponed. It asks again when you step away.'); }
+    };
+    document.body.append(box); box.querySelector('.primary').focus();
+  }
+  const tick = () => { const n = Math.max(0, Math.ceil((until - Date.now()) / 1000)); box.querySelector('b').textContent = `${n}s`; };
+  tick(); restartAsk.t = setInterval(tick, 250);
+}
+setInterval(() => { if (restartLater && Date.now() - lastActive > 2 * 60000) { restartLater = false; api('/restart', { op: 'ready' }).catch(() => {}); } }, 15000);
+fetch('/api/restart').then((r) => r.json()).then((r) => { if (r?.phase === 'asking') restartAsk(r.until); }).catch(() => {}); // raw: api() reloads on a 401
+$('#restartBtn').onclick = async () => { const r = await api('/restart', { op: 'now', by: 'owner' }).catch(() => null); if (r?.error) toast(r.error); else if (typeof r === 'string') toast(r[0].toUpperCase() + r.slice(1)); };
 $('#quitAsk').onclick = async (e) => {
   const q = e.target.dataset?.q; if (!q) return; $('#quitAsk').hidden = true; if (q === 'no') return;
   const r = await api('/quit', { now: q === 'now' }).catch(() => null); if (r?.error) return toast(r.error);

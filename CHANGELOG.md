@@ -21,6 +21,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - An ask cut off by a server restart is marked interrupted at boot and its filer is told; its output is lost.
 
 ### Added
+- Restart counts down 10s on an open page, with Restart now and Not yet; Not yet lets work go on until you step away. `restart now|later|status`, and a Restart item in the menu.
 - Merge steps name their owner (`task needs|after <id> add "Ada: <step>"`, or Owner for you); untagged ones are refused and `tag <n> <owner>` fixes old ones. Each squiggle is told its steps on review or merge, and the Merge tab says whose each step is.
 - Squiggle sheet: Look lists every character style; Avataaars adds hair, clothes and colour pickers.
 - Two more character styles, Notionists and Lorelei (CC0 art via DiceBear's parts): `look <id> notionists|lorelei` or the room's character setting. Both talk; Lorelei has no desk.

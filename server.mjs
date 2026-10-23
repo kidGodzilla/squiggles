@@ -615,6 +615,21 @@ function broadcast(id, ev) {
 // Restart without killing anyone mid-turn: wait until nobody is working, then exit; the login item starts the server again.
 // Started by hand (no login item), start the replacement ourselves; it waits for this one to free the port.
 let restartPending = false, quitting = false, restartBy = '';
+// With a page open, a due restart counts down 10s there (Restart now / Not yet). Not yet lets turns run again until
+// the page reports the user idle 2 min, or they press Restart. No page open: restart as before.
+let gate = null; // { phase: 'asking', until } | { phase: 'later', at }; gateOk skips the countdown once
+let gateOk = false;
+const restartState = () => ({ pending: restartPending, working: working(), ...(gate ? { phase: gate.phase, ...(gate.until ? { until: gate.until } : {}), ...(gate.at ? { at: gate.at } : {}) } : {}), by: restartBy });
+function restartOp(op, by) {
+  if (op === 'now') { clearTimeout(gate?.t); gate = null; gateOk = true; restartBy = whoAsked(by) || restartBy || 'owner'; restartPending = true; setTimeout(maybeRestart, 100); return 'restarting as soon as nobody is mid-turn, no countdown'; }
+  if (op === 'later') {
+    if (!restartPending && gate?.phase !== 'later') return 'no restart is due';
+    clearTimeout(gate?.t); gate = { phase: 'later', at: Date.now() }; restartPending = false; releaseHeld();
+    broadcast('*room', { k: 'room', action: 'restartLater' }); return `restart postponed until ${USER} is idle on the page`;
+  }
+  if (op === 'ready') { if (gate?.phase !== 'later') return 'nothing postponed'; gate = null; restartPending = true; setTimeout(maybeRestart, 100); return 'restart due again'; }
+  throw new Error('op must be now, later or ready');
+}
 // Self-reported, so one short line: no control chars to forge log lines (t1436).
 const whoAsked = (by) => String(by || '').replace(/[\x00-\x1f\x7f]+/g, ' ').trim().slice(0, 40);
 const supervised = process.env.XPC_SERVICE_NAME === 'local.squiggles.server';
@@ -622,6 +637,14 @@ const working = () => [...rt.values()].filter((r) => r.status === 'working' && (
 function maybeRestart() {
   if (!restartPending || working()) return;
   if (quitting) return quitNow();
+  if (!gateOk && clients.size) {
+    if (gate?.phase !== 'asking') {
+      gate = { phase: 'asking', until: Date.now() + 10000 };
+      gate.t = setTimeout(() => { if (gate?.phase === 'asking') { gate = null; gateOk = true; maybeRestart(); } }, 10000);
+      broadcast('*room', { k: 'room', action: 'restartAsk', until: gate.until });
+    }
+    return;
+  }
   broadcast('*room', { k: 'room', action: 'restarting' });
   if (!supervised) spawn(process.execPath, process.argv.slice(1), { detached: true, stdio: 'inherit', env: { ...process.env, SQUIGGLES_RESPAWN: '1' } }).unref();
   shutdown(0, false, `restart by ${restartBy || 'unknown'}${supervised ? '' : ', replacement started'}`);
@@ -639,10 +662,13 @@ function quitNow() {
   broadcast('*room', { k: 'room', action: 'quit' });
   shutdown(0, true, `quit by ${restartBy || 'unknown'}`);
 }
-// Turns held by a pending restart go out once the new server is up.
-setTimeout(() => {
+// Turns held by a pending restart go out once the new server is up, or when the user postpones it.
+function releaseHeld() {
   const held = persisted['*held'] || []; delete persisted['*held']; saveState();
   for (const h of held) try { send(h.id, h.text, h.from, { replay: true, human: h.human, images: h.images || [] }); } catch (e) { console.error('held', h.id, e.message); }
+}
+setTimeout(() => {
+  releaseHeld();
   // Asks the old server was running when it stopped.
   for (const a of asks.interrupted()) {
     try { send(a.by, `Your ask ${a.id} was cut off: the server restarted while it ran${a.stillRunning ? ` (pid ${a.pid} still running)` : ''}. Its output is lost. Check what it did before filing it again:\n$ ${a.cmd}`, 'harness'); } catch (e) { console.error('ask interrupted', a.id, e.message); }
@@ -1085,7 +1111,7 @@ const server = http.createServer(async (req, res) => {
       // A page on this Mac (not proxied by tailscale serve, which adds x-forwarded-for): meeting alerts are left to it.
       res.local = !req.headers['x-forwarded-for'];
       clients.add(res);
-      req.on('close', () => clients.delete(res));
+      req.on('close', () => { clients.delete(res); if (gate?.phase === 'later' && !clients.size) restartOp('ready'); }); // last page gone: restart as before
       return;
     }
     if (url.pathname === '/api/squiggles' && req.method === 'GET') return json(res, listSquiggles().map(view));
@@ -1109,7 +1135,14 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/inbox') return json(res, { ...drop.list(), dir: path.join(DATA, 'inbox').replace(os.homedir(), '~') });
     if (url.pathname === '/api/limit') return json(res, { until: limit.until });
     if (url.pathname === '/api/quit' && req.method === 'POST') { const b = await body(req, res); return json(res, quit(!!b.now, b.by || 'owner')); }
-    if (url.pathname === '/api/restart' && req.method === 'POST') { restartBy = whoAsked((await body(req, res)).by) || 'owner'; restartPending = true; setTimeout(maybeRestart, 500); return json(res, 'restarting as soon as nobody is mid-turn'); }
+    if (url.pathname === '/api/restart' && req.method === 'GET') return json(res, restartState());
+    if (url.pathname === '/api/restart' && req.method === 'POST') {
+      const b = await body(req, res);
+      if (b.op) { try { return json(res, restartOp(b.op, b.by)); } catch (e) { return json(res, { error: e.message }, 400); } }
+      if (gate?.phase === 'later') return json(res, `${User} postponed the restart; it runs once they are idle on the page (restart now skips that)`);
+      restartBy = whoAsked(b.by) || 'owner'; restartPending = true; setTimeout(maybeRestart, 500);
+      return json(res, `restarting as soon as nobody is mid-turn${clients.size ? `, after a 10s countdown on ${USER}'s page` : ''}`);
+    }
     if (url.pathname === '/api/voice') return json(res, kokoro.status());
     // Room controls (radio, voices, chatter, tabs, chat windows) so the lead can do whatever the user can.
     if (url.pathname === '/api/room' && req.method === 'POST') {
