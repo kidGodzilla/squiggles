@@ -5,6 +5,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 ## 0.1.2 (unreleased)
 
 ### Security
+- Image paths in agent messages can no longer use %2e or backslashes to make the page fetch a path outside /files/.
 - Restart and quit requests log who asked as one line of at most 40 characters, so a caller can't forge shutdown log lines.
 - `calendar` leaves out invite locations and notes unless `--notes`, then marks them untrusted; control characters in titles, calendars and attendees become spaces. Attendees are listed.
 - Request bodies are capped at 200 MB (413), read as bytes so split UTF-8 survives; the composer escapes attached image URLs.

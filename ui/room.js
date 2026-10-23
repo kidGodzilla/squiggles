@@ -381,7 +381,7 @@ function sharing() { const on = !!S.present && presenter() === S.present; if (do
 const IMG_PATH = /(?:~|\/)[^\s`'"()<>\[\]]*\.(?:png|jpe?g|gif|webp)(?=$|[\s`'"()<>\[\].,;:!?])/gi;
 function fileUrl(p) {
   p = String(p || '').replace(/^~(?=\/)/, S.home || '~');
-  if (/^\/files\/[^?#]+$/.test(p) && !/\/\.|\.\./.test(p)) return p;
+  if (/^\/files\/[^?#\\%]+$/.test(p) && !/\/\.|\.\./.test(p)) return p; // no %2e or \: the browser would resolve them out of /files/
   for (const [src, dir] of Object.entries(S.roots || {})) {
     if (!p.startsWith(dir + '/')) continue;
     const rel = p.slice(dir.length + 1); if (!rel || rel.split('/').some((x) => !x || x.startsWith('.'))) return null;
