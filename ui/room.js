@@ -623,11 +623,19 @@ function shrinkImage(file) {
     img.src = url;
   });
 }
+// Unsent text survives a reload or restart: kept per chat in this tab's sessionStorage until sent or emptied.
+const drafts = () => { try { return JSON.parse(sessionStorage.squigglesDrafts || '{}'); } catch { return {}; } };
+function keepDraft(ta, key) {
+  const d = drafts()[key]; if (d && !ta.value) ta.value = d;
+  const save = () => { const all = drafts(); if (ta.value.trim()) all[key] = ta.value; else delete all[key]; try { sessionStorage.squigglesDrafts = JSON.stringify(all); } catch {} };
+  ta.addEventListener('input', save); return save;
+}
 function wireChat(cw, id) {
   const ta = cw.querySelector('textarea'), head = cw.querySelector('.chead');
   const autosize = () => { ta.style.height = 'auto'; ta.style.height = Math.min(140, ta.scrollHeight) + 'px'; };
+  const draft = keepDraft(ta, id); autosize();
   const form = cw.querySelector('form'); wireAttach(form, ta, cw);
-  const send = async () => { const t = ta.value.trim(), images = takeImages(form); if (!t && !images.length) return; ta.value = ''; autosize(); paintMirror(ta); mentionClose(); await api(`/squiggles/${id}/send`, { text: t, images, from: 'owner', human: me().id }); };
+  const send = async () => { const t = ta.value.trim(), images = takeImages(form); if (!t && !images.length) return; ta.value = ''; draft(); autosize(); paintMirror(ta); mentionClose(); await api(`/squiggles/${id}/send`, { text: t, images, from: 'owner', human: me().id }); };
   ta.addEventListener('input', autosize);
   ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); } if (e.key === 'Escape') cw.classList.add('min'); });
   cw.querySelector('form').onsubmit = (e) => { e.preventDefault(); send(); };
@@ -1114,8 +1122,9 @@ function threadTo(text) {
   const f = $('#meetThread form'), ta = f.querySelector('textarea');
   pinChat($('#meetThread .msgs'));
   const autosize = () => { ta.style.height = 'auto'; ta.style.height = Math.min(140, ta.scrollHeight) + 'px'; };
+  const draft = keepDraft(ta, 'meeting'); autosize();
   wireAttach(f, ta, $('#meetThread'));
-  const send = async () => { const t = ta.value.trim(), images = takeImages(f); if (!t && !images.length) return; ta.value = ''; autosize(); paintMirror(ta); mentionClose(); pinBottom($('#meetThread .msgs')); for (const id of threadTo(t)) await api(`/squiggles/${id}/send`, { text: t, images, from: 'owner', human: me().id }); };
+  const send = async () => { const t = ta.value.trim(), images = takeImages(f); if (!t && !images.length) return; ta.value = ''; draft(); autosize(); paintMirror(ta); mentionClose(); pinBottom($('#meetThread .msgs')); for (const id of threadTo(t)) await api(`/squiggles/${id}/send`, { text: t, images, from: 'owner', human: me().id }); };
   ta.addEventListener('input', autosize);
   ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); } });
   f.onsubmit = (e) => { e.preventDefault(); send(); };

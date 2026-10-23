@@ -100,6 +100,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - The lead's "Handled." replies fold with the reports they answer into one line that opens to list them.
 
 ### Fixed
+- Unsent chat text survives a page reload or restart, per chat, until you send or clear it.
 - `task worktree` and merges run git in the background, so a slow disk no longer freezes every chat while a checkout runs.
 - A due restart holds your chat at most 2 minutes: held messages then go out and nothing is held for 10 minutes; the restart still runs once nobody is mid-turn.
 - `room reload` no longer reloads the page under you: while you're active it counts down 10s with Reload now and Not yet; Not yet waits until you step away.
