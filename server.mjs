@@ -235,6 +235,8 @@ const modelFor = (s) => pickModel(s, CONFIG.model);
 // Settings baked into a process's flags. A change ends the idle process before the next turn; --resume keeps the session.
 // The squiggle's settings.json (allow rules) is in it too: an edit relaunches the idle process on its next message. So is the system prompt (t1307).
 const launchSig = (s) => JSON.stringify([!!s.chrome, modelFor(s), s.permissionMode, s.autocompact, s.maxTurns, s.effort, s.cwd, readText(path.join(sqDir(s.id), 'settings.json'), ''), systemPrompt(s)]);
+// Busy Mac: every squiggle but the lead runs at nice 10 and its builds and tests inherit it, so the lead and the page stay quick.
+const lowPriority = (s, proc) => { if (!s.lead && proc.pid) try { os.setPriority(proc.pid, 10); } catch {} };
 function launch(s) {
   const r = R(s.id); r.sig = launchSig(s);
   const args = ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose',
@@ -257,6 +259,7 @@ function launch(s) {
   if (r.sessionId) args.push('--resume', r.sessionId);
 
   const proc = spawn('claude', args, { cwd: home(s.cwd), stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, AGENTS_ID: s.id } });
+  lowPriority(s, proc);
   r.proc = proc;
   let buf = '', lastText = '';
   proc.stdout.on('data', (chunk) => {
@@ -329,6 +332,7 @@ function codexServer(s) {
     // The agents CLI talks to this server over HTTP; the journal lives in the squiggle's folder.
     '-c', 'sandbox_workspace_write.network_access=true', '-c', `sandbox_workspace_write.writable_roots=${JSON.stringify(roots)}`],
   { cwd: home(s.cwd), stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, AGENTS_ID: s.id } });
+  lowPriority(s, proc);
   const cx = r.cx = { proc, n: 0, wait: new Map(), on: null };
   cx.req = (method, params) => new Promise((res, rej) => { const id = ++cx.n; cx.wait.set(id, { res, rej }); proc.stdin.write(JSON.stringify({ id, method, params }) + '\n'); });
   let buf = '';
