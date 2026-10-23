@@ -67,7 +67,8 @@ function detectBase(repo, branch) {
   }
   return best;
 }
-const daysSince = (d) => (d ? Math.floor((Date.now() - Date.parse(d + 'T12:00:00')) / 864e5) : 0);
+// Dates are UTC days (toISOString): count from that day's UTC midnight, never below 0.
+const daysSince = (d) => (d ? Math.max(0, Math.floor((Date.now() - Date.parse(d + 'T00:00:00Z')) / 864e5)) : 0);
 const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
 
 // Every harness worktree lives at ~/wt/<repo>-<task> (t769).

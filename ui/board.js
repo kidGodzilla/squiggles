@@ -6,7 +6,8 @@ const TIER_NAMES = { active: 'Active', hold: 'On hold', todo: 'Next up', done: '
 const COLS = [['todo', 'To do'], ['doing', 'Doing'], ['review', 'Review'], ['blocked', 'Blocked'], ['done', 'Done']];
 const STALE_DAYS = 7;
 
-const daysSince = (d) => (d ? Math.floor((Date.now() - Date.parse(d + 'T12:00:00')) / 864e5) : 0);
+// Dates are UTC days (toISOString): count from that day's UTC midnight, never below 0.
+const daysSince = (d) => (d ? Math.max(0, Math.floor((Date.now() - Date.parse(d + 'T00:00:00Z')) / 864e5)) : 0);
 const ago = (d) => { const n = daysSince(d); return n <= 0 ? 'today' : n < 14 ? `${n}d` : `${Math.round(n / 7)}w`; };
 const allGoals = () => Object.values(B.goals).flat();
 const goalById = (id) => allGoals().find((g) => g.id === id);
