@@ -27,7 +27,7 @@ async function loadBoard() {
   if (B.seen) for (const t of B.tasks) if (!before.has(t.id)) B.fresh.add(t.id);
   B.seen = true;
   renderGoals(); renderTasks(); B.fresh.clear(); linkAll();
-  if (B.view === 'team') { renderTeam(); loadHumans(); }
+  if (B.view === 'team') { renderTeam(); loadHumans(); loadCost(); }
   if (B.view === 'calendar') loadCal();
   if (B.view === 'merge') loadMerges();
 }
@@ -422,6 +422,11 @@ $('#mergeView').onclick = async (e) => {
 const charterLine = (c, label) => (String(c || '').match(new RegExp(label + ':\\s*([^\\n]+)', 'i')) || [])[1] || '';
 const cadence = (m) => (!m ? 'Only when asked' : m % 1440 === 0 ? (m === 1440 ? 'Daily' : `Every ${m / 1440} days`) : m % 60 === 0 ? `Every ${m / 60}h` : `Every ${m}m`);
 const modelName = (m) => ({ opus: 'Opus 5.5', sonnet: 'Sonnet 5.5', 'claude-opus-5-5': 'Opus 5.5', 'claude-sonnet-5-5': 'Sonnet 5.5', 'gpt-6.1-sol': 'Codex 6.1 Sol' })[m] || m || 'Opus 5.5';
+// Spend per squiggle: cost ledger over 7 days, refreshed when Team shows (at most once a minute). CLI: cost [days].
+B.cost = {}; B.costAt = 0;
+async function loadCost() { if (Date.now() - B.costAt < 6e4) return; B.costAt = Date.now(); const r = await api('/cost?days=7'); if (Array.isArray(r)) { B.cost = Object.fromEntries(r.map((x) => [x.id, x])); renderTeam(); } }
+const tokens = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : `${Math.round(n / 1e3)}k`);
+const spend = (c) => (c.cost ? `$${c.today.toFixed(2)} today, $${c.cost.toFixed(2)} in 7 days` : `${tokens(c.in + c.out)} tokens in 7 days`);
 function renderTeam() {
   const q = ($('#teamq').value || '').trim().toLowerCase();
   const all = S.order.map((id) => S.sq[id]).filter(Boolean);
@@ -438,6 +443,7 @@ function renderTeam() {
       <dl>${care ? `<dt>Cares about</dt><dd>${esc(care)}</dd>` : ''}${guard ? `<dt>Guards</dt><dd>${esc(guard)}</dd>` : ''}
         <dt>Goals</dt><dd>${owns.length ? owns.map(esc).join(', ') : 'None'}</dd>
         <dt>Runs</dt><dd>${esc(cadence(s.every))}, ${esc(modelName(s.model))}${s.permissionMode && s.permissionMode !== 'auto' ? `, ${esc(s.permissionMode)}` : ''}</dd>
+        ${B.cost[s.id] ? `<dt>Spend</dt><dd>${esc(spend(B.cost[s.id]))}</dd>` : ''}
         <dt>Works in</dt><dd><code>${esc(s.cwd || '~')}</code></dd></dl>
       <div class="acts"><button data-a="one">1:1</button><button data-a="chat">Chat</button><button data-a="wake">Wake</button><button data-a="meet">Meet</button><button data-a="edit">Settings</button></div>
     </div>`;
@@ -618,7 +624,7 @@ function setView(v, who, nav) {
   if (nav !== 'none' && location.search !== q) history[nav === 'replace' ? 'replaceState' : 'pushState'](null, '', location.pathname + q);
   if (v === 'room' || office) layout(); else loadBoard();
   if (v === 'merge') loadMerges();
-  if (v === 'team') { renderTeam(); loadHumans(); }
+  if (v === 'team') { renderTeam(); loadHumans(); loadCost(); }
   if (v === 'calendar') loadCal();
   if (v === 'files' && typeof loadFiles === 'function') loadFiles();
   if (v === 'settings') { if (typeof renderSettings === 'function') renderSettings(); loadHumans(); }

@@ -22,6 +22,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - An ask cut off by a server restart is marked interrupted at boot and its filer is told; its output is lost.
 
 ### Added
+- Cost ledger: each finished turn adds a row to `runs/cost.jsonl` (dollars for Claude, tokens for other providers). `cost [days]` sums it per squiggle; Team shows each one's spend over 7 days.
 - `runs/stalls.jsonl` logs event-loop stalls over 1s: duration, CPU time (near 0 means the process was paused), requests in flight and slow background work.
 - `task ship <id> [note]`: a reviewer's sign-off pinned to the commit they saw. Merge takes the reviewed commit, and a branch that moved after review is refused until it's moved to review again. The Merge tab shows the reviewed commit and who shipped it.
 - A message sent mid-turn shows at once that it landed and what the squiggle is doing; the squiggle answers it first.

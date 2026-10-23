@@ -13,6 +13,7 @@ import { createFiles } from './files.mjs';
 import { holdGate } from './hold.mjs';
 import { createAsks, runAsk } from './asks.mjs';
 import { dropStale } from './stale.mjs';
+import { createLedger } from './cost.mjs';
 import { modelFor as pickModel, DEFAULT_MODELS, EFFORTS, checkModelEffort } from './models.mjs';
 import { createMeetings, local, markPast, meetingNotes, parseWhen } from './meetings.mjs';
 import { createInbox } from './inbox.mjs';
@@ -160,6 +161,7 @@ const humans = createHumans(DATA, () => {
 const tilde = (v) => path.resolve(String(v).replace(/^~(?=\/|$)/, os.homedir()));
 const asks = createAsks({ file: path.join(RUNS, 'asks.json'), log: path.join(RUNS, 'asks.log') });
 // Lead lines pointing the user at an ask that already ran or a Merge no longer in review are dropped; kept in a log event.
+const ledger = createLedger(path.join(RUNS, 'cost.jsonl'));
 const unstale = (id, text) => {
   let all = [], ts = [];
   try { all = asks.list({ all: true }); } catch {} try { ts = board.tasks(); } catch {}
@@ -271,6 +273,7 @@ function launch(s) {
   const settings = path.join(sqDir(s.id), 'settings.json');
   if (fs.existsSync(settings)) args.push('--settings', settings);
   if (r.sessionId) args.push('--resume', r.sessionId);
+  r.resumedFrom = r.sessionId || null;
 
   const proc = spawn('claude', args, { cwd: home(s.cwd), stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, AGENTS_ID: s.id } });
   lowPriority(s, proc);
@@ -306,7 +309,13 @@ function launch(s) {
       } else if (ev.type === 'user' && Array.isArray(ev.message?.content)) {
         for (const c of ev.message.content) if (c.type === 'tool_result') emit(s.id, resultEvent(c));
       } else if (ev.type === 'rate_limit_event') { emit(s.id, { k: 'rate', info: ev.rate_limit_info }); if (ev.rate_limit_info?.status === 'rejected' && ev.rate_limit_info.resetsAt) limitHit(ev.rate_limit_info.resetsAt * 1000); }
-      else if (ev.type === 'result') { turnEnded(s, ev.result || lastText, ev.is_error, ev.subtype); if (ev.subtype === 'error_max_turns') { r.proc?.kill('SIGTERM'); } }
+      else if (ev.type === 'result') {
+        // total_cost_usd counts the whole session, across --resume: the turn's share is the rise since the last result.
+        const u = ev.usage || {}, c = ev.total_cost_usd || 0, sid = ev.session_id;
+        const prev = r.costSession === sid ? r.costSeen || 0 : r.resumedFrom === sid ? null : 0;
+        r.spent = { in: (u.input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0), out: u.output_tokens || 0, ...(prev === null || c < prev ? {} : { cost: +(c - prev).toFixed(6) }) };
+        r.costSession = sid; r.costSeen = c;
+        turnEnded(s, ev.result || lastText, ev.is_error, ev.subtype); if (ev.subtype === 'error_max_turns') { r.proc?.kill('SIGTERM'); } }
     }
   });
   proc.stderr.on('data', (d) => emit(s.id, { k: 'log', text: String(d).slice(0, 2000) }));
@@ -584,6 +593,10 @@ function turnEnded(s, text, isError, subtype) {
     : subtype === 'error_max_turns' ? { status: 'error', note: `hit the turn cap (${s.maxTurns ?? 40}); ${lastSaved(s)}; fresh process next wake` }
     : isError ? { status: 'error', note: 'turn failed' } : statusLine(text) || { status: 'idle', note: '' };
   R(s.id).lastEnd = now();
+  { const r = R(s.id), u = r.usage || {}, m = r.usageMark || {};
+    const sp = r.spent || (r.usageMark ? { in: (u.in || 0) - (m.in || 0), out: (u.out || 0) - (m.out || 0) } : {}); // no mark yet: tokens so far are all-time
+    r.usageMark = { ...u }; delete r.spent;
+    if (sp.in || sp.out || sp.cost) try { ledger.add({ id: s.id, wake: r.lastWake, provider: p || 'claude', model: modelFor(s), ...sp }); } catch {} }
   const relay = R(s.id).relay; if (relay?.length && !isError && text?.trim()) { delete R(s.id).relay; saveState(); const said = s.lead ? unstale(s.id, text) : text; if (said.trim()) for (const t of new Set(relay)) emit(t, { k: 'say', text: said, by: s.id }); }
   emit(s.id, { k: 'end', status: st.status, note: st.note });
   setStatus(s.id, st.status, st.note);
@@ -1179,6 +1192,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/share') return json(res, req.method === 'POST' ? await share(!!(await body(req, res)).on) : await shareStatus());
     if (url.pathname === '/api/inbox') return json(res, { ...drop.list(), dir: path.join(DATA, 'inbox').replace(os.homedir(), '~') });
     if (url.pathname === '/api/limit') return json(res, { until: limit.until });
+    if (url.pathname === '/api/cost') return json(res, ledger.summary(Math.max(1, Math.min(90, +url.searchParams.get('days') || 1))));
     if (url.pathname === '/api/quit' && req.method === 'POST') { const b = await body(req, res); return json(res, quit(!!b.now, b.by || 'owner')); }
     if (url.pathname === '/api/restart' && req.method === 'GET') return json(res, restartState());
     if (url.pathname === '/api/restart' && req.method === 'POST') {
