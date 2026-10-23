@@ -376,9 +376,26 @@ function sharing() { const on = !!S.present && presenter() === S.present; if (do
 // =====================================================================
 //  chat with the lead
 // =====================================================================
+// Images in agent messages: ![alt](path) and bare image paths render when they resolve to our own /files
+// (the drop folder or a research source, served sandboxed); remote URLs and other paths stay text.
+const IMG_PATH = /(?:~|\/)[^\s`'"()<>\[\]]*\.(?:png|jpe?g|gif|webp)(?=$|[\s`'"()<>\[\].,;:!?])/gi;
+function fileUrl(p) {
+  p = String(p || '').replace(/^~(?=\/)/, S.home || '~');
+  if (/^\/files\/[^?#]+$/.test(p) && !/\/\.|\.\./.test(p)) return p;
+  for (const [src, dir] of Object.entries(S.roots || {})) {
+    if (!p.startsWith(dir + '/')) continue;
+    const rel = p.slice(dir.length + 1); if (!rel || rel.split('/').some((x) => !x || x.startsWith('.'))) return null;
+    return src === 'files' && !rel.includes('/') ? `/files/${encodeURIComponent(rel)}` : `/files/@${src}/${rel.split('/').map(encodeURIComponent).join('/')}`;
+  }
+  return null;
+}
+const mdImg = (u, alt) => `<a class="mimg" href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(u)}" alt="${esc(alt || 'Image')}" loading="lazy"></a>`;
+// Bare image paths in a paragraph (code spans included, ![]() excluded) show under it, once each.
+const pathImgs = (raw) => { const seen = new Set(), out = []; for (const m of raw.replace(/!\[[^\]]*\]\([^)\s]+\)/g, '').matchAll(IMG_PATH)) { const u = fileUrl(m[0]); if (u && !seen.has(u)) { seen.add(u); out.push(mdImg(u, m[0].split('/').pop())); } } return out.length ? `<div class="mimgs">${out.join('')}</div>` : ''; };
 function md(src) {
   const blocks = [], text = String(src || '').replace(/```(\w*)\n?([\s\S]*?)```/g, (_, l, code) => { blocks.push(`<pre><code>${esc(code.replace(/\n$/, ''))}</code></pre>`); return `\u0000${blocks.length - 1}\u0000`; });
-  const inline = (s) => esc(s).replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>').replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>').replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  const inline = (s) => { const im = []; s = s.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (all, alt, u) => { const f = fileUrl(u); if (!f) return `[${alt || u}](${u})`; im.push(mdImg(f, alt)); return `\u0001${im.length - 1}\u0001`; }); return inline0(s).replace(/\u0001(\d+)\u0001/g, (_, i) => im[+i]); };
+  const inline0 = (s) => esc(s).replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>').replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>').replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
   return text.split(/\n{2,}/).map((para) => {
     if (/^\u0000\d+\u0000$/.test(para.trim())) return blocks[+para.trim().slice(1, -1)];
     const lines = para.split('\n');
@@ -387,14 +404,14 @@ function md(src) {
       const cells = (l) => l.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => c.trim());
       const align = cells(lines[1]).map((c) => (c.startsWith(':') && c.endsWith(':') ? 'center' : c.endsWith(':') ? 'right' : ''));
       const td = (tag, c, i) => `<${tag}${align[i] ? ` style="text-align:${align[i]}"` : ''}>${inline(c)}</${tag}>`;
-      return `<div class="tbl"><table><thead><tr>${cells(lines[0]).map((c, i) => td('th', c, i)).join('')}</tr></thead><tbody>${lines.slice(2).map((l) => `<tr>${cells(l).map((c, i) => td('td', c, i)).join('')}</tr>`).join('')}</tbody></table></div>`;
+      return `<div class="tbl"><table><thead><tr>${cells(lines[0]).map((c, i) => td('th', c, i)).join('')}</tr></thead><tbody>${lines.slice(2).map((l) => `<tr>${cells(l).map((c, i) => td('td', c, i)).join('')}</tr>`).join('')}</tbody></table></div>` + pathImgs(para);
     }
     if (lines.length === 1 && /^\s*(-{3,}|\*{3,})\s*$/.test(lines[0])) return '<hr>';
     const hm = /^(#{1,4})\s+(.*)$/.exec(lines[0]);
     if (hm) { const h = `<h${Math.min(4, hm[1].length + 2)}>${inline(hm[2])}</h${Math.min(4, hm[1].length + 2)}>`; return lines.length > 1 ? h + md(lines.slice(1).join('\n')) : h; }
     if (lines.every((l) => /^\s*>/.test(l))) return `<blockquote>${md(lines.map((l) => l.replace(/^\s*>\s?/, '')).join('\n'))}</blockquote>`;
-    if (lines.every((l) => /^\s*([-*]|\d+\.)\s+/.test(l))) { const ol = /^\s*\d+\./.test(lines[0]); return `<${ol ? 'ol' : 'ul'}>${lines.map((l) => `<li>${inline(l.replace(/^\s*([-*]|\d+\.)\s+/, ''))}</li>`).join('')}</${ol ? 'ol' : 'ul'}>`; }
-    return `<p>${lines.map(inline).join('<br>')}</p>`.replace(/\u0000(\d+)\u0000/g, (_, i) => blocks[+i]);
+    if (lines.every((l) => /^\s*([-*]|\d+\.)\s+/.test(l))) { const ol = /^\s*\d+\./.test(lines[0]); return `<${ol ? 'ol' : 'ul'}>${lines.map((l) => `<li>${inline(l.replace(/^\s*([-*]|\d+\.)\s+/, ''))}</li>`).join('')}</${ol ? 'ol' : 'ul'}>` + pathImgs(para); }
+    return `<p>${lines.map(inline).join('<br>')}</p>`.replace(/\u0000(\d+)\u0000/g, (_, i) => blocks[+i]) + pathImgs(para);
   }).join('');
 }
 const when = (ts) => new Date(ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
@@ -756,7 +773,7 @@ function showLimit(until) {
 }
 async function load() {
   api('/limit').then((l) => showLimit(l.until || 0));
-  roomGen((await api('/room').catch(() => ({}))).characters || 'cast');
+  const room = await api('/room').catch(() => ({})); roomGen(room.characters || 'cast'); S.roots = room.fileRoots || {}; S.home = room.home || '';
   const list = await api('/squiggles').catch(() => null);
   // A failed read must not empty the room (t671): keep what's on screen and try again.
   if (!Array.isArray(list)) { setTimeout(load, 2000); return; }

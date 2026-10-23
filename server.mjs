@@ -1158,7 +1158,7 @@ const server = http.createServer(async (req, res) => {
       const d = setDefaults(await body(req, res)); broadcast('*room', { k: 'room', action: 'defaults' }); return json(res, d);
     }
     if (url.pathname === '/api/defaults') return json(res, teamDefaults());
-    if (url.pathname === '/api/room') { const { passcode, ...c } = roomCfg(); return json(res, c); } // never the passcode hash (t913)
+    if (url.pathname === '/api/room') { const { passcode, ...c } = roomCfg(); return json(res, { ...c, fileRoots: files.SOURCES, home: os.homedir() }); } // never the passcode hash; fileRoots: chat images
     if (url.pathname === '/api/board') return json(res, { goals: board.goals(), tasks: board.tasks() });
     if (url.pathname === '/api/goals' && req.method === 'POST') return json(res, board.goalOp(await body(req, res)));
     if (url.pathname === '/api/tasks' && req.method === 'POST') {
