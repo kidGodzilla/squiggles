@@ -122,3 +122,25 @@ test('a branch cut from another branch merges into that one, not main (t1638)', 
   assert.throws(() => b.taskOp({ op: 'base', id: 't5', branch: 'auto' }), /branch t5-fix is gone/);
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test('one merge per task: a second click joins it, send back during git is refused', async () => {
+  const { execFileSync } = await import('node:child_process');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lock-')), repo = path.join(dir, 'repo');
+  const g = (...a) => execFileSync('git', ['-C', repo, ...a], { stdio: 'pipe', env: { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' } }).toString().trim();
+  fs.mkdirSync(repo); g('init', '-q', '-b', 'main'); fs.writeFileSync(path.join(repo, 'a'), 'a'); g('add', 'a'); g('commit', '-q', '-m', 'base');
+  g('checkout', '-q', '-b', 't1-x'); fs.writeFileSync(path.join(repo, 'b'), 'b'); g('add', 'b'); g('commit', '-q', '-m', 'x'); g('checkout', '-q', 'main');
+  fs.writeFileSync(path.join(dir, 'goals.json'), JSON.stringify({ active: [{ id: 'g', title: 'G', repos: [repo] }] }));
+  fs.writeFileSync(path.join(dir, 'tasks.json'), JSON.stringify({ tasks: [{ id: 't1', title: 'x', goal: 'g', owner: 'builder', status: 'review', repo, branch: 't1-x' }] }));
+  const b = createBoard(dir, () => {});
+  const p = b.merge('t1', 'owner'), q = b.merge('t1', 'owner');
+  assert.equal(p, q, 'double click joins the running merge');
+  while (b.mergeState('t1') === 'checking') await new Promise((r) => setImmediate(r));
+  assert.equal(b.mergeState('t1'), 'writing');
+  assert.throws(() => b.mergeBack('t1', 'fix it', 'reviewer'), /merging right now/);
+  assert.throws(() => b.taskOp({ op: 'move', id: 't1', status: 'doing' }), /merging right now/);
+  const [r1, r2] = await Promise.all([p, q]);
+  assert.equal(r1, r2); assert.equal(b.tasks()[0].status, 'done'); assert.equal(b.mergeState('t1'), null);
+  assert.equal(g('log', '-1', '--format=%s', 'main'), 'x');
+  assert.throws(() => b.mergeBack('t1', 'late', 'reviewer'), /not in review/); // lock released; normal rules again
+  fs.rmSync(dir, { recursive: true, force: true });
+});

@@ -227,6 +227,7 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
     }
     const task = t.find((x) => x.id === id);
     if (!task) throw new Error(`no task ${id}`);
+    if (op === 'move' || op === 'drop') notMerging(id);
     // task worktree <id> [repo] (t769): the only way a worktree is made. ~/wt/<repo>-<id> on the task's branch, recorded on the task.
     if (op === 'worktree') {
       const goal = task.goal ? TIERS.flatMap((x) => goals()[x]).find((g) => g.id === task.goal) : null;
@@ -487,9 +488,18 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
   // uncommitted work; git itself refuses if a dirty file would be overwritten. Otherwise merge in a temp worktree on the base.
   // Fast-forward when possible, a merge commit otherwise. A conflict is reported: send it back.
   // by: who merged or sent back (t142), a human id from the page or a squiggle id from the CLI.
-  async function merge(id, by) {
+  // One merge per task at a time: a second click joins the running one. While it only reads, a send back
+  // (or move, drop) still wins and the merge stops; once git starts writing they're refused until it ends.
+  const merging = new Map(), writing = new Set();
+  const mergeState = (id) => writing.has(id) ? 'writing' : merging.has(id) ? 'checking' : null;
+  const notMerging = (id) => { if (writing.has(id)) throw new Error(`${id} is merging right now: try again when it finishes`); };
+  function merge(id, by) {
+    if (!merging.has(id)) merging.set(id, mergeNow(id, by).finally(() => { merging.delete(id); writing.delete(id); }));
+    return merging.get(id);
+  }
+  async function mergeNow(id, by) {
     const task = mergeTask(id), r = await mergeInfo(task, memo());
-    mergeTask(id); // sent back while git ran
+    mergeTask(id); writing.add(id); // sent back while git read? stop here; otherwise lock it
     // Committed straight on the base (open goals, 'review main'): nothing to merge, it's already in (t1251).
     if (r.base && r.branch === r.base && !r.others?.length) {
       const t = tasks(), x = t.find((k) => k.id === id);
@@ -557,9 +567,9 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
     return mine.map((x) => x.decision === 'accepted' ? `${x.id} "${x.title}" accepted, on ${x.goal} for ${x.owner}` : `${x.id} "${x.title}" declined: ${x.why}`);
   }
   function mergeBack(id, note, by) {
-    mergeTask(id); if (!String(note || '').trim()) throw new Error('send back needs a note saying what to fix');
+    notMerging(id); mergeTask(id); if (!String(note || '').trim()) throw new Error('send back needs a note saying what to fix');
     return taskOp({ op: 'move', id, status: 'doing', note: `sent back${by ? ` by ${by}` : ''}: ${String(note).trim()}` });
   }
 
-  return { goals, tasks, goalOp, taskOp, suggestionNews, merges, mergeSweep, mergeDiff, merge, gated, mergeBack, worktrees, orphanNotes, TIERS, STATUSES, MERGE };
+  return { goals, tasks, goalOp, taskOp, suggestionNews, merges, mergeSweep, mergeDiff, merge, mergeState, gated, mergeBack, worktrees, orphanNotes, TIERS, STATUSES, MERGE };
 }
