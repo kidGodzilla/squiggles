@@ -22,6 +22,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - An ask cut off by a server restart is marked interrupted at boot and its filer is told; its output is lost.
 
 ### Added
+- A message sent mid-turn shows at once that it landed and what the squiggle is doing; the squiggle answers it first.
 - Images in squiggle messages render inline: a path under the data dir's files/ or research/, or `![alt](path)`. Other paths and web URLs stay text.
 - Restart counts down 10s on an open page, with Restart now and Not yet; Not yet lets work go on until you step away. `restart now|later|status`, and a Restart item in the menu.
 - Merge steps name their owner (`task needs|after <id> add "Ada: <step>"`, or Owner for you); untagged ones are refused and `tag <n> <owner>` fixes old ones. Each squiggle is told its steps on review or merge, and the Merge tab says whose each step is.

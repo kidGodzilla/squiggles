@@ -123,6 +123,8 @@ const clients = new Set();
 // `stored` is what goes in runs/<id>.jsonl when it shouldn't be the whole event (screen content: t854).
 function emit(id, ev, stored) {
   ev = { ts: Date.now(), ...ev };
+  // The step a squiggle is on, for the mid-turn ack.
+  if (ev.k === 'tool') R(id).step = { what: ev.note || ev.name, at: ev.ts }; else if (ev.k === 'out' && R(id).step) R(id).step = null;
   fs.appendFileSync(path.join(RUNS, `${id}.jsonl`), JSON.stringify(stored ? { ts: ev.ts, ...stored } : ev) + '\n');
   const line = `data: ${JSON.stringify({ id, ev })}\n\n`;
   for (const res of clients) res.write(line);
@@ -164,7 +166,7 @@ function keepAwake(id, on) {
 function setStatus(id, status, note) {
   const r = R(id);
   keepAwake(id, status === 'working' && !!loadSquiggle(id)?.awake);
-  r.status = status;
+  r.status = status; if (status !== 'working') r.step = null;
   if (note !== undefined) r.note = note;
   saveState();
   emit(id, { k: 'state', status, note: r.note || '' });
@@ -427,11 +429,19 @@ function send(id, text, from = 'owner', { replay = false, human, images = [] } =
     setTimeout(maybeRestart, 500); return;
   }
   const who = from === 'owner' && (humans.all().find((h) => h.id === (human || 'owner')) || { id: human, name: human });
-  const content = (who ? `From ${who.name}: ${text}` : text) + (images.length ? `\n\n(Attached: ${images.map((f) => path.join(FILES, f)).join(', ')})` : '');
+  let content = (who ? `From ${who.name}: ${text}` : text) + (images.length ? `\n\n(Attached: ${images.map((f) => path.join(FILES, f)).join(', ')})` : '');
   const shown = { k: 'user', text, from, ...(who && { human: who.id }), ...(images.length && { imgs: images.map((f) => `/files/${f}`) }) };
+  // Mid-turn: the owner hears at once that it landed, and the squiggle answers it before carrying on.
+  const midTurn = () => {
+    if (r.status !== 'working' || !who || replay) return;
+    const st = r.step, mins = st && Math.floor((Date.now() - st.at) / 60000);
+    emit(id, { k: 'log', text: `${s.name || id} is mid-turn${st ? ` (${st.what}${mins ? `, ${mins} min` : ''})` : ''}; reads this after that step and answers first` });
+    content += '\n\n(Sent while you were mid-turn: answer this first, in a few words, then carry on.)';
+  };
   if (providerOf(s)) {
     if (!replay) emit(id, shown);
     if (r.proc) {
+      midTurn();
       // Mid-turn: steer the running turn; if it can't take input yet, the message waits for the next turn.
       const queue = () => { (r.queue ||= []).push(content); saveState(); emit(id, { k: 'log', text: 'queued for the next turn' }); };
       if (r.proc.steer) r.proc.steer(content).catch(queue); else queue();
@@ -445,6 +455,7 @@ function send(id, text, from = 'owner', { replay = false, human, images = [] } =
   if (!r.proc) launch(s);
   r.lastWake = now(); r.turns = 0; r.board0 = ownNotes(id);
   if (!replay) emit(id, shown);
+  midTurn();
   setStatus(id, 'working', '');
   r.proc.stdin.write(JSON.stringify({ type: 'user', message: { role: 'user', content: images.length ? [{ type: 'text', text: content }, ...images.map(imageBlock).filter(Boolean)] : content } }) + '\n');
 }
