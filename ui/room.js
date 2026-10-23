@@ -806,6 +806,23 @@ setInterval(() => {
 //  squiggle sheet and the new-squiggle form
 // =====================================================================
 const brief = (e) => e.k === 'say' ? esc(e.text) : e.k === 'tool' ? `<code>${esc(e.name)}</code> ${esc(String(e.note || e.text || (e.file && base(e.file)) || e.arg || '').slice(0, 160))}` : e.k === 'out' && e.err ? `<code>failed</code> ${esc(e.text.slice(0, 160))}` : e.k === 'user' ? `<code>${esc(e.from)}</code> ${esc(e.text.slice(0, 200))}` : e.k === 'end' ? `<code>${esc(e.status)}</code> ${esc(e.note || '')}` : '';
+// Look picker: automatic, a cast character, or another generator by name.
+function lookOptions(s, p) {
+  const own = s.look ? parseLook(s.look).gen : '', o = (v, on, t) => `<option value="${esc(v)}"${on ? ' selected' : ''}>${esc(t)}</option>`;
+  return o('', !s.look, `Automatic (${GENS[p.gen].name}${p.gen === 'cast' ? `: ${LOOKS[p.char]}` : ''})`)
+    + `<optgroup label="Squiggles">${LOOKS.map((n) => o(`cast:${n}`, own === 'cast' && p.opts.character === n, n)).join('')}</optgroup>`
+    + Object.values(GENS).filter((g) => g.id !== 'cast').map((g) => o(g.id, own === g.id, g.name)).join('');
+}
+// Hair, clothes and colours for generators that have them; the shown value is what the seed picked unless set.
+const LOOK_PICKS = [['top', 'Hair'], ['clothing', 'Clothes'], ['hairColor', 'Hair colour'], ['clothesColor', 'Clothes colour'], ['skinColor', 'Skin']];
+const nice = (k) => k.replace(/([a-z])([A-Z0-9])/g, '$1 $2').toLowerCase().replace(/^./, (c) => c.toUpperCase());
+function lookCustom(p) {
+  const G = GENS[p.gen], cur = p.a || {}, picks = LOOK_PICKS.filter(([k]) => G.options[k]); if (!picks.length) return '';
+  const cell = ([k, label]) => /Color$/.test(k)
+    ? `<div><label>${label}</label><div class="swatches" data-lk="${k}" role="group" aria-label="${label}">${G.options[k].map((c) => `<button type="button" data-v="${esc(c)}" aria-label="#${esc(c)}" aria-pressed="${cur[k] === c}" style="background:#${esc(c)}"></button>`).join('')}</div></div>`
+    : `<div><label>${label}</label><select data-lk="${k}">${G.options[k].map((v) => `<option value="${esc(v)}"${cur[k] === v ? ' selected' : ''}>${esc(nice(v))}</option>`).join('')}</select></div>`;
+  return `<div class="row2">${picks.map(cell).join('')}</div>`;
+}
 async function openSheet(id) {
   await refreshMeta(id);
   const s = S.sq[id], p = P(id);
@@ -837,8 +854,9 @@ async function openSheet(id) {
     </div>
     <div class="row2">
       <div><label>Context cap (tokens before compacting)</label><input id="shCompact" type="number" min="20000" step="10000" value="${esc(s.autocompact ?? (s.lead ? 300000 : 200000))}"></div>
-      <div><label>Look</label><div class="lookrow"><select id="shLook"><option value="">Automatic${p.gen === 'cast' ? ` (${esc(LOOKS[p.char])})` : ''}</option>${LOOKS.map((n) => `<option value="cast:${n}" ${s.look && p.opts.character === n ? 'selected' : ''}>${n}</option>`).join('')}</select><button class="btn" data-a="shuffle" title="New colour, face, accessory, desk item and room">Shuffle</button></div></div>
+      <div><label>Look</label><div class="lookrow"><select id="shLook">${lookOptions(s, p)}</select><button class="btn" data-a="shuffle" title="New colour, face, accessory, desk item and room">Shuffle</button></div></div>
     </div>
+    ${lookCustom(p)}
     <div class="row2">
       <div><label>Keep the Mac awake while working</label><select id="shAwake"><option value="">No</option><option value="1" ${s.awake ? 'selected' : ''}>Yes: display on, no sleep or lock</option></select></div><div></div>
     </div>
@@ -860,6 +878,11 @@ async function openSheet(id) {
     paintTile(id); renderSummary(); $('#sheet').classList.remove('on');
   };
   $('#shLook').onchange = async (e) => { await restyle(id, { look: e.target.value }); openSheet(id); };
+  // Customise: each pick rewrites look as <generator>:k=v,... with the options already set, like the CLI's look.
+  $('#sheetBody').querySelectorAll('[data-lk]').forEach((el) => {
+    const set = async (v) => { const o = { ...p.opts, [el.dataset.lk]: v }; await restyle(id, { look: `${p.gen}:${Object.entries(o).map(([k, x]) => `${k}=${x}`).join(',')}` }); openSheet(id); };
+    if (el.tagName === 'SELECT') el.onchange = () => set(el.value); else el.onclick = (e) => { const b = e.target.closest('[data-v]'); if (b) set(b.dataset.v); };
+  });
   $('#sheet').classList.add('on');
 }
 // Look changes apply at once: the server saves them, and the meta event redraws every copy of the avatar.

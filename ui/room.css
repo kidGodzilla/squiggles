@@ -119,6 +119,9 @@ main { flex: 1; display: flex; min-height: 0 }
 .flick { transform-box: fill-box; transform-origin: 50% 100%; animation: flick 1.1s ease-in-out infinite alternate } @keyframes flick { to { transform: scale(.92, 1.06) skewX(-3deg) } }
 .sway { animation: sway 2.6s ease-in-out infinite alternate } @keyframes sway { to { transform: translateX(1.2px) } }
 .lookrow { display: flex; gap: 8px } .lookrow select { flex: 1; min-width: 0 }
+.swatches { display: flex; flex-wrap: wrap; gap: 6px } .swatches button { width: 28px; height: 28px; padding: 0; border-radius: 6px; border: 1px solid var(--line); cursor: pointer }
+.swatches button[aria-pressed="true"] { outline: 2px solid var(--text); outline-offset: 2px }
+@media (pointer: coarse) { .swatches button { width: 44px; height: 44px } }
 .bloom { display: none } .speaking .bloom { display: inline } .speaking .bud { display: none }
 .hand { animation: type .34s ease-in-out infinite } .hand.r { animation-delay: -.17s } @keyframes type { 50% { transform: translateY(-1.3px) } }
 .tw { animation: tw 3.2s ease-in-out infinite } .pulse { animation: tw 1.7s ease-in-out infinite } @keyframes tw { 50% { opacity: .25 } }
