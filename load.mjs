@@ -14,10 +14,12 @@ export function load({ root, days = 7, now = Date.now() }) {
   const runs = path.join(root, 'runs'), from = day(now - (days - 1) * 864e5), rows = {};
   const row = (d) => (rows[d] ??= { date: d, merges: 0, runs: 0, denies: 0, messages: 0, questions: 0, done: 0, merged: 0 }); // calls, callP50, callP90, stalls, stallMax only when there are any
   const add = (t, k) => { const d = typeof t === 'string' && /^\d{4}-\d\d-\d\d$/.test(t) ? t : day(t); if (d >= from) row(d)[k]++; };
+  // finished is a UTC date; finishedAt (ms) puts it on the right local day. Older tasks keep the UTC date.
   for (const t of read(path.join(root, 'tasks.json'), { tasks: [] }).tasks) {
     if (t.status !== 'done' || !t.finished) continue;
-    add(t.finished, 'done');
-    if (t.merged) { add(t.finished, 'merged'); if (!t.mergedBy || t.mergedBy === 'owner') add(t.finished, 'merges'); }
+    const at = t.finishedAt || t.finished;
+    add(at, 'done');
+    if (t.merged) { add(at, 'merged'); if (!t.mergedBy || t.mergedBy === 'owner') add(at, 'merges'); }
   }
   for (const e of lines(path.join(runs, 'asks.log')).map(json)) {
     if (e?.ev === 'running' && e.who === 'owner') add(e.t, 'runs');

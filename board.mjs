@@ -267,7 +267,7 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
         Object.assign(task, { goal, owner, decision: 'accepted', decidedBy: by || 'lead', decided: today(), confirmed: today() });
       } else {
         if (!String(why || '').trim()) throw new Error(`decline needs a reason: suggestion decline ${task.id} "<why>"`);
-        Object.assign(task, { status: 'done', finished: today(), decision: 'declined', why: String(why).trim(), decidedBy: by || 'lead', decided: today() });
+        Object.assign(task, { status: 'done', finished: today(), finishedAt: Date.now(), decision: 'declined', why: String(why).trim(), decidedBy: by || 'lead', decided: today() });
       }
       if (task.by) task.untold = true;
       saveTasks(t); return task;
@@ -294,7 +294,7 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
         try { const b = detectBase(task.repo, task.branch); if (b !== baseOf(task.repo)) task.base = b; else delete task.base; } catch {}
       } else if (branch) Object.assign(task, resolveBranch(branch, task.goal ? TIERS.flatMap((x) => goals()[x]).find((g) => g.id === task.goal) : null));
       if (status === 'review' && task.status !== 'review') tellSteps(task, 'needs');
-      task.status = status; task.confirmed = today(); if (status === 'done') task.finished = today(); else delete task.finished;
+      task.status = status; task.confirmed = today(); if (status === 'done') Object.assign(task, { finished: today(), finishedAt: Date.now() }); else { delete task.finished; delete task.finishedAt; }
       if (note !== undefined) task.note = note;
       if (status === 'done') retire(task);
     } else if (op === 'confirm') task.confirmed = today();
@@ -486,7 +486,7 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
       x.worktrees = (x.worktrees || []).filter((p) => w.kept.includes(p)); if (!x.worktrees.length) delete x.worktrees;
       if (w.removed.length) c.worktrees = w.removed;
       const why = c.why + (w.kept.length ? `; worktree with uncommitted work kept: ${w.kept.join(', ')}` : '');
-      x.status = 'done'; x.finished = today(); x.confirmed = today(); x.note = `${why}${x.note ? ` — ${x.note}` : ''}`;
+      x.status = 'done'; x.finished = today(); x.finishedAt = Date.now(); x.confirmed = today(); x.note = `${why}${x.note ? ` — ${x.note}` : ''}`;
     }
     saveTasks(t); return closed.filter((c) => c.why);
   }
@@ -543,7 +543,7 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
     // Committed straight on the base (open goals, 'review main'): nothing to merge, it's already in (t1251).
     if (r.base && r.branch === r.base && !r.others?.length) {
       const t = tasks(), x = t.find((k) => k.id === id);
-      x.status = 'done'; x.finished = today(); x.confirmed = today(); if (by) x.mergedBy = by;
+      x.status = 'done'; x.finished = today(); x.finishedAt = Date.now(); x.confirmed = today(); if (by) x.mergedBy = by;
       x.note = `already on ${r.base}${by ? `, closed by ${by}` : ''}${x.note ? ` — ${x.note}` : ''}`;
       tellSteps(x, 'after'); saveTasks(t); flushTold(); return { ...r, merged: [], task: x, worktrees: [] };
     }
@@ -564,7 +564,7 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
     }
     const t = tasks(), x = t.find((k) => k.id === id), main = done[0];
     const where = done.length > 1 ? done.map((d) => `${path.basename(expand(d.repo))} ${d.base}@${d.sha}`).join(', ') : `${main.base} at ${main.sha}`;
-    x.status = 'done'; x.finished = today(); x.confirmed = today(); x.merged = done.map((d) => `${d.base}@${d.sha}`).join(' '); if (by) x.mergedBy = by;
+    x.status = 'done'; x.finished = today(); x.finishedAt = Date.now(); x.confirmed = today(); x.merged = done.map((d) => `${d.base}@${d.sha}`).join(' '); if (by) x.mergedBy = by;
     x.worktrees = (x.worktrees || []).filter((p) => kept.includes(p)); if (!x.worktrees.length) delete x.worktrees;
     const k = kept.length ? `; branch kept, worktree with uncommitted work: ${kept.join(', ')}` : '';
     x.note = `merged into ${where}${by ? ` by ${by}` : ''}${k}${x.note ? ` — ${x.note}` : ''}`;

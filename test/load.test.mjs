@@ -35,3 +35,24 @@ test('load shows how long the lead waited on harness calls and server stalls ove
   assert.deepEqual([r.calls, r.callP50, r.callP90, r.stalls, r.stallMax], [3, 1500, 12000, 2, 4200]);
   fs.rmSync(root, { recursive: true });
 });
+
+test('a task shipped after local midnight but before UTC midnight counts today, east of UTC', async () => {
+  const { execFileSync } = await import('node:child_process');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'load-'));
+  // Tokyo 2026-10-24 05:00 is 2026-10-23 20:00 UTC: the board's finished date is still the 23rd.
+  const src = `
+    import { createBoard } from ${JSON.stringify(path.resolve('board.mjs'))};
+    import { load } from ${JSON.stringify(path.resolve('load.mjs'))};
+    const now = Date.parse('2026-10-23T20:00:00Z'); Date.now = () => now;
+    const b = createBoard(${JSON.stringify(root)}, () => {});
+    const t = b.taskOp({ op: 'add', title: 'x' }), u = b.taskOp({ op: 'add', title: 'y' });
+    b.taskOp({ op: 'move', id: t.id, status: 'done' }); b.taskOp({ op: 'move', id: u.id, status: 'done' }); b.taskOp({ op: 'move', id: u.id, status: 'doing' });
+    const x = b.tasks().find((y) => y.id === t.id), y = b.tasks().find((z) => z.id === u.id);
+    console.log(JSON.stringify({ finished: x.finished, finishedAt: x.finishedAt, back: 'finishedAt' in y, days: load({ root: ${JSON.stringify(root)}, days: 2, now }).map((r) => [r.date, r.done]) }));`;
+  const out = JSON.parse(execFileSync(process.execPath, ['--input-type=module', '-e', src], { env: { ...process.env, TZ: 'Asia/Tokyo' } }).toString());
+  assert.equal(out.finished, '2026-10-23');
+  assert.equal(out.finishedAt, Date.parse('2026-10-23T20:00:00Z'));
+  assert.equal(out.back, false);
+  assert.deepEqual(out.days, [['2026-10-23', 0], ['2026-10-24', 1]]);
+  fs.rmSync(root, { recursive: true });
+});
