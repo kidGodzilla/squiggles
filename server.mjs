@@ -28,6 +28,9 @@ import { callerChain } from './caller.mjs';
 const home = (p) => String(p || '').replace(/^~(?=\/|$)/, os.homedir());
 // Code (ROOT) is written by git only; the room lives in DATA. See docs/upgrading.md.
 const ROOT = path.dirname(new URL(import.meta.url).pathname);
+// Background sync work over 200ms since the last stall check: a stall with no request in flight names what ran.
+const slowSync = [];
+const timed = (what, fn) => { const t = Date.now(); try { return fn(); } finally { const ms = Date.now() - t; if (ms > 200) slowSync.push(`${what} ${ms}ms`); } };
 const DATA = dataDir();
 try { const m = await migrate(DATA); if (m) console.log(`Migrated data schema ${m.from} to ${m.to}; backup in ${m.backup}`); } catch (e) { console.error(e.message); process.exit(1); }
 const CONFIG = loadConfig(DATA);
@@ -735,7 +738,7 @@ setInterval(() => {
     if (started.has(p) || Date.now() - (newest[p] || 0) < 2 * 60000) continue;
     const r = R(s.id);
     const last = Date.parse(r.lastWake || 0) || 0;
-    if (r.status !== 'working' && Date.now() >= dueAt(s.id, s.every, last) && wake(s.id)) started.add(p);
+    if (r.status !== 'working' && Date.now() >= dueAt(s.id, s.every, last) && timed(`wake ${s.id}`, () => wake(s.id))) started.add(p);
   }
 }, 30000);
 
@@ -876,9 +879,9 @@ function meetingTick() {
   const due = meetings.upcoming(new Date(now - 2 * 60000), new Date(now + 1000)).find((m) => !done.has(`${m.id}@${m.start}`));
   if (due) startMeeting(due);
 }
-setInterval(() => { try { meetingTick(); } catch (e) { console.error('meetings:', e.message); } }, 20000);
+setInterval(() => { try { timed('meetings', meetingTick); } catch (e) { console.error('meetings:', e.message); } }, 20000);
 // Orphan worktrees (t769): hourly, the lead's one note is refreshed (or closed when none are left).
-setInterval(() => { try { board.orphanNotes(); } catch (e) { console.error('worktrees:', e.message); } }, 3600000);
+setInterval(() => { try { timed('orphan notes', () => board.orphanNotes()); } catch (e) { console.error('worktrees:', e.message); } }, 3600000);
 
 // ---------- inbox: text files the user drops in <data>/inbox wake the lead, then move to inbox/read/ ----------
 const drop = createInbox(path.join(DATA, 'inbox'));
@@ -886,7 +889,7 @@ setInterval(() => {
   try {
     const lead = listSquiggles().find((x) => x.lead);
     if (!lead || R(lead.id).status === 'working') return; // files wait in inbox/ until the lead can take them
-    const notes = drop.take(); if (!notes.length) return;
+    const notes = timed('inbox', () => drop.take()); if (!notes.length) return;
     send(lead.id, `${User} dropped ${notes.length > 1 ? `${notes.length} notes` : 'a note'} in the inbox:\n\n${notes.map((n) => `--- ${n.name} ---\n${n.text.trim()}`).join('\n\n')}\n\nTreat ${notes.length > 1 ? 'these' : 'it'} as a message from ${USER}. Moved to inbox/read/.`, 'inbox');
   } catch (e) { console.error('inbox:', e.message); }
 }, 5000);
@@ -1021,7 +1024,7 @@ function body(req, res, max = BODY_MAX) {
     const refuse = () => { over = true; parts.length = 0; if (res && !res.headersSent) { res.setHeader('connection', 'close'); json(res, { error: `too large (${max === BODY_MAX ? '200 MB' : `${max} bytes`} max)` }, 413); } };
     if (over) refuse();
     req.on('data', (c) => { if (over) return; n += c.length; if (n > max) refuse(); else parts.push(c); });
-    req.on('end', () => { if (over) return; const d = Buffer.concat(parts).toString('utf8'); try { resolve(d ? JSON.parse(d) : {}); } catch { resolve({}); } });
+    req.on('end', () => { if (over) return; const d = Buffer.concat(parts).toString('utf8'); let b = {}; try { b = d ? JSON.parse(d) : {}; } catch {} if (req.flight && typeof b?.op === 'string') req.flight.what += ` ${b.op.slice(0, 20)}${typeof b.id === 'string' ? ` ${b.id.slice(0, 20)}` : ''}`; resolve(b); });
   });
 }
 const json = (res, v, code = 200) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(v)); };
@@ -1115,8 +1118,18 @@ async function peerJoin(req, res) {
   broadcast('*room', { k: 'room', action: 'peers' });
   return json(res, r);
 }
+// Event-loop stalls over 1s: logged to runs/stalls.jsonl with the requests in flight, so slow ops can be found and moved off the loop.
+// cpu: our CPU time over the gap. Near ms means our code ran; near 0 means the process was paused (App Nap, sleep, swap), not our code.
+const inflight = new Map(); let reqN = 0, tick = Date.now(), cpu0 = process.cpuUsage();
+setInterval(() => {
+  const now = Date.now(), ms = now - tick - 250, sync = slowSync.splice(0), c = process.cpuUsage(cpu0); tick = now; cpu0 = process.cpuUsage(); if (ms < 1000) return;
+  const cpu = Math.round((c.user + c.system) / 1000);
+  const ops = [...inflight.values()].map((o) => `${o.what} ${now - o.at}ms`);
+  fs.appendFile(path.join(RUNS, 'stalls.jsonl'), JSON.stringify({ ts: now, ms, cpu, ops, ...(sync.length ? { sync } : {}) }) + '\n', () => {});
+}, 250).unref();
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
+  if (url.pathname !== '/api/stream') { const n = ++reqN; inflight.set(n, req.flight = { what: `${req.method} ${url.pathname}`, at: Date.now() }); res.on('close', () => inflight.delete(n)); }
   const p = url.pathname.split('/').filter(Boolean);
   tailnet.seen(req.headers.host);
   const why = refuse(req);
