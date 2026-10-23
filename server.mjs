@@ -10,6 +10,7 @@ import os from 'node:os';
 import vm from 'node:vm';
 import { createBoard } from './board.mjs';
 import { createFiles } from './files.mjs';
+import { holdGate } from './hold.mjs';
 import { createAsks, runAsk } from './asks.mjs';
 import { modelFor as pickModel, DEFAULT_MODELS, EFFORTS, checkModelEffort } from './models.mjs';
 import { createMeetings, local, markPast, meetingNotes, parseWhen } from './meetings.mjs';
@@ -415,8 +416,9 @@ function send(id, text, from = 'owner', { replay = false, human, images = [] } =
   const r = R(id);
   // A pending restart waits for everyone to be idle; new turns would starve it (a report wakes the lead, the lead wakes someone).
   // So a turn that would start now is held in state and sent after the restart. Messages to a squiggle mid-turn still go through.
-  if (restartPending && r.status !== 'working') {
+  if (restartPending && r.status !== 'working' && hold.holding()) {
     r.lastWake = now(); (persisted['*held'] ||= []).push({ id, text, from, human, images }); saveState();
+    if (from === 'owner') { clearTimeout(hold.t); hold.t = setTimeout(capHold, hold.held()); }
     emit(id, { k: 'user', text, from, ...(human && { human }), ...(images.length && { imgs: images.map((f) => `/files/${f}`) }) }); emit(id, { k: 'log', text: 'held until the restart' });
     setTimeout(maybeRestart, 500); return;
   }
@@ -615,16 +617,22 @@ function broadcast(id, ev) {
 // Restart without killing anyone mid-turn: wait until nobody is working, then exit; the login item starts the server again.
 // Started by hand (no login item), start the replacement ourselves; it waits for this one to free the port.
 let restartPending = false, quitting = false, restartBy = '';
+const hold = holdGate();
+// The user's chat held past the cap: send everything held, then hold nothing for a while; the restart stays due.
+function capHold() {
+  if (!restartPending || !persisted['*held']?.length) return;
+  hold.release(); console.log('restart hold capped: held turns sent, restart still due'); releaseHeld();
+}
 // With a page open, a due restart counts down 10s there (Restart now / Not yet). Not yet lets turns run again until
 // the page reports the user idle 2 min, or they press Restart. No page open: restart as before.
 let gate = null; // { phase: 'asking', until } | { phase: 'later', at }; gateOk skips the countdown once
 let gateOk = false;
 const restartState = () => ({ pending: restartPending, working: working(), ...(gate ? { phase: gate.phase, ...(gate.until ? { until: gate.until } : {}), ...(gate.at ? { at: gate.at } : {}) } : {}), by: restartBy });
 function restartOp(op, by) {
-  if (op === 'now') { clearTimeout(gate?.t); gate = null; gateOk = true; restartBy = whoAsked(by) || restartBy || 'owner'; restartPending = true; setTimeout(maybeRestart, 100); return 'restarting as soon as nobody is mid-turn, no countdown'; }
+  if (op === 'now') { hold.reset(); clearTimeout(gate?.t); gate = null; gateOk = true; restartBy = whoAsked(by) || restartBy || 'owner'; restartPending = true; setTimeout(maybeRestart, 100); return 'restarting as soon as nobody is mid-turn, no countdown'; }
   if (op === 'later') {
     if (!restartPending && gate?.phase !== 'later') return 'no restart is due';
-    clearTimeout(gate?.t); gate = { phase: 'later', at: Date.now() }; restartPending = false; releaseHeld();
+    clearTimeout(gate?.t); gate = { phase: 'later', at: Date.now() }; restartPending = false; hold.reset(); releaseHeld();
     broadcast('*room', { k: 'room', action: 'restartLater' }); return `restart postponed until ${USER} is idle on the page`;
   }
   if (op === 'ready') { if (gate?.phase !== 'later') return 'nothing postponed'; gate = null; restartPending = true; setTimeout(maybeRestart, 100); return 'restart due again'; }
