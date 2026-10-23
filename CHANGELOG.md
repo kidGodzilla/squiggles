@@ -70,6 +70,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Shared prompt: no routine deploy or self-check chores in review notes or needs; checking your own work after a merge is the squiggle's job.
 - Merge merges every goal repo carrying the task's branch (Repo shows "api + web"; detail lists "Also merges"). `repo:branch` accepts a goal repo's bare name.
 ### Changed
+- Squiggles are asked to ship each change standalone off main, mergeable and deployable in any order, with no stacked branches.
 - Squiggles describe code to you by when and what ("the fix from today 14:27"), not commit hash.
 - Squiggles treat a convenient cause ("user error", "intended") as likely until evidence shows it explains the symptom.
 - Merge tab below 1000px wide hides the Test result column so titles get the room; it stays in the opened row.
