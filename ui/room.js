@@ -753,8 +753,8 @@ async function roomCommand(ev) {
     case 'reload': location.reload(); break;
     case 'quit': if (!$('#offnote')) document.body.insertAdjacentHTML('beforeend', '<div id="offnote"><b>Squiggles is off</b><p>Open Squiggles to start it again.</p></div>'); break;
     case 'restarting': restartAsk(); toast('Server restarting with the latest code…'); setTimeout(() => location.reload(), 4000); break;
-    case 'restartAsk': restartAsk(ev.until); break;
-    case 'restartLater': restartAsk(); break;
+    case 'restartAsk': restartLater = false; restartAsk(ev.until); break;
+    case 'restartLater': restartAsk(); restartLater = true; break; // any postpone, CLI too
     case 'limit': showLimit(+ev.value || 0); break;
     case 'call': window.onCall?.(); break;
     case 'meeting': meetingNow(ev.value, true); break;
@@ -1163,7 +1163,7 @@ function restartAsk(until) {
   tick(); restartAsk.t = setInterval(tick, 250);
 }
 setInterval(() => { if (restartLater && Date.now() - lastActive > 2 * 60000) { restartLater = false; api('/restart', { op: 'ready' }).catch(() => {}); } }, 15000);
-fetch('/api/restart').then((r) => r.json()).then((r) => { if (r?.phase === 'asking') restartAsk(r.until); }).catch(() => {}); // raw: api() reloads on a 401
+fetch('/api/restart').then((r) => r.json()).then((r) => { if (r?.phase === 'asking') restartAsk(r.until); else if (r?.phase === 'later') restartLater = true; }).catch(() => {}); // raw: api() reloads on a 401
 $('#restartBtn').onclick = async () => { const r = await api('/restart', { op: 'now', by: 'owner' }).catch(() => null); if (r?.error) toast(r.error); else if (typeof r === 'string') toast(r[0].toUpperCase() + r.slice(1)); };
 $('#quitAsk').onclick = async (e) => {
   const q = e.target.dataset?.q; if (!q) return; $('#quitAsk').hidden = true; if (q === 'no') return;
