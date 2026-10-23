@@ -36,7 +36,7 @@ function githubOf(repo) {
 const git = (repo, args, opts = {}) => execFileSync('git', ['-C', expand(repo), ...args], { stdio: 'pipe', encoding: 'utf8', maxBuffer: 32 << 20, env: { ...process.env, GIT_EDITOR: 'true', GIT_TERMINAL_PROMPT: '0' }, ...opts }).trim();
 // Async git for the merge listing (t961): sync git per review branch froze the server for 17 s.
 const pexec = promisify(execFile);
-const gitA = async (repo, args) => (await pexec('git', ['-C', expand(repo), ...args], { encoding: 'utf8', maxBuffer: 32 << 20, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } })).stdout.trim();
+const gitA = async (repo, args) => (await pexec('git', ['-C', expand(repo), ...args], { encoding: 'utf8', maxBuffer: 32 << 20, env: { ...process.env, GIT_EDITOR: 'true', GIT_TERMINAL_PROMPT: '0' } })).stdout.trim();
 const okA = (p) => p.then(() => true, () => false);
 // Files that would conflict merging branch into base (t783), [] if clean. merge-tree exits 1 on conflicts, file names after the tree id.
 const conflictsA = (repo, base, branch) => gitA(repo, ['merge-tree', '--write-tree', '--name-only', base, branch]).then(() => [],
@@ -190,6 +190,22 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
     saveGoals(g); return f.goal;
   }
 
+  // Checkouts run async (10-23): a sync worktree add froze every chat for a minute while Xcode builds loaded the disk.
+  const adding = new Map();
+  async function addWorktree(id, repo, at, br) {
+    const have = worktreesOf(repo).find((w) => w.path === at || (w.branch === br && fs.existsSync(w.path)));
+    if (!have) {
+      fs.mkdirSync(WT, { recursive: true });
+      await gitA(repo, hasBranch(repo, br) ? ['worktree', 'add', '--quiet', at, br] : ['worktree', 'add', '--quiet', '-b', br, at, baseOf(repo)]);
+      if (fs.existsSync(path.join(expand(repo), 'node_modules')) && fs.existsSync(path.join(at, 'package.json'))) fs.symlinkSync(path.join(expand(repo), 'node_modules'), path.join(at, 'node_modules'));
+    }
+    const p = have?.path || fs.realpathSync(at);
+    // Re-read: the board may have changed while git ran.
+    const t = tasks(), task = t.find((x) => x.id === id);
+    if (!task) throw new Error(`no task ${id}`);
+    task.repo = repo; task.branch = have?.branch || br; task.worktrees = [...new Set([...(task.worktrees || []), p])]; task.confirmed = today();
+    saveTasks(t); return { ...task, path: p, created: !have };
+  }
   function taskOp({ op, id, title, goal, owner, status, note, by, parent, split, titles, branch, act, text, n, who, repo: repoArg, evidence, why }) {
     const t = tasks();
     // Suggestions (t825): a squiggle notices something outside its task and files it for the lead, unowned and off every goal.
@@ -218,15 +234,8 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
       const repos = goal?.repos || [], repo = repoArg || task.repo || (repos.length === 1 ? repos[0] : '');
       if (!repo) throw new Error(repos.length ? `say which repo: task worktree ${task.id} <${repos.join('|')}>` : `${task.id} has no repo: task worktree ${task.id} <repo>`);
       const name = path.basename(expand(repo)), at = path.join(WT, `${name}-${task.id}`), br = (task.repo && expand(task.repo) === expand(repo) && task.branch) || `${task.id}-${slug(task.title).slice(0, 30).replace(/-$/, '')}`;
-      const have = worktreesOf(repo).find((w) => w.path === at || (w.branch === br && fs.existsSync(w.path)));
-      if (!have) {
-        fs.mkdirSync(WT, { recursive: true });
-        git(repo, hasBranch(repo, br) ? ['worktree', 'add', '--quiet', at, br] : ['worktree', 'add', '--quiet', '-b', br, at, baseOf(repo)]);
-        if (fs.existsSync(path.join(expand(repo), 'node_modules')) && fs.existsSync(path.join(at, 'package.json'))) fs.symlinkSync(path.join(expand(repo), 'node_modules'), path.join(at, 'node_modules'));
-      }
-      const p = have?.path || fs.realpathSync(at);
-      task.repo = repo; task.branch = have?.branch || br; task.worktrees = [...new Set([...(task.worktrees || []), p])]; task.confirmed = today();
-      saveTasks(t); return { ...task, path: p, created: !have };
+      if (!adding.has(at)) adding.set(at, addWorktree(task.id, repo, at, br).finally(() => adding.delete(at)));
+      return adding.get(at);
     }
     if (op === 'accept' || op === 'decline') {
       if (task.kind !== 'suggestion') throw new Error(`${task.id} is not a suggestion`);
@@ -494,7 +503,7 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
     const sides = [{ ...r, worktrees: task.worktrees || [] }, ...(r.others || []).map((o) => ({ ...o, worktrees: task.worktrees || [] }))];
     const done = [], removed = [], kept = [];
     for (const side of sides) {
-      try { const m = mergeRepo(id, side); done.push({ repo: side.repo, base: side.base, sha: m.sha }); removed.push(...m.removed); kept.push(...m.kept); }
+      try { const m = await mergeRepo(id, side); done.push({ repo: side.repo, base: side.base, sha: m.sha }); removed.push(...m.removed); kept.push(...m.kept); }
       catch (e) {
         if (!done.length) throw e;
         const t = tasks(), x = t.find((k) => k.id === id), name = (p) => path.basename(expand(p));
@@ -512,18 +521,18 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
     tellSteps(x, 'after'); saveTasks(t); flushTold(); return { ...r, sha: main.sha, merged: done, task: x, worktrees: removed };
   }
   // Merge one repo's side of a review branch into its base; returns { sha, removed, kept } worktrees.
-  function mergeRepo(id, r) {
+  async function mergeRepo(id, r) {
     if (r.head === r.branch) throw new Error(`${r.repo} has ${r.branch} checked out: switch it away first`);
     const wts = git(r.repo, ['worktree', 'list', '--porcelain']).split(/\n\n+/);
     const onBase = wts.find((b) => b.match(/^branch (.+)$/m)?.[1] === `refs/heads/${r.base}`)?.match(/^worktree (.+)$/m)?.[1];
     let sha, tmp, w;
     try {
       if (r.ahead > 0) {
-        try { git(r.repo, ['merge-tree', '--write-tree', r.base, r.branch]); }
+        try { await gitA(r.repo, ['merge-tree', '--write-tree', r.base, r.branch]); }
         catch (e) { throw new Error(/conflict/i.test(String(e.stdout || '') + String(e.stderr || '')) ? `conflicts merging ${r.branch} into ${r.base}: send it back` : String(e.stderr || e.message).trim().split('\n').pop()); }
         let at = onBase;
-        if (!at) { tmp = fs.mkdtempSync(path.join(os.tmpdir(), `merge-${id}-`)); fs.rmdirSync(tmp); git(r.repo, ['worktree', 'add', '--quiet', tmp, r.base]); at = tmp; }
-        try { git(at, ['merge', '--no-edit', r.branch]); }
+        if (!at) { tmp = fs.mkdtempSync(path.join(os.tmpdir(), `merge-${id}-`)); fs.rmdirSync(tmp); await gitA(r.repo, ['worktree', 'add', '--quiet', tmp, r.base]); at = tmp; }
+        try { await gitA(at, ['merge', '--no-edit', r.branch]); }
         catch (e) {
           const out = (String(e.stdout || '') + String(e.stderr || '')).trim();
           throw new Error(/commit your changes or stash/i.test(out) ? `${r.base} is checked out at ${at} with uncommitted changes the merge would overwrite: commit or stash them, then merge again` : out.split('\n').filter(Boolean).slice(-3).join(' ') || 'merge failed');
@@ -535,7 +544,7 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
       w = dropWorktrees(r.repo, r.branch, r.worktrees || []);
       if (!w.kept.length) {
         let at = onBase || tmp;
-        if (!at) { tmp = fs.mkdtempSync(path.join(os.tmpdir(), `merge-${id}-`)); fs.rmdirSync(tmp); git(r.repo, ['worktree', 'add', '--quiet', '--detach', tmp, r.base]); at = tmp; }
+        if (!at) { tmp = fs.mkdtempSync(path.join(os.tmpdir(), `merge-${id}-`)); fs.rmdirSync(tmp); await gitA(r.repo, ['worktree', 'add', '--quiet', '--detach', tmp, r.base]); at = tmp; }
         git(at, ['branch', '-d', r.branch]);
       }
     } finally { if (tmp) { try { git(r.repo, ['worktree', 'remove', tmp]); } catch {} try { git(r.repo, ['worktree', 'prune']); } catch {} } }

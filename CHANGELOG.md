@@ -100,6 +100,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - The lead's "Handled." replies fold with the reports they answer into one line that opens to list them.
 
 ### Fixed
+- `task worktree` and merges run git in the background, so a slow disk no longer freezes every chat while a checkout runs.
 - A due restart holds your chat at most 2 minutes: held messages then go out and nothing is held for 10 minutes; the restart still runs once nobody is mid-turn.
 - `room reload` no longer reloads the page under you: while you're active it counts down 10s with Reload now and Not yet; Not yet waits until you step away.
 - A restart postponed from the CLI, or before a page reload, now resumes once you are idle on the page instead of waiting for every page to close.
