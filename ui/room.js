@@ -750,7 +750,7 @@ async function roomCommand(ev) {
     case 'fold': case 'unfold': foldGoals(v, ev.action === 'fold'); break; // t1217
     case 'chat': if (S.sq[ev.value]) { if (S.office && !S.officeIds.includes(ev.value)) setView('room'); discuss(ev.value, ev.text, false); } break;
     case 'lock': lock(); break;
-    case 'reload': location.reload(); break;
+    case 'reload': reloadAsk(); break;
     case 'quit': if (!$('#offnote')) document.body.insertAdjacentHTML('beforeend', '<div id="offnote"><b>Squiggles is off</b><p>Open Squiggles to start it again.</p></div>'); break;
     case 'restarting': restartAsk(); toast('Server restarting with the latest code…'); setTimeout(() => location.reload(), 4000); break;
     case 'restartAsk': restartLater = false; restartAsk(ev.until); break;
@@ -1162,6 +1162,26 @@ function restartAsk(until) {
   const tick = () => { const n = Math.max(0, Math.ceil((until - Date.now()) / 1000)); box.querySelector('b').textContent = `${n}s`; };
   tick(); restartAsk.t = setInterval(tick, 250);
 }
+// room reload: same 10s countdown while you are active, so a reload never drops what you're doing. Away 2 min: reload now.
+let reloadLater = false;
+function reloadAsk() {
+  if (Date.now() - lastActive > 2 * 60000) return location.reload();
+  let box = $('#reloadAsk'); clearInterval(reloadAsk.t); reloadLater = false;
+  if (!box) {
+    box = document.createElement('div'); box.id = 'reloadAsk'; box.setAttribute('role', 'alertdialog'); box.setAttribute('aria-label', 'Reload');
+    box.innerHTML = '<p>Reloading this page in <b>10s</b> with the latest version.</p><div><button class="chip primary" data-r="now">Reload now</button><button class="chip" data-r="later">Not yet</button></div>';
+    box.onclick = (e) => {
+      const op = e.target.dataset?.r; if (!op) return; box.remove(); clearInterval(reloadAsk.t);
+      if (op === 'now') return location.reload();
+      reloadLater = true; toast('Reload postponed. It happens when you step away.');
+    };
+    document.body.append(box); box.querySelector('.primary').focus();
+  }
+  const until = Date.now() + 10000;
+  const tick = () => { const n = Math.max(0, Math.ceil((until - Date.now()) / 1000)); box.querySelector('b').textContent = `${n}s`; if (!n) location.reload(); };
+  tick(); reloadAsk.t = setInterval(tick, 250);
+}
+setInterval(() => { if (reloadLater && Date.now() - lastActive > 2 * 60000) location.reload(); }, 15000);
 setInterval(() => { if (restartLater && Date.now() - lastActive > 2 * 60000) { restartLater = false; api('/restart', { op: 'ready' }).catch(() => {}); } }, 15000);
 fetch('/api/restart').then((r) => r.json()).then((r) => { if (r?.phase === 'asking') restartAsk(r.until); else if (r?.phase === 'later') restartLater = true; }).catch(() => {}); // raw: api() reloads on a 401
 $('#restartBtn').onclick = async () => { const r = await api('/restart', { op: 'now', by: 'owner' }).catch(() => null); if (r?.error) toast(r.error); else if (typeof r === 'string') toast(r[0].toUpperCase() + r.slice(1)); };

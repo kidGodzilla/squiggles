@@ -762,6 +762,6 @@ body.v-one.screen:not(.v-meet) #chats .cw.office { left: auto !important; width:
 @media (max-width: 760px) { #fprevBox { padding: 10px 10px calc(var(--tabh) + 10px) } .fprev .dh .chip { height: 44px; min-width: 44px; justify-content: center } }
 @media (pointer: coarse) { .fprev .dh button, .fprev .dh .chip { min-height: 44px; min-width: 44px } }
 /* Restart countdown */
-#restartAsk { position: fixed; top: 64px; left: 50%; transform: translateX(-50%); z-index: 60; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; box-shadow: 0 8px 30px rgba(0,0,0,.45); display: flex; flex-direction: column; gap: 10px; width: max-content; max-width: calc(100vw - 24px) } #restartAsk .chip { white-space: nowrap }
-#restartAsk p { margin: 0; font-size: 14px } #restartAsk div { display: flex; gap: 8px; justify-content: flex-end }
-@media (pointer: coarse) { #restartAsk .chip { min-height: 44px; padding: 0 16px } }
+#restartAsk, #reloadAsk { position: fixed; top: 64px; left: 50%; transform: translateX(-50%); z-index: 60; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; box-shadow: 0 8px 30px rgba(0,0,0,.45); display: flex; flex-direction: column; gap: 10px; width: max-content; max-width: calc(100vw - 24px) } #restartAsk .chip, #reloadAsk .chip { white-space: nowrap }
+#restartAsk p, #reloadAsk p { margin: 0; font-size: 14px } #restartAsk div, #reloadAsk div { display: flex; gap: 8px; justify-content: flex-end }
+@media (pointer: coarse) { #restartAsk .chip, #reloadAsk .chip { min-height: 44px; padding: 0 16px } }
