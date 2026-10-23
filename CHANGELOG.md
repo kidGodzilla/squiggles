@@ -106,6 +106,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - The lead's "Handled." replies fold with the reports they answer into one line that opens to list them.
 
 ### Fixed
+- The lead no longer tells you to press Run on an ask that already ran, or Merge on a task no longer in review: those lines are dropped (noted in the log).
 - Ages on the board and merges list no longer show -1d before noon: dates are counted from their UTC day.
 - Worktrees get their own copy of node_modules (an APFS clone) instead of a link to main's, so installing in a worktree no longer empties the main checkout's.
 - A double-clicked Merge joins the running merge; send back, move and drop wait until git finishes writing.

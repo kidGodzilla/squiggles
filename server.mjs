@@ -12,6 +12,7 @@ import { createBoard } from './board.mjs';
 import { createFiles } from './files.mjs';
 import { holdGate } from './hold.mjs';
 import { createAsks, runAsk } from './asks.mjs';
+import { dropStale } from './stale.mjs';
 import { modelFor as pickModel, DEFAULT_MODELS, EFFORTS, checkModelEffort } from './models.mjs';
 import { createMeetings, local, markPast, meetingNotes, parseWhen } from './meetings.mjs';
 import { createInbox } from './inbox.mjs';
@@ -155,6 +156,14 @@ const humans = createHumans(DATA, () => {
 }, { ownerName: CONFIG.userName || 'You' });
 const tilde = (v) => path.resolve(String(v).replace(/^~(?=\/|$)/, os.homedir()));
 const asks = createAsks({ file: path.join(RUNS, 'asks.json'), log: path.join(RUNS, 'asks.log') });
+// Lead lines pointing the user at an ask that already ran or a Merge no longer in review are dropped; kept in a log event.
+const unstale = (id, text) => {
+  let all = [], ts = [];
+  try { all = asks.list({ all: true }); } catch {} try { ts = board.tasks(); } catch {}
+  const r = dropStale(text, { ask: (a) => all.find((x) => x.id === a)?.status, task: (t) => ts.find((x) => x.id === t)?.status });
+  if (r.dropped.length) emit(id, { k: 'log', text: `Stale line dropped: ${r.dropped.join(' | ')}` });
+  return r.text;
+};
 const files = createFiles({ root: DATA, extra: Object.fromEntries(Object.entries(CONFIG.fileSources || {}).map(([k, v]) => [k, tilde(v)])), tasks: () => { try { return board.tasks(); } catch { return []; } } });
 // Awake squiggles (t294): while one with awake: true is working, caffeinate keeps the display on and the Mac from idle sleep or locking.
 // -w ties it to this server, so a crash can't leave the Mac awake for good.
@@ -288,7 +297,7 @@ function launch(s) {
           }
         }
         for (const c of ev.message.content || []) {
-          if (c.type === 'text' && c.text.trim()) { lastText = c.text; emit(s.id, { k: 'say', text: c.text }); }
+          if (c.type === 'text' && c.text.trim()) { lastText = c.text; const t = s.lead ? unstale(s.id, c.text) : c.text; if (t.trim()) emit(s.id, { k: 'say', text: t }); }
           else if (c.type === 'tool_use') emit(s.id, toolEvent(c));
         }
       } else if (ev.type === 'user' && Array.isArray(ev.message?.content)) {
@@ -572,7 +581,7 @@ function turnEnded(s, text, isError, subtype) {
     : subtype === 'error_max_turns' ? { status: 'error', note: `hit the turn cap (${s.maxTurns ?? 40}); ${lastSaved(s)}; fresh process next wake` }
     : isError ? { status: 'error', note: 'turn failed' } : statusLine(text) || { status: 'idle', note: '' };
   R(s.id).lastEnd = now();
-  const relay = R(s.id).relay; if (relay?.length && !isError && text?.trim()) { delete R(s.id).relay; saveState(); for (const t of new Set(relay)) emit(t, { k: 'say', text, by: s.id }); }
+  const relay = R(s.id).relay; if (relay?.length && !isError && text?.trim()) { delete R(s.id).relay; saveState(); const said = s.lead ? unstale(s.id, text) : text; if (said.trim()) for (const t of new Set(relay)) emit(t, { k: 'say', text: said, by: s.id }); }
   emit(s.id, { k: 'end', status: st.status, note: st.note });
   setStatus(s.id, st.status, st.note);
   if (!s.lead && st.status !== 'idle' && st.status !== 'waiting') {
