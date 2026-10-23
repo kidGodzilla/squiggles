@@ -237,6 +237,7 @@ body.v-goals #room, body.v-tasks #room, body.v-merge #room, body.v-files #room, 
 .btool input, .btool select { height: 32px; border-radius: 9px; background: var(--panel2); border: 1px solid var(--line); padding: 0 10px; color: var(--text); outline: 0 }
 .btool input { width: 240px } .btool select { max-width: 220px } .btool input:focus { border-color: var(--accent) }
 .btool #gcount, .btool #tcount { color: var(--dim); font-size: 12.5px }
+.btool #gload { margin-left: auto; color: var(--dim); font-size: 12.5px }
 .seg { display: flex; padding: 2px; border-radius: 9px; background: var(--panel2); border: 1px solid var(--line) }
 .seg button { height: 26px; padding: 0 12px; border-radius: 7px; color: var(--dim); font-size: 12.5px } .seg button.on { background: var(--bg); color: var(--text) }
 mark { background: rgba(245,192,74,.45); color: inherit; border-radius: 3px; padding: 0 1px }

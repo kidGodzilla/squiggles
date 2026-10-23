@@ -77,6 +77,14 @@ function renderGoals() {
   $('#gcount').textContent = q ? `${shown + aShown.length} of ${both}` : both;
 }
 
+// The user's load: today's actions and shipped tasks beside the 6-day average; the tooltip has each day. CLI: load [days].
+async function loadLoad() {
+  const d = await api('/load?days=7').catch(() => null), el = $('#gload'); if (!Array.isArray(d) || !el) return;
+  const t = d.at(-1), past = d.slice(0, -1), avg = (k) => Math.round(past.reduce((n, r) => n + r[k], 0) / (past.length || 1));
+  el.textContent = `Today: ${t.actions} actions by you, ${t.done} tasks shipped. Past 6 days: ${avg('actions')} and ${avg('done')} a day.`;
+  el.title = d.map((r) => `${r.date}: ${r.actions} actions (${r.merges} merges, ${r.runs + r.denies} asks, ${r.messages} messages), ${r.done} shipped`).join('\n');
+}
+
 // ---------- Tasks: the cork board ----------
 // Suggestions (t825) live in their own filter until the lead accepts one; then it's a normal note.
 const isSug = (t) => t.kind === 'suggestion' && t.decision !== 'accepted';
@@ -626,6 +634,7 @@ function setView(v, who, nav) {
   if (v === 'merge') loadMerges();
   if (v === 'team') { renderTeam(); loadHumans(); loadCost(); }
   if (v === 'calendar') loadCal();
+  if (v === 'goals') loadLoad();
   if (v === 'files' && typeof loadFiles === 'function') loadFiles();
   if (v === 'settings') { if (typeof renderSettings === 'function') renderSettings(); loadHumans(); }
   focusOffice();

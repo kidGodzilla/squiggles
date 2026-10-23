@@ -14,6 +14,7 @@ import { holdGate } from './hold.mjs';
 import { createAsks, runAsk } from './asks.mjs';
 import { dropStale } from './stale.mjs';
 import { createLedger } from './cost.mjs';
+import { load as ownerLoad } from './load.mjs';
 import { modelFor as pickModel, DEFAULT_MODELS, EFFORTS, checkModelEffort } from './models.mjs';
 import { createMeetings, local, markPast, meetingNotes, parseWhen } from './meetings.mjs';
 import { createInbox } from './inbox.mjs';
@@ -40,6 +41,7 @@ const VERSION = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf
 const USER = CONFIG.userName || 'the user', User = CONFIG.userName || 'The user';
 const SQ = path.join(DATA, 'squiggles');
 const RUNS = path.join(DATA, 'runs');
+const loadCache = {};
 const MEDIA = path.join(RUNS, 'media');
 const FILES = path.join(DATA, 'files'); // shared drop folder; chat images land here
 const STATE = path.join(RUNS, 'state.json');
@@ -1192,6 +1194,9 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/share') return json(res, req.method === 'POST' ? await share(!!(await body(req, res)).on) : await shareStatus());
     if (url.pathname === '/api/inbox') return json(res, { ...drop.list(), dir: path.join(DATA, 'inbox').replace(os.homedir(), '~') });
     if (url.pathname === '/api/limit') return json(res, { until: limit.until });
+    // The user's load: reads every chat log, so one minute's cache per day count.
+    if (url.pathname === '/api/load') { const n = Math.max(1, Math.min(90, +url.searchParams.get('days') || 7)), c = loadCache[n];
+      return json(res, c && Date.now() - c.at < 60e3 ? c.v : (loadCache[n] = { at: Date.now(), v: ownerLoad({ root: DATA, days: n }) }).v); }
     if (url.pathname === '/api/cost') return json(res, ledger.summary(Math.max(1, Math.min(90, +url.searchParams.get('days') || 1))));
     if (url.pathname === '/api/quit' && req.method === 'POST') { const b = await body(req, res); return json(res, quit(!!b.now, b.by || 'owner')); }
     if (url.pathname === '/api/restart' && req.method === 'GET') return json(res, restartState());
