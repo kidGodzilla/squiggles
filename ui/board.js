@@ -314,6 +314,7 @@ function renderMerges() {
       ${nc ? `<dt>Conflicts</dt><dd>${m.conflicts.map((f) => `<code>${esc(f)}</code>`).join(', ')}</dd>` : ''}
       ${m.error ? '' : `<dt>Base</dt><dd>${esc(m.base)}${m.into ? ' (the branch it was cut from)' : ''} <button class="quiet mbase" data-a="base" title="Merge into another branch">Change</button>, ${ab}${m.dirty ? `, ${m.dirty} uncommitted file${m.dirty > 1 ? 's' : ''} in the repo` : ''}</dd>`}
       <dt>Test result</dt><dd>${esc(m.error || m.result || 'None on the note')}</dd><dt>In review</dt><dd>since ${esc(m.reviewed || '')} (${m.age <= 0 ? 'today' : `${m.age}d`})${m.owner ? `, by ${esc(ownerName(m.owner))}` : ''}</dd>
+      ${m.sha ? `<dt>Reviewed commit</dt><dd><code>${esc(m.sha)}</code>${m.shipped?.length ? `, shipped by ${m.shipped.map((x) => `${esc(ownerName(x.by))} ${esc(x.date)}`).join(', ')}` : ''}</dd>` : ''}
       ${m.log?.length ? `<dt>Commits</dt><dd><code class="mlog">${esc(m.log.join('\n'))}</code></dd>` : ''}</dl>
       ${m.desktop || m.compare ? `<p class="mlinks">${m.desktop ? `<a href="${esc(m.desktop)}">Open in GitHub Desktop</a>` : ''}${m.compare ? `<a href="${esc(m.compare)}" target="_blank" rel="noopener">View on GitHub</a>` : m.desktop ? '<span title="The branch is not on GitHub; nobody pushes it from here">Not on GitHub yet</span>' : ''}</p>` : ''}
       <div class="macts mdacts">${m.owner ? `<button data-a="owner">Discuss with ${esc(ownerName(m.owner))}</button>` : ''}${acts}</div></div></td></tr>` : ''}`;

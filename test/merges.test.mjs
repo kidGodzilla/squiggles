@@ -144,3 +144,32 @@ test('one merge per task: a second click joins it, send back during git is refus
   assert.throws(() => b.mergeBack('t1', 'late', 'reviewer'), /not in review/); // lock released; normal rules again
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test('merge takes the reviewed commit: a branch moved since review is refused until reviewed again; ship pins the sha', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'merges-')), repo = path.join(dir, 'repo');
+  const g = (...a) => execFileSync('git', ['-C', repo, ...a], { stdio: 'pipe', env: { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' } });
+  const commit = (f, m) => { fs.writeFileSync(path.join(repo, f), m); g('add', f); g('commit', '-q', '-m', m); };
+  const tip = () => g('rev-parse', 'refs/heads/work').toString().trim();
+  fs.mkdirSync(repo); g('init', '-q', '-b', 'main'); commit('a', 'base');
+  g('checkout', '-q', '-b', 'work'); commit('b', 'reviewed'); g('checkout', '-q', 'main');
+  fs.writeFileSync(path.join(dir, 'goals.json'), JSON.stringify({ active: [{ id: 'g', title: 'G', merge: 'gated', repos: [repo] }] }));
+  fs.writeFileSync(path.join(dir, 'tasks.json'), JSON.stringify({ tasks: [{ id: 't1', title: 'w', goal: 'g', status: 'doing', owner: 'o' }] }));
+  const b = createBoard(dir, () => {});
+  const reviewed = tip();
+  b.taskOp({ op: 'move', id: 't1', status: 'review', branch: `${repo}:work` });
+  assert.equal(Object.values(b.tasks()[0].tips)[0], reviewed);
+  assert.equal((await b.merges())[0].sha, reviewed.slice(0, 7));
+  b.taskOp({ op: 'ship', id: 't1', by: 'reviewer', note: 'Ship' });
+  assert.deepEqual(b.tasks()[0].shipped.map((x) => [x.by, x.sha]), [['reviewer', reviewed]]);
+  g('checkout', '-q', 'work'); commit('c', 'after review'); g('checkout', '-q', 'main');
+  assert.throws(() => b.taskOp({ op: 'ship', id: 't1', by: 'designer' }), /moved since review/);
+  assert.match((await b.merges())[0].error, /moved since review/);
+  await assert.rejects(b.merge('t1', 'owner'), /moved since review/);
+  assert.equal(fs.existsSync(path.join(repo, 'b')), false);
+  b.taskOp({ op: 'move', id: 't1', status: 'review' }); // re-review pins the new tip, drops the old sign-off
+  assert.equal(b.tasks()[0].shipped, undefined);
+  const m = await b.merge('t1', 'owner');
+  assert.equal(m.task.status, 'done');
+  assert.equal(fs.readFileSync(path.join(repo, 'c'), 'utf8'), 'after review');
+  fs.rmSync(dir, { recursive: true, force: true });
+});

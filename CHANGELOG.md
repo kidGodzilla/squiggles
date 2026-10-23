@@ -22,6 +22,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - An ask cut off by a server restart is marked interrupted at boot and its filer is told; its output is lost.
 
 ### Added
+- `task ship <id> [note]`: a reviewer's sign-off pinned to the commit they saw. Merge takes the reviewed commit, and a branch that moved after review is refused until it's moved to review again. The Merge tab shows the reviewed commit and who shipped it.
 - A message sent mid-turn shows at once that it landed and what the squiggle is doing; the squiggle answers it first.
 - Images in squiggle messages render inline: a path under the data dir's files/ or research/, or `![alt](path)`. Other paths and web URLs stay text.
 - Restart counts down 10s on an open page, with Restart now and Not yet; Not yet lets work go on until you step away. `restart now|later|status`, and a Restart item in the menu.

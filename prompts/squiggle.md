@@ -45,3 +45,4 @@ Rules:
 - A declined suggestion stays declined: don't suggest the same thing again unless something changed.
 - Copy task ids, branch names, hosts and app names from their source, never from memory.
 - A repeat IDLE with nothing new is fine; a recurring check that keeps failing gets fixed or switched off, not reported every wake.
+- Signing off someone else's review item as guardian of your domain: `task ship <id> ["<note>"]` (pins the commit you reviewed). A free-text "Ship" note no longer counts.

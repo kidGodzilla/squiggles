@@ -11,6 +11,13 @@ const STATUSES = ['todo', 'doing', 'review', 'blocked', 'done'];
 // Merge policy per goal. gated: a branch per task, merged from the Merge tab. open: commit to main. Missing means gated.
 const MERGE = ['gated', 'open'];
 const expand = (p) => String(p || '').replace(/^~(?=$|\/)/, os.homedir());
+// The commit a branch pointed at when it went to review: merge takes that, never a later tip.
+const realRepo = (p) => { try { return fs.realpathSync(expand(p)); } catch { return expand(p); } };
+const tipOf = (repo, branch) => { try { return execFileSync('git', ['-C', expand(repo), 'rev-parse', '--verify', '--quiet', `refs/heads/${branch}`], { stdio: 'pipe' }).toString().trim(); } catch { return ''; } };
+function pinTips(task, goal) {
+  task.tips = {}; for (const r of new Set([task.repo, ...(goal?.repos || [])].filter(Boolean).map(realRepo))) { const sha = tipOf(r, task.branch); if (sha) task.tips[r] = sha; }
+  if (!Object.keys(task.tips).length) delete task.tips;
+}
 const hasBranch = (repo, branch) => { try { execFileSync('git', ['-C', expand(repo), 'rev-parse', '--verify', '--quiet', `refs/heads/${branch}`], { stdio: 'pipe' }); return true; } catch { return false; } };
 // A review task names a branch. "repo:branch" pins the repo (a path or a goal repo's name); a bare branch is looked up in the goal's repos.
 function resolveBranch(spec, goal) {
@@ -282,6 +289,8 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
         const spec = branch || (task.repo ? `${task.repo}:${task.branch}` : task.branch);
         const goal = task.goal ? TIERS.flatMap((x) => goals()[x]).find((g) => g.id === task.goal) : null;
         Object.assign(task, resolveBranch(spec, goal)); task.reviewed = today();
+        const was = JSON.stringify(task.tips || {}); pinTips(task, goal);
+        if (task.shipped && JSON.stringify(task.tips || {}) !== was) delete task.shipped; // a sign-off covers the commit it saw
         try { const b = detectBase(task.repo, task.branch); if (b !== baseOf(task.repo)) task.base = b; else delete task.base; } catch {}
       } else if (branch) Object.assign(task, resolveBranch(branch, task.goal ? TIERS.flatMap((x) => goals()[x]).find((g) => g.id === task.goal) : null));
       if (status === 'review' && task.status !== 'review') tellSteps(task, 'needs');
@@ -289,6 +298,17 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
       if (note !== undefined) task.note = note;
       if (status === 'done') retire(task);
     } else if (op === 'confirm') task.confirmed = today();
+    // task ship <id> [note]: a guardian signs off on the reviewed commit; refused once the branch moved past it.
+    else if (op === 'ship') {
+      if (task.status !== 'review' || !task.branch) throw new Error(`${task.id} is not in review on a branch`);
+      const goal = goalOf(task.goal);
+      if (!task.tips) pinTips(task, goal);
+      for (const [r, want] of Object.entries(task.tips || {})) { const now = tipOf(r, task.branch); if (now !== want) throw new Error(`${task.branch} moved since review (${want.slice(0, 7)} → ${now ? now.slice(0, 7) : 'gone'}) in ${r}: ${task.owner || 'the owner'} moves it to review again, then you review that`); }
+      const sha = task.tips?.[realRepo(task.repo)] || '';
+      if (!sha) throw new Error(`branch ${task.branch} is gone from ${task.repo}`);
+      task.shipped = [...(task.shipped || []).filter((x) => x.by !== (by || 'lead')), { by: by || 'lead', sha, date: today(), ...(String(note || '').trim() ? { note: String(note).trim() } : {}) }];
+      task.confirmed = today();
+    }
     // task base <id> <branch>|auto: the branch the Merge tab merges into; auto re-detects, the default base clears it.
     else if (op === 'base') {
       if (!task.repo || !task.branch) throw new Error(`${task.id} has no branch yet`);
@@ -381,6 +401,7 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
       if (!(await okA(gitA(repo, ['rev-parse', '--verify', '--quiet', `refs/heads/${branch}`])))) throw new Error(`branch ${branch} is gone from ${repo}`);
       const base = into || await q(`base ${repo}`, () => baseOfA(repo));
       if (into && !(await okA(gitA(repo, ['rev-parse', '--verify', '--quiet', `refs/heads/${into}`])))) throw new Error(`base branch ${into} is gone from ${repo}: task base <id> <branch>|auto`);
+      r.tip = await gitA(repo, ['rev-parse', `refs/heads/${branch}`]);
       r.base = base; r.head = await q(`head ${repo}`, () => gitA(repo, ['rev-parse', '--abbrev-ref', 'HEAD']));
       r.ahead = Number(await gitA(repo, ['rev-list', '--count', `${base}..${branch}`]));
       r.behind = Number(await gitA(repo, ['rev-list', '--count', `${branch}..${base}`]));
@@ -417,7 +438,13 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
     const { repo: _r, branch: _b, ...one } = await repoInfo(task.repo, task.branch, q, task.base);
     Object.assign(r, one);
     if (r.error) return r;
-    const others = await otherRepos(task, q);
+    // Reviewed commit: a branch that moved after review needs reviewing again before it merges.
+    const pin = (o) => {
+      const want = task.tips?.[realRepo(o.repo)]; if (!want || !o.tip) return;
+      o.pin = want; if (o.tip !== want && !o.error) o.error = o.moved = `${o.branch} moved since review (${want.slice(0, 7)} → ${o.tip.slice(0, 7)}): review it again, then task move ${task.id} review`;
+    };
+    pin(r); r.sha = (r.pin || r.tip || '').slice(0, 7); if (task.shipped) r.shipped = task.shipped.map((x) => ({ ...x, sha: x.sha.slice(0, 7) }));
+    const others = await otherRepos(task, q); others.forEach(pin);
     if (others.length) {
       r.others = others;
       const bad = others.find((o) => o.error);
@@ -472,7 +499,7 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
     if (!onConflict) return list;
     const sent = [];
     for (const r of list) {
-      if (r.error || !r.conflicts?.length) continue;
+      if ((r.error && r.error !== r.moved) || !r.conflicts?.length) continue; // moved since review still goes back for its conflicts
       let key; try { key = `${await gitA(r.repo, ['rev-parse', r.branch])} ${await gitA(r.repo, ['rev-parse', r.base])}`; } catch { continue; }
       const t = tasks(), x = t.find((k) => k.id === r.id);
       if (x?.status !== 'review' || x.conflictSent === key) continue;
@@ -551,11 +578,12 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
     let sha, tmp, w;
     try {
       if (r.ahead > 0) {
-        try { await gitA(r.repo, ['merge-tree', '--write-tree', r.base, r.branch]); }
+        const what = r.pin || r.branch; // the reviewed commit, never a newer tip
+        try { await gitA(r.repo, ['merge-tree', '--write-tree', r.base, what]); }
         catch (e) { throw new Error(/conflict/i.test(String(e.stdout || '') + String(e.stderr || '')) ? `conflicts merging ${r.branch} into ${r.base}: send it back` : String(e.stderr || e.message).trim().split('\n').pop()); }
         let at = onBase;
         if (!at) { tmp = fs.mkdtempSync(path.join(os.tmpdir(), `merge-${id}-`)); fs.rmdirSync(tmp); await gitA(r.repo, ['worktree', 'add', '--quiet', tmp, r.base]); at = tmp; }
-        try { await gitA(at, ['merge', '--no-edit', r.branch]); }
+        try { await gitA(at, ['merge', '--no-edit', ...(r.pin ? ['-m', `Merge branch '${r.branch}'`] : []), what]); }
         catch (e) {
           const out = (String(e.stdout || '') + String(e.stderr || '')).trim();
           throw new Error(/commit your changes or stash/i.test(out) ? `${r.base} is checked out at ${at} with uncommitted changes the merge would overwrite: commit or stash them, then merge again` : out.split('\n').filter(Boolean).slice(-3).join(' ') || 'merge failed');

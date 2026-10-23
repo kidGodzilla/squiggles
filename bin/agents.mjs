@@ -133,7 +133,7 @@ const cmds = {
   // task worktree <id> [repo]: the only way to make a worktree, at ~/wt/<repo>-<id>, recorded on the task (gated goals) |
   // task needs <id> add "<owner>: <what they must do before merging>" | done|undo|drop <n> | tag <n> <owner> | clear (also task edit <id> needs ...) |
   // task after <id> add "<owner>: <what they must do after merging>" | done|undo|drop <n> | tag <n> <owner> | clear |
-  // task add <title> [goal] [owner] | task split <id> <subtask>... | task claim <id> [owner] | task release <id> | task edit <id> split true|false | task edit <id> parent <id> | task move <id> <todo|doing|blocked|done> [note] | task move <id> review [repo:]<branch> [note] | task edit <id> branch [repo:]<branch> | task confirm <id> | task edit <id> <field> <value> | task drop <id>
+  // task add <title> [goal] [owner] | task split <id> <subtask>... | task claim <id> [owner] | task release <id> | task edit <id> split true|false | task edit <id> parent <id> | task move <id> <todo|doing|blocked|done> [note] | task move <id> review [repo:]<branch> [note] | task edit <id> branch [repo:]<branch> | task confirm <id> | task ship <id> [note] | task edit <id> <field> <value> | task drop <id>
   task: () => {
     const [op, x, y, z] = a;
     if (op === 'add') return call('/tasks', { op, title: x, goal: y, owner: z, by: process.env.AGENTS_ID });
@@ -146,6 +146,10 @@ const cmds = {
     if (op === 'base') return call('/tasks', { op, id: x, branch: y || 'auto' }).then((t) => `${t.id} merges into ${t.base || 'the default branch'}`);
     if (op === 'worktree') return call('/tasks', { op, id: x, ...(y ? { repo: y } : {}) }).then((t) => `${t.created ? 'created' : 'already there'}: ${t.path} on ${t.branch}`);
     if (op === 'needs' || op === 'after' || (op === 'edit' && (y === 'needs' || y === 'after'))) { const [list, act, v] = op === 'edit' ? [y, z, a[4]] : [op, y, z]; return call('/tasks', { op: list, id: x, act, ...(/^\d+$/.test(v || '') ? { n: v } : { text: v }), ...(act === 'tag' ? { who: op === 'edit' ? a[5] : a[4] } : {}) }); }
+    // task ship <id> [note] (t1922): a guardian's sign-off, pinned to the commit under review.
+    if (op === 'ship') return call('/tasks', { op, id: x, note: y, by: process.env.AGENTS_ID }).then((t) => `${t.id} shipped at ${t.shipped.at(-1).sha.slice(0, 7)}`);
+    // task ship <id> [note]: a guardian's sign-off, pinned to the commit under review.
+    if (op === 'ship') return call('/tasks', { op, id: x, note: y, by: process.env.AGENTS_ID }).then((t) => `${t.id} shipped at ${t.shipped.at(-1).sha.slice(0, 7)}`);
     if (op === 'edit') return call('/tasks', { op, id: x, [y]: z ?? '' });
     return call('/tasks', { op, id: x });
   },
@@ -159,7 +163,7 @@ const cmds = {
     ? ((r) => r.closed.length ? r.closed.map((c) => `${c.id} done: ${c.why}`).join('\n') : `nothing merged outside; ${r.merges.length} in review`)(await call('/merges', { op: 'refresh' }))
     : [(await call('/merges')).map((m) => m.error
     ? `${m.id}  ${m.title}  ${m.repo}:${m.branch}  — ${m.error}`
-    : `${m.id}  ${m.title}  ${m.repo}:${m.branch}  ${m.ahead} ahead${m.behind ? `, ${m.behind} behind` : ''} of ${m.base}${m.others?.length ? `  + ${m.others.map((o) => `${o.repo}${o.error ? ` (${o.error})` : ` ${o.ahead} ahead`}`).join(', ')}` : ''}${m.conflicts?.length ? `  CONFLICTS: ${m.conflicts.join(', ')}` : ''}  ${m.age}d${m.stale ? ' STALE' : ''}${m.owner ? `  @${m.owner}` : ''}${m.result ? `  — ${m.result}` : '  — no test result'}${steps(m.needs, 'needs')}${steps(m.after, 'after')}${m.desktop ? `\n    desktop: ${m.desktop}` : ''}${m.compare ? `\n    github: ${m.compare}` : ''}`).join('\n'), await afterMerge()].filter(Boolean).join('\n\n') || 'nothing in review',
+    : `${m.id}  ${m.title}  ${m.repo}:${m.branch}  ${m.ahead} ahead${m.behind ? `, ${m.behind} behind` : ''} of ${m.base}${m.others?.length ? `  + ${m.others.map((o) => `${o.repo}${o.error ? ` (${o.error})` : ` ${o.ahead} ahead`}`).join(', ')}` : ''}${m.conflicts?.length ? `  CONFLICTS: ${m.conflicts.join(', ')}` : ''}  ${m.age}d${m.stale ? ' STALE' : ''}${m.sha ? `  at ${m.sha}` : ''}${m.shipped?.length ? `  shipped by ${m.shipped.map((x) => x.by).join(', ')}` : ''}${m.owner ? `  @${m.owner}` : ''}${m.result ? `  — ${m.result}` : '  — no test result'}${steps(m.needs, 'needs')}${steps(m.after, 'after')}${m.desktop ? `\n    desktop: ${m.desktop}` : ''}${m.compare ? `\n    github: ${m.compare}` : ''}`).join('\n'), await afterMerge()].filter(Boolean).join('\n\n') || 'nothing in review',
   // meetings [days] [from YYYY-MM-DD] (past ones say Done or Missed) | meeting add "<title>" "<when>" <id,id> [once|daily|weekdays|weekly] ["<agenda>"] | meeting edit <id> <field> <value> (presenters <id,id> sets the turn order; showtell true|false builds each presenter's agenda from their work since the last one) | meeting cancel <id> [date] | meeting start <id> | meeting next | meeting end | meeting now
   meetings: async () => {
     const { upcoming } = await call(`/meetings?days=${Number(a[0]) || 7}${a[1] ? `&from=${a[1]}T00:00` : ''}`);
