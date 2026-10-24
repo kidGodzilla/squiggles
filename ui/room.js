@@ -885,6 +885,7 @@ async function openSheet(id) {
     </div>
     <div class="row2">
       <div><label>Browser</label><select id="shBrowser"><option value="">Off</option><option value="chrome" ${s.chrome ? 'selected' : ''}>Claude in Chrome</option></select></div>
+      ${s.lead ? '' : `<div><label>Trust</label><select id="shTrust" title="${esc(TRUST_HINT)}">${trustOpts(s.trust)}</select></div>`}
     </div>
     <div class="row2">
       <div><label>Effort</label><select id="shEffort">${['', 'low', 'medium', 'high', 'xhigh', 'max'].map((m) => `<option value="${m}" ${(s.effort ?? '') === m ? 'selected' : ''}>${m || (s.lead ? 'Default' : 'medium (default)')}</option>`).join('')}</select></div>
@@ -912,7 +913,7 @@ async function openSheet(id) {
       const res = await api(`/squiggles/${id}/remove`, {}); toast(typeof res === 'string' ? res : res.error); $('#sheet').classList.remove('on'); return;
     }
     if (a === 'shuffle') { await restyle(id, { lookSeed: Math.floor(Math.random() * 1e9) }); return openSheet(id); }
-    if (a === 'save') Object.assign(S.sq[id], await api(`/squiggles/${id}/update`, { name: $('#shName').value.trim() || s.name, role: $('#shRole').value.trim() || s.role, charter: $('#shCharter').value, cwd: $('#shCwd').value, every: Number($('#shEvery').value) || 0, model: $('#shModel').value || undefined, permissionMode: $('#shPerm').value, effort: $('#shEffort').value || undefined, chrome: $('#shBrowser').value === 'chrome', awake: !!$('#shAwake').value, maxTurns: Number($('#shTurns').value) || 40, autocompact: Number($('#shCompact').value) || undefined }));
+    if (a === 'save') Object.assign(S.sq[id], await api(`/squiggles/${id}/update`, { name: $('#shName').value.trim() || s.name, role: $('#shRole').value.trim() || s.role, charter: $('#shCharter').value, cwd: $('#shCwd').value, every: Number($('#shEvery').value) || 0, model: $('#shModel').value || undefined, permissionMode: $('#shPerm').value, effort: $('#shEffort').value || undefined, chrome: $('#shBrowser').value === 'chrome', awake: !!$('#shAwake').value, maxTurns: Number($('#shTurns').value) || 40, autocompact: Number($('#shCompact').value) || undefined, ...($('#shTrust') && { trust: $('#shTrust').value }) }));
     paintTile(id); renderSummary(); $('#sheet').classList.remove('on');
   };
   $('#shLook').onchange = async (e) => { await restyle(id, { look: e.target.value }); openSheet(id); };

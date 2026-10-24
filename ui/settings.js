@@ -64,14 +64,19 @@ $('#setDefaults').onchange = async (e) => {
   if (!r || r.error) { renderDefaults(); return toast(r?.error || 'Not saved'); } // put the select back
   toast('Saved team defaults');
 };
+// Trust: how far a squiggle acts on its own ideas; rules in trust.mjs. CLI: set <id> trust <level>.
+const TRUST_OPTS = [['low', 'Low'], ['medium', 'Medium'], ['high', 'High'], ['veryhigh', 'Very high']];
+const TRUST_HINT = 'Low: suggests only. Medium: files its own tasks, writes wait. High: also ships small tested fixes for the lead to merge after its guardian signs off. Very high: also merges and deploys in open goals without asking.';
+const trustOpts = (v) => TRUST_OPTS.map(([k, n]) => `<option value="${k}"${(v || 'medium') === k ? ' selected' : ''}>${n}</option>`).join('');
 function renderSetSqs() {
   const cell = (label, html) => `<td><label class="sqf"><span class="sqlab">${label}</span>${html}</label></td>`;
-  $('#setSqs').innerHTML = `<table class="sqtable"><thead><tr><th scope="col">Squiggle</th><th scope="col">Model</th><th scope="col">Effort</th><th scope="col">Wakes</th><th scope="col">Pack</th><th scope="col">Paused</th></tr></thead><tbody>` + S.order.map((id) => {
+  $('#setSqs').innerHTML = `<table class="sqtable"><thead><tr><th scope="col">Squiggle</th><th scope="col">Model</th><th scope="col">Effort</th><th scope="col">Wakes</th><th scope="col">Trust</th><th scope="col">Pack</th><th scope="col">Paused</th></tr></thead><tbody>` + S.order.map((id) => {
     const s = S.sq[id], own = s.look ? parseLook(s.look).gen : '';
     return `<tr data-sq="${id}"><th scope="row"><span class="sqname"><span class="tile mini">${avatarSVG(P(id), undefined, 'sq' + P(id).gid + '_')}</span><b>${esc(s.name)}</b></span></th>
       ${cell('Model', `<select data-f="model">${modelOpts(s.model)}</select>`)}
       ${cell('Effort', `<select data-f="effort">${effortOpts(s.effort, s.lead)}</select>`)}
       ${cell('Wakes', `<select data-f="every">${everyOpts(s.every)}</select>`)}
+      ${s.lead ? '<td></td>' : cell('Trust', `<select data-f="trust" title="${esc(TRUST_HINT)}">${trustOpts(s.trust)}</select>`)}
       ${cell('Pack', `<select data-f="look">${opt('', own, 'Room pack')}${Object.values(GENS).map((g) => opt(g.id, own, g.name)).join('')}</select>`)}
       <td><label class="sqpause"><input data-f="paused" type="checkbox"${s.paused ? ' checked' : ''}><span class="sqlab">Paused</span></label></td></tr>`;
   }).join('') + '</tbody></table>';

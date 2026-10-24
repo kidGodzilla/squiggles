@@ -13,6 +13,7 @@ import { createFiles } from './files.mjs';
 import { holdGate } from './hold.mjs';
 import { createAsks, runAsk } from './asks.mjs';
 import { createPicks } from './picks.mjs';
+import { trustLevel, trustOf, trustRules } from './trust.mjs';
 import { dropStale } from './stale.mjs';
 import { createLedger } from './cost.mjs';
 import { load as ownerLoad } from './load.mjs';
@@ -249,7 +250,7 @@ if (!listSquiggles().length) {
 }
 function systemPrompt(s) {
   const dir = sqDir(s.id);
-  const base = prompt(s.lead ? 'lead.md' : 'squiggle.md');
+  const base = prompt(s.lead ? 'lead.md' : 'squiggle.md').replace('{{trust}}', () => fillPrompt(trustRules(s)));
   return `${base}\n\nYou are ${s.name} (id: ${s.id}). Your role: ${s.role}.\nCharter: ${dir}/charter.md\nJournal: ${dir}/journal.md\nHarness CLI: node ${ROOT}/bin/agents.mjs\nShared files: ${FILES} (${USER}'s drops; \`files [query]\` lists them with the research folders)\n\nThe team:\n${TEAM()}`;
 }
 // Always pass a model: unset would inherit the CLI default, which may be Fable; squiggles never run on Fable.
@@ -1243,7 +1244,8 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/tasks' && req.method === 'POST') {
       const b = await body(req, res);
       // Filed in a turn the user or the lead started: their ask, not the squiggle's own idea (Proactive).
-      if (b.op === 'add' && !b.asked) { const c = await callerSquiggle(req); if (c && R(c).asked?.length) b.asked = R(c).asked[0]; }
+      // Low trust: that squiggle suggests, never files its own ideas (a note for the user's or the lead's ask is fine).
+      if (b.op === 'add') { const c = await callerSquiggle(req), cs = c && loadSquiggle(c); if (cs && !b.asked && R(c).asked?.length) b.asked = R(c).asked[0]; if (cs && !cs.lead && !b.asked && trustOf(cs) === 'low') return json(res, { error: `${cs.name}'s trust is Low: suggest it instead` }, 403); }
       const r = await board.taskOp(b);
       // A new suggestion rides along with the next team report to the lead; it never wakes anyone on its own (t825).
       if (b.op === 'suggest' && !r.dup) inbox.push(`[${(r.by && loadSquiggle(r.by)?.name) || r.by || 'Someone'} · SUGGESTION] ${r.id} ${r.title}${r.evidence ? ` (evidence: ${r.evidence})` : ''}`);
@@ -1375,6 +1377,10 @@ const server = http.createServer(async (req, res) => {
         case 'update': {
           const { charter, ...meta } = b;
           checkModelEffort(meta); // t905: only allowed models and efforts reach squiggle.json and the launch args
+          if ('trust' in meta) { // the user or the lead sets it, never the squiggle itself
+            meta.trust = trustLevel(meta.trust) ?? undefined;
+            if (trustOf(meta) !== trustOf(s)) { const c = await callerSquiggle(req); if (c && !loadSquiggle(c)?.lead) return json(res, { error: `trust is set by ${USER} or the lead, not ${c}` }, 403); }
+          }
           saveSquiggle({ ...s, ...meta, id });
           if (charter != null) fs.writeFileSync(path.join(sqDir(id), 'charter.md'), charter.trim() + '\n');
           emit(id, { k: 'meta' });
