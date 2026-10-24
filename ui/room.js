@@ -754,7 +754,7 @@ async function roomCommand(ev) {
     case 'volume': prefs.musicVol = Math.max(0, Math.min(1, +v || 0)); paintSound(); break;
     case 'voices': prefs.voice = v !== 'off'; paintSound(); break;
     case 'chatter': if (['quiet', 'normal', 'lively'].includes(v)) { prefs.chatter = v; paintSound(); } break;
-    case 'view': if (v === 'settings' && ev.id) B.stab = setTab(String(ev.id).toLowerCase()); if (['room', 'lead', 'meeting', 'team', 'calendar', 'goals', 'tasks', 'merge', 'files', 'settings'].includes(v)) { setView(v); if (v === 'files' && ev.id) previewByName(ev.id); } else if (v === 'blocked' || v === 'rethink') openStuck(v); else if (v === '1on1' && S.sq[ev.id]) oneOnOne(ev.id); break;
+    case 'view': if (v === 'settings' && ev.id) B.stab = setTab(String(ev.id).toLowerCase()); if (v === 'calendar' && ev.id) setCalMode(String(ev.id).toLowerCase()); if (['room', 'lead', 'meeting', 'team', 'calendar', 'goals', 'tasks', 'merge', 'files', 'settings'].includes(v)) { setView(v); if (v === 'files' && ev.id) previewByName(ev.id); } else if (v === 'blocked' || v === 'rethink') openStuck(v); else if (v === '1on1' && S.sq[ev.id]) oneOnOne(ev.id); break;
     case 'fold': case 'unfold': foldGoals(v, ev.action === 'fold'); break; // t1217
     case 'chat': if (S.sq[ev.value]) { if (S.office && !S.officeIds.includes(ev.value)) setView('room'); discuss(ev.value, ev.text, false); } break;
     case 'lock': lock(); break;

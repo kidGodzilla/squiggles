@@ -516,33 +516,106 @@ $('#teamList').onclick = async (e) => {
 };
 $('#teamList').onkeydown = (e) => { const c = e.target.closest?.('[data-sq]'); if (e.key === 'Enter' && c === e.target) oneOnOne(c.dataset.sq); };
 
-// ---------- calendar: a week of meetings with squiggles, plus goal due dates ----------
+// ---------- calendar: meetings with squiggles, plus goal due dates ----------
+// Desktop: a week as an hour grid that fills the window (hours scroll inside), or a month; phones keep the day list.
+// CLI: room view calendar week|month.
 const pad2 = (n) => String(n).padStart(2, '0');
 const ymd = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 const mondayOf = (d) => { const m = new Date(d); m.setHours(0, 0, 0, 0); m.setDate(m.getDate() - ((m.getDay() + 6) % 7)); return m; };
-B.week = mondayOf(new Date()); B.cal = { meetings: [], upcoming: [] };
+const monthOf = (d) => new Date(d.getFullYear(), d.getMonth(), 1);
+B.week = mondayOf(new Date()); B.month = monthOf(new Date()); B.cal = { meetings: [], upcoming: [] };
+B.calMode = (() => { try { return localStorage.agentsCalMode === 'month' ? 'month' : 'week'; } catch { return 'week'; } })();
+const CAL_PHONE = matchMedia('(max-width: 760px)'), calMonth = () => B.calMode === 'month' && !CAL_PHONE.matches;
 const REPEAT_WORD = { once: '', daily: 'Every day', weekdays: 'Weekdays', weekly: 'Every week' };
+// First day shown and how many: a month shows the whole weeks it touches (5 or 6).
+function calSpan() {
+  if (!calMonth()) return [B.week, 7];
+  const first = mondayOf(B.month), last = new Date(B.month.getFullYear(), B.month.getMonth() + 1, 0);
+  return [first, Math.round((mondayOf(last) - first) / 864e5) + 7];
+}
 async function loadCal() {
-  const r = await api(`/meetings?from=${ymd(B.week)}T00:00&days=7`);
+  const [from, n] = calSpan(), r = await api(`/meetings?from=${ymd(from)}T00:00&days=${n}`);
   if (r?.error || !r?.upcoming) { $('#calWeek').innerHTML = `<p class="calempty">${esc(r?.error || 'Calendar unavailable: restart the server to load it.')}</p>`; return; }
   B.cal = r; renderCal();
 }
+function setCalMode(m) {
+  if (!['week', 'month'].includes(m)) return;
+  if (m === 'month' && B.calMode !== 'month') { const mid = new Date(B.week); mid.setDate(mid.getDate() + 3); B.month = monthOf(mid); }
+  if (m === 'week' && B.calMode !== 'week') { const t = new Date(); B.week = mondayOf(monthOf(t).getTime() === B.month.getTime() ? t : B.month); }
+  B.calMode = m; try { localStorage.agentsCalMode = m; } catch {}
+  B.calScrolled = false; loadCal(); syncUrl();
+}
+const calMeetBtn = (m, key, cls = '', style = '') => { const on = S.meeting?.key === `${m.id}@${m.start}`; return `<button class="calm ${cls} ${on ? 'on' : m.past || ''}" data-meeting="${esc(m.id)}" data-date="${key}" data-start="${esc(m.start)}"${cls ? ` title="${esc(`${m.start.slice(11)} to ${m.end.slice(11)}: ${m.title}`)}"` : ''}${style ? ` style="${style}"` : ''}>`; };
+const calState = (m) => S.meeting?.key === `${m.id}@${m.start}` ? '<em>On now</em> ' : m.past ? `<em>${m.past === 'done' ? 'Done' : 'Missed'}</em> ` : '';
+const calDue = (g) => `<button class="caldue c${colorOf(g.id)}" data-goal="${esc(g.id)}">Due: ${esc(g.title)}</button>`;
 function renderCal() {
-  const days = [...Array(7)].map((_, i) => { const d = new Date(B.week); d.setDate(d.getDate() + i); return d; }), today = ymd(new Date());
-  const fmt = (d, o) => d.toLocaleDateString([], o);
-  $('#calRange').textContent = `${fmt(days[0], { month: 'short', day: 'numeric' })} to ${fmt(days[6], { month: 'short', day: 'numeric', year: 'numeric' })}`;
-  const due = allGoals().filter((g) => g.due);
-  $('#calWeek').innerHTML = days.map((d) => {
-    const key = ymd(d), ms = B.cal.upcoming.filter((m) => m.start.startsWith(key)), gs = due.filter((g) => g.due === key);
+  const [from, n] = calSpan(), days = [...Array(n)].map((_, i) => { const d = new Date(from); d.setDate(d.getDate() + i); return d; }), today = ymd(new Date());
+  const fmt = (d, o) => d.toLocaleDateString([], o), month = calMonth(), grid = !month && !CAL_PHONE.matches;
+  $('#calRange').textContent = month ? fmt(B.month, { month: 'long', year: 'numeric' }) : `${fmt(days[0], { month: 'short', day: 'numeric' })} to ${fmt(days[6], { month: 'short', day: 'numeric', year: 'numeric' })}`;
+  $('#calToday').textContent = month ? 'This month' : 'This week';
+  $('#calPrev').ariaLabel = month ? 'Previous month' : 'Previous week'; $('#calNext').ariaLabel = month ? 'Next month' : 'Next week';
+  for (const b of $('#calMode').children) b.classList.toggle('on', b.dataset.m === (month ? 'month' : 'week'));
+  const due = allGoals().filter((g) => g.due), box = $('#calWeek');
+  const on = (key) => ({ ms: B.cal.upcoming.filter((m) => m.start.startsWith(key)), gs: due.filter((g) => g.due === key) });
+  box.className = `cal ${month ? 'mo' : grid ? 'wk' : ''}`;
+  if (month) return renderMonth(box, days, today, on, fmt);
+  if (grid) return renderWeekGrid(box, days, today, on, fmt);
+  box.innerHTML = days.map((d) => {
+    const key = ymd(d), { ms, gs } = on(key);
     return `<div class="calday ${key === today ? 'today' : ''} ${key < today ? 'past' : ''}">
       <h3>${fmt(d, { weekday: 'short' })} <span>${fmt(d, { month: 'short', day: 'numeric' })}</span>${key === today ? '<em>Today</em>' : ''}</h3>
-      ${gs.map((g) => `<button class="caldue c${colorOf(g.id)}" data-goal="${esc(g.id)}">Due: ${esc(g.title)}</button>`).join('')}
-      ${ms.map((m) => { const on = S.meeting?.key === `${m.id}@${m.start}`; return `<button class="calm ${on ? 'on' : m.past || ''}" data-meeting="${esc(m.id)}" data-date="${key}" data-start="${esc(m.start)}">
-        <span class="calt">${on ? '<em>On now</em> ' : m.past ? `<em>${m.past === 'done' ? 'Done' : 'Missed'}</em> ` : ''}${m.start.slice(11)} to ${m.end.slice(11)}${REPEAT_WORD[m.repeat] ? ` · ${REPEAT_WORD[m.repeat]}` : ''}</span>
+      ${gs.map(calDue).join('')}
+      ${ms.map((m) => `${calMeetBtn(m, key)}
+        <span class="calt">${calState(m)}${m.start.slice(11)} to ${m.end.slice(11)}${REPEAT_WORD[m.repeat] ? ` · ${REPEAT_WORD[m.repeat]}` : ''}</span>
         <b>${esc(m.title)}</b><span class="calppl">${m.attendees.map((id) => face(id, `cal${m.id}${key}${id}_`)).join('')}</span>
-        ${m.agenda ? `<span class="calag">${esc(m.agenda)}</span>` : ''}</button>`; }).join('')}
+        ${m.agenda ? `<span class="calag">${esc(m.agenda)}</span>` : ''}</button>`).join('')}
       ${!ms.length && !gs.length ? '<p class="calempty">Nothing</p>' : ''}</div>`;
   }).join('');
+}
+// Minutes since midnight of "YYYY-MM-DDTHH:MM"; an end on a later day runs to midnight.
+const calMin = (s, key) => s.slice(0, 10) > key ? 1440 : +s.slice(11, 13) * 60 + +s.slice(14, 16);
+// Overlapping meetings share the column side by side: each gets a lane, and every meeting in a cluster the cluster's lane count.
+function calLanes(ms, key) {
+  const items = ms.map((m) => ({ m, a: calMin(m.start, key), b: Math.max(calMin(m.start, key) + 20, calMin(m.end, key)) })).sort((x, y) => x.a - y.a);
+  let cluster = [], end = -1; const lanes = [];
+  const close = () => { const n = Math.max(...cluster.map((x) => x.lane)) + 1; cluster.forEach((x) => { x.n = n; }); cluster = []; };
+  for (const it of items) {
+    if (it.a >= end && cluster.length) { close(); lanes.length = 0; }
+    let l = lanes.findIndex((e) => e <= it.a); if (l < 0) l = lanes.length; lanes[l] = it.b; it.lane = l;
+    cluster.push(it); end = Math.max(end, it.b);
+  }
+  if (cluster.length) close();
+  return items;
+}
+function renderWeekGrid(box, days, today, on, fmt) {
+  const H = 48, now = new Date(), nowMin = now.getHours() * 60 + now.getMinutes();
+  const cols = days.map((d) => ({ d, key: ymd(d), ...on(ymd(d)) }));
+  box.innerHTML = `<div class="wkhead"><span></span>${cols.map(({ d, key, gs }) => `<div class="wkday ${key === today ? 'today' : ''} ${key < today ? 'past' : ''}">
+      <h3>${fmt(d, { weekday: 'short' })} <span>${fmt(d, { day: 'numeric' })}</span>${key === today ? '<em>Today</em>' : ''}</h3>${gs.map(calDue).join('')}</div>`).join('')}</div>
+    <div class="wkbody"><div class="wkgrid" style="height:${24 * H}px">
+      <div class="wkhours">${[...Array(23)].map((_, i) => `<span style="top:${(i + 1) * H}px">${pad2(i + 1)}:00</span>`).join('')}</div>
+      ${cols.map(({ key, ms }) => `<div class="wkcol ${key === today ? 'today' : ''} ${key < today ? 'past' : ''}">
+        ${key === today ? `<i class="wknow" style="top:${nowMin / 60 * H}px"></i>` : ''}
+        ${calLanes(ms, key).map(({ m, a, b, lane, n }) => `${calMeetBtn(m, key, 'wkm', `top:${a / 60 * H}px;height:${(b - a) / 60 * H - 2}px;left:calc(${lane / n * 100}% + 2px);width:calc(${100 / n}% - 4px)`)}
+          <span class="calt">${calState(m)}${m.start.slice(11)}</span> <b>${esc(m.title)}</b></button>`).join('')}</div>`).join('')}
+    </div></div>`;
+  // Opens at 8:00, or an hour before now if that's later, then keeps the user's scroll. Re-applied whenever the grid comes back on screen: hiding it resets the scroll.
+  const body = box.querySelector('.wkbody');
+  const place = () => { if (!body.clientHeight) return; if (B.calScrolled) body.scrollTop = B.calTop || 0; else { body.scrollTop = Math.max(8, now.getHours() - 1) * H; B.calScrolled = true; B.calTop = body.scrollTop; } };
+  const ro = new ResizeObserver(place); ro.observe(body); place();
+  body.onscroll = () => { if (B.calScrolled) B.calTop = body.scrollTop; };
+}
+function renderMonth(box, days, today, on, fmt) {
+  const mon = B.month.getMonth();
+  box.innerHTML = `<div class="mohead">${days.slice(0, 7).map((d) => `<span>${fmt(d, { weekday: 'short' })}</span>`).join('')}</div>
+    <div class="mogrid" style="grid-template-rows:repeat(${days.length / 7},minmax(0,1fr))">${days.map((d) => {
+      const key = ymd(d), { ms, gs } = on(key), more = ms.length > 3 ? ms.length - 3 : 0;
+      return `<div class="moday ${key === today ? 'today' : ''} ${d.getMonth() !== mon ? 'out' : ''} ${key < today ? 'past' : ''}">
+        <button class="mod" data-day="${key}" aria-label="Week of ${fmt(d, { month: 'long', day: 'numeric' })}">${d.getDate()}</button>
+        ${gs.map(calDue).join('')}
+        ${ms.slice(0, 3).map((m) => `${calMeetBtn(m, key, 'mom')}<span class="calt">${calState(m)}${m.start.slice(11)}</span> <b>${esc(m.title)}</b></button>`).join('')}
+        ${more ? `<button class="momore" data-day="${key}">${more} more</button>` : ''}</div>`;
+    }).join('')}</div>`;
 }
 function meetingForm(m, date, occ) {
   const at = m ? m.at : (() => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0); return `${ymd(d)}T09:00`; })();
@@ -584,9 +657,12 @@ function editMeeting(anchor, id, date, start) {
     };
   });
 }
-$('#calPrev').onclick = () => { B.week.setDate(B.week.getDate() - 7); loadCal(); syncUrl(); };
-$('#calNext').onclick = () => { B.week.setDate(B.week.getDate() + 7); loadCal(); syncUrl(); };
-$('#calToday').onclick = () => { B.week = mondayOf(new Date()); loadCal(); syncUrl(); };
+const calStep = (n) => { if (calMonth()) B.month = new Date(B.month.getFullYear(), B.month.getMonth() + n, 1); else B.week.setDate(B.week.getDate() + 7 * n); loadCal(); syncUrl(); };
+$('#calPrev').onclick = () => calStep(-1);
+$('#calNext').onclick = () => calStep(1);
+$('#calToday').onclick = () => { B.week = mondayOf(new Date()); B.month = monthOf(new Date()); B.calScrolled = false; loadCal(); syncUrl(); };
+$('#calMode').onclick = (e) => setCalMode(e.target.dataset.m);
+CAL_PHONE.addEventListener('change', () => { if (B.view === 'calendar') loadCal(); });
 $('#calAdd').onclick = (e) => editMeeting(e.currentTarget);
 // New meeting (t146, was Meet now): pick who, an optional topic and presenters (t604; default: the attendees); a 30-minute meeting starts at once. CLI: meet now <id,id> ["topic"] [--presenters <id,id>].
 function meetNowPop(anchor, id) {
@@ -611,7 +687,9 @@ $('#calNow').onclick = (e) => meetNowPop(e.currentTarget);
 $('#teamMeet').onclick = (e) => meetNowPop(e.currentTarget);
 $('#calWeek').onclick = (e) => {
   const m = e.target.closest('[data-meeting]'); if (m) return editMeeting(m, m.dataset.meeting, m.dataset.date, m.dataset.start);
-  const g = e.target.closest('[data-goal]'); if (g) editGoal(g);
+  const g = e.target.closest('[data-goal]'); if (g) return editGoal(g);
+  // A day number or "3 more" in the month opens that week.
+  const d = e.target.closest('[data-day]'); if (d) { B.week = mondayOf(new Date(d.dataset.day + 'T12:00')); B.calMode = 'week'; try { localStorage.agentsCalMode = 'week'; } catch {} B.calScrolled = false; loadCal(); syncUrl(); }
 };
 
 // ---------- tabs: Room | Lead | Team | Calendar | Goals | Tasks | Merge ----------
@@ -662,7 +740,8 @@ function viewUrl(v = B.view, who = B.who) {
   // Merge diff and calendar week: week only when it isn't this week.
   if (v === 'merge' && B.diff) p.set('diff', B.diff);
   if (v === 'settings' && B.stab && B.stab !== 'room') p.set('tab', B.stab);
-  if (v === 'calendar' && ymd(B.week) !== ymd(mondayOf(new Date()))) p.set('week', ymd(B.week));
+  if (v === 'calendar' && calMonth()) { p.set('cal', 'month'); if (ymd(B.month) !== ymd(monthOf(new Date()))) p.set('month', ymd(B.month).slice(0, 7)); }
+  else if (v === 'calendar' && ymd(B.week) !== ymd(mondayOf(new Date()))) p.set('week', ymd(B.week));
   const c = chatParam(v || 'room'); if (c) p.set('chat', c);
   const s = p.toString(); return s ? '?' + s : '';
 }
@@ -676,7 +755,11 @@ function viewFromUrl(search, nav) {
   if (v === 'goals') $('#gq').value = B.gq = q.get('q') || '';
   if (v === 'tasks') { $('#tq').value = B.tq = q.get('q') || ''; B.tgoal = q.get('goal') || ''; B.towner = q.get('owner') || ''; B.tshow = ['open', 'all', 'stale', 'suggest'].includes(q.get('show')) ? q.get('show') : 'open'; }
   if (v === 'settings') B.stab = setTab(q.get('tab'));
-  if (v === 'calendar') { const w = /^(\d{4})-(\d\d)-(\d\d)$/.exec(q.get('week') || ''); B.week = mondayOf(w ? new Date(+w[1], w[2] - 1, +w[3]) : new Date()); }
+  if (v === 'calendar') {
+    const w = /^(\d{4})-(\d\d)-(\d\d)$/.exec(q.get('week') || ''), mo = /^(\d{4})-(\d\d)$/.exec(q.get('month') || '');
+    B.week = mondayOf(w ? new Date(+w[1], w[2] - 1, +w[3]) : new Date()); B.month = mo ? new Date(+mo[1], mo[2] - 1, 1) : monthOf(new Date());
+    if (q.get('cal') === 'month' || w) B.calMode = w ? 'week' : 'month';
+  }
   const d = v === 'merge' && q.get('diff'); if (!d) closeDiff(false);
   setView(v, q.get('with') || '', nav); if (d) openDiff(d); return true;
 }
