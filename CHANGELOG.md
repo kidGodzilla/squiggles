@@ -129,7 +129,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Worktrees get their own copy of node_modules (an APFS clone) instead of a link to main's, so installing in a worktree no longer empties the main checkout's.
 - A double-clicked Merge joins the running merge; send back, move and drop wait until git finishes writing.
 - Unsent chat text survives a page reload or restart, per chat, until you send or clear it.
-- `task worktree` and merges run git in the background, so a slow disk no longer freezes every chat while a checkout runs.
+- `task worktree` and merges run git in the background, so a slow disk no longer freezes every chat while a checkout runs or a merged task's worktrees are removed.
 - A due restart holds your chat at most 2 minutes: held messages then go out and nothing is held for 10 minutes; the restart still runs once nobody is mid-turn.
 - `room reload` no longer reloads the page under you: while you're active it counts down 10s with Reload now and Not yet; Not yet waits until you step away.
 - A restart postponed from the CLI, or before a page reload, now resumes once you are idle on the page instead of waiting for every page to close.
