@@ -4,6 +4,7 @@ import http from 'node:http';
 import { spawn, execFile, execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import crypto from 'node:crypto';
+import { slowSync, timed } from './slow.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -34,9 +35,6 @@ import { codeStamp, codeChanged } from './codestamp.mjs';
 const home = (p) => String(p || '').replace(/^~(?=\/|$)/, os.homedir());
 // Code (ROOT) is written by git only; the room lives in DATA. See docs/upgrading.md.
 const ROOT = path.dirname(new URL(import.meta.url).pathname);
-// Background sync work over 200ms since the last stall check: a stall with no request in flight names what ran.
-const slowSync = [];
-const timed = (what, fn) => { const t = Date.now(); try { return fn(); } finally { const ms = Date.now() - t; if (ms > 200) slowSync.push(`${what} ${ms}ms`); } };
 const DATA = dataDir();
 try { const m = await migrate(DATA); if (m) console.log(`Migrated data schema ${m.from} to ${m.to}; backup in ${m.backup}`); } catch (e) { console.error(e.message); process.exit(1); }
 const CONFIG = loadConfig(DATA);
@@ -361,7 +359,7 @@ function codexServer(s) {
   if (r.cx) return r.cx;
   const roots = [sqDir(s.id)];
   // workspace-write keeps .git read-only; the repo's git dir must be a writable root or the squiggle can't commit.
-  try { roots.push(execFileSync('git', ['-C', home(s.cwd), 'rev-parse', '--path-format=absolute', '--git-common-dir'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()); } catch {}
+  try { roots.push(timed(`git common-dir ${s.id}`, () => execFileSync('git', ['-C', home(s.cwd), 'rev-parse', '--path-format=absolute', '--git-common-dir'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })).trim()); } catch {}
   const proc = spawn(codexBin(), ['app-server', '-c', 'sandbox_mode="workspace-write"', '-c', 'approval_policy="never"',
     // The agents CLI talks to this server over HTTP; the journal lives in the squiggle's folder.
     '-c', 'sandbox_workspace_write.network_access=true', '-c', `sandbox_workspace_write.writable_roots=${JSON.stringify(roots)}`],

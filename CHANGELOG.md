@@ -32,7 +32,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Chat links `[Name](1on1:<id>)` open that squiggle's 1:1; the lead and squiggle prompts say how to use them.
 - `load [days]`: your actions per day (merges, asks, messages) beside tasks shipped, how long the lead waited on harness calls, and server stalls. Goals shows today against the past 6 days.
 - Cost ledger: each finished turn adds a row to `runs/cost.jsonl` (dollars for Claude, tokens for other providers). `cost [days]` sums it per squiggle; Team shows each one's spend over 7 days.
-- `runs/stalls.jsonl` logs event-loop stalls over 1s: duration, CPU time (near 0 means the process was paused), requests in flight and slow background work.
+- `runs/stalls.jsonl` logs event-loop stalls over 1s: duration, CPU time (near 0 means the process was paused), requests in flight and slow background work, including each slow git call by repo and subcommand.
 - `task ship <id> [note]`: a reviewer's sign-off pinned to the commit they saw. Merge takes the reviewed commit, and a branch that moved after review is refused until it's moved to review again. The Merge tab shows the reviewed commit and who shipped it.
 - A message sent mid-turn shows at once that it landed and what the squiggle is doing; the squiggle answers it first.
 - Images in squiggle messages render inline: a path under the data dir's files/ or research/, or `![alt](path)`. Other paths and web URLs stay text.

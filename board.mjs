@@ -2,7 +2,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { execFileSync, execFile } from 'node:child_process';
+import { execFile, execFileSync as cpSync } from 'node:child_process';
+import { timedSync } from './slow.mjs';
+const execFileSync = timedSync(cpSync);
 import { promisify } from 'node:util';
 
 const today = () => new Date(Date.now()).toISOString().slice(0, 10); // Date.now, so tests can set the clock
