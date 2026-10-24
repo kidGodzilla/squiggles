@@ -277,7 +277,8 @@ function launch(s) {
   if (r.sessionId) args.push('--resume', r.sessionId);
   r.resumedFrom = r.sessionId || null;
 
-  const proc = spawn('claude', args, { cwd: home(s.cwd), stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, AGENTS_ID: s.id } });
+  // CLAUDE_ENV_FILE runs before each Bash command: nvm's Node, not Homebrew's.
+  const proc = spawn('claude', args, { cwd: home(s.cwd), stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, AGENTS_ID: s.id, CLAUDE_ENV_FILE: path.join(ROOT, 'bin', 'squiggle-env.sh') } });
   lowPriority(s, proc);
   r.proc = proc;
   let buf = '', lastText = '';

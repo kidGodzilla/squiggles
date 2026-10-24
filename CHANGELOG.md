@@ -78,6 +78,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Shared prompt: no routine deploy or self-check chores in review notes or needs; checking your own work after a merge is the squiggle's job.
 - Merge merges every goal repo carrying the task's branch (Repo shows "api + web"; detail lists "Also merges"). `repo:branch` accepts a goal repo's bare name.
 ### Changed
+- Squiggle shells use nvm's Node (the repo's `.nvmrc`, else nvm's default) ahead of Homebrew's. No change without nvm.
 - Squiggle prompt: ask only for the user's decisions, check before redoing an irreversible step, declined suggestions stay declined, copy ids from their source, fix or switch off a check that keeps failing.
 - Squiggle prompt: propose the next useful thing with `suggest` when the board is empty, and batch blocked commands into one ask.
 - Squiggles other than the lead run at lower CPU priority (nice 10), so a busy Mac keeps the lead and the page quick.
