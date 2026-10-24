@@ -153,10 +153,10 @@ const cmds = {
   // task worktree <id> [repo]: the only way to make a worktree, at ~/wt/<repo>-<id>, recorded on the task (gated goals) |
   // task needs <id> add "<owner>: <what they must do before merging>" | done|undo|drop <n> | tag <n> <owner> | clear (also task edit <id> needs ...) |
   // task after <id> add "<owner>: <what they must do after merging>" | done|undo|drop <n> | tag <n> <owner> | clear |
-  // task add <title> [goal] [owner] | task split <id> <subtask>... | task claim <id> [owner] | task release <id> | task edit <id> split true|false | task edit <id> parent <id> | task move <id> <todo|doing|blocked|done> [note] | task move <id> review [repo:]<branch> [note] | task edit <id> branch [repo:]<branch> | task confirm <id> | task ship <id> [note] | task edit <id> <field> <value> | task drop <id>
+  // task add <title> [goal] [owner] [--asked <who>] | task split <id> <subtask>... | task claim <id> [owner] | task release <id> | task edit <id> split true|false | task edit <id> parent <id> | task move <id> <todo|doing|blocked|done> [note] | task move <id> review [repo:]<branch> [note] | task edit <id> branch [repo:]<branch> | task confirm <id> | task ship <id> [note] | task edit <id> <field> <value> | task drop <id>
   task: () => {
     const [op, x, y, z] = a;
-    if (op === 'add') return call('/tasks', { op, title: x, goal: y, owner: z, by: process.env.AGENTS_ID });
+    if (op === 'add') { const i = a.indexOf('--asked'), asked = i > 0 ? a.splice(i, 2)[1] || 'owner' : undefined; const [, t, g, o] = a; return call('/tasks', { op, title: t, goal: g, owner: o, by: process.env.AGENTS_ID, asked }); }
     if (op === 'move' && y === 'review') return call('/tasks', { op, id: x, status: y, branch: z, note: a[4] });
     if (op === 'move') return call('/tasks', { op, id: x, status: y, note: z });
     if (op === 'claim') return call('/tasks', { op: 'edit', id: x, owner: y || process.env.AGENTS_ID || '' });

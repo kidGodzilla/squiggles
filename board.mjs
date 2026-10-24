@@ -119,7 +119,9 @@ const STOP = new Set('the a an and or of to in on for with is are be no not it i
 const words = (s) => new Set(String(s).toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').split(/\s+/).filter((w) => w.length > 2 && !STOP.has(w)));
 // Two titles name the same thing when most of their words overlap (Jaccard over content words).
 // Proactive: done tasks a squiggle filed for itself (by is its own id), finished at or after since.
-export const ownIdeas = (tasks, id, since) => { const t0 = Date.parse(since) || 0; return tasks.filter((t) => t.owner === id && t.by === id && t.status === 'done' && (t.finishedAt || 0) >= t0).map((t) => t.id); };
+// Not its own idea: filed for someone's request (asked: set by the server when the user or the lead started that turn, or --asked).
+export const askedFor = (t) => !!t.asked;
+export const ownIdeas = (tasks, id, since) => { const t0 = Date.parse(since) || 0; return tasks.filter((t) => t.owner === id && t.by === id && !askedFor(t) && t.status === 'done' && (t.finishedAt || 0) >= t0).map((t) => t.id); };
 export function similar(a, b) { const x = words(a), y = words(b); if (!x.size || !y.size) return false; let i = 0; for (const w of x) if (y.has(w)) i++; return i / (x.size + y.size - i) >= 0.5; }
 export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {}) {
   const GOALS = path.join(root, 'goals.json'), TASKS = path.join(root, 'tasks.json');
@@ -228,7 +230,7 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
     task.repo = repo; task.branch = have?.branch || br; task.worktrees = [...new Set([...(task.worktrees || []), p])]; task.confirmed = today();
     saveTasks(t); return { ...task, path: p, created: !have };
   }
-  function taskOp({ op, id, title, goal, owner, status, note, by, parent, split, titles, branch, act, text, n, who, repo: repoArg, evidence, why }) {
+  function taskOp({ op, id, title, goal, owner, status, note, by, asked, parent, split, titles, branch, act, text, n, who, repo: repoArg, evidence, why }) {
     const t = tasks();
     // Suggestions (t825): a squiggle notices something outside its task and files it for the lead, unowned and off every goal.
     // Similar titles (open or declined) count as the same suggestion. accept turns it into a normal task; decline closes it.
@@ -244,7 +246,7 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
       if (!title) throw new Error('a task needs a title');
       const n = lastId(t) + 1;
       const task = { id: 't' + n, title, status: STATUSES.includes(status) ? status : 'todo', created: today(), confirmed: today(),
-        ...(goal ? { goal } : {}), ...(owner ? { owner } : {}), ...(note ? { note } : {}), ...(by ? { by } : {}), ...(parent ? { parent } : {}), ...(split ? { split: true } : {}) };
+        ...(goal ? { goal } : {}), ...(owner ? { owner } : {}), ...(note ? { note } : {}), ...(by ? { by } : {}), ...(asked ? { asked: String(asked).slice(0, 40) } : {}), ...(parent ? { parent } : {}), ...(split ? { split: true } : {}) };
       t.push(task); saveTasks(t); return task;
     }
     const task = t.find((x) => x.id === id);
@@ -346,7 +348,7 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
       if (list.length) task[op] = list; else delete task[op];
     }
     else if (op === 'edit') {
-      for (const [k, v] of Object.entries({ title, goal, owner, note })) if (v !== undefined) { if (v) task[k] = v; else delete task[k]; }
+      for (const [k, v] of Object.entries({ title, goal, owner, note, asked })) if (v !== undefined) { if (v) task[k] = v; else delete task[k]; }
       if (branch !== undefined) { if (branch) Object.assign(task, resolveBranch(branch, task.goal ? TIERS.flatMap((x) => goals()[x]).find((g) => g.id === task.goal) : null)); else { delete task.branch; delete task.repo; } }
       if (parent !== undefined) { if (parent && parent !== task.id) task.parent = parent; else delete task.parent; }
       if (split !== undefined) { if (split === true || split === 'true') task.split = true; else delete task.split; }

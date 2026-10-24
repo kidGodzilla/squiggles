@@ -14,3 +14,13 @@ test('proactive: done this wake, filed by the squiggle itself', () => {
   assert.deepEqual(ownIdeas(tasks, 'ux', since), ['t1']);
   assert.deepEqual(ownIdeas(tasks, 'ops', since), []);
 });
+
+test('proactive: a note filed for the user or the lead is not its own idea', () => {
+  const since = '2026-10-24T10:00:00.000Z', at = Date.parse(since), done = { owner: 'ops', by: 'ops', status: 'done', finishedAt: at + 5 };
+  const tasks = [
+    { id: 't1', title: 'GlitchTip: one project per app', asked: 'lead', ...done }, // filed in a turn the lead started
+    { id: 't2', title: 'Trust levels per squiggle', asked: 'owner', ...done },
+    { id: 't3', title: 'Rotate stale backups', ...done },
+  ];
+  assert.deepEqual(ownIdeas(tasks, 'ops', since), ['t3']);
+});

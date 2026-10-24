@@ -445,10 +445,14 @@ async function codexTurn(s, prompt, images = []) {
   } catch (e) { emit(s.id, { k: 'log', text: shortEv(e.message) }); end(e.message, true); }
 }
 // from 'owner' means a person on the page; human says which one (humans.json), and the squiggle reads 'From <name>: '.
-function send(id, text, from = 'owner', { replay = false, human, images = [] } = {}) {
+function send(id, text, from = 'owner', { replay = false, human, images = [], asker } = {}) {
   const s = loadSquiggle(id);
   if (!s) throw new Error(`no squiggle ${id}`);
   const r = R(id);
+  // Who asked this turn (Proactive): the user, a person, the lead, or a non-scheduled wake. Tasks filed while it runs are theirs, not the squiggle's own idea.
+  if (!replay && r.status !== 'working') r.asked = [];
+  asker ||= from === 'harness' ? '' : from === 'owner' ? human || 'owner' : from;
+  if (asker && !(r.asked ||= []).includes(asker)) r.asked.push(asker);
   // A pending restart waits for everyone to be idle; new turns would starve it (a report wakes the lead, the lead wakes someone).
   // So a turn that would start now is held in state and sent after the restart. Messages to a squiggle mid-turn still go through.
   if (restartPending && r.status !== 'working' && hold.holding()) {
@@ -565,11 +569,11 @@ function serveMedia(req, res, f) {
   fs.createReadStream(f, { start: a, end: z }).pipe(res);
 }
 
-function wake(id, why = 'scheduled') {
+function wake(id, why = 'scheduled', asker = '') {
   const s = loadSquiggle(id);
   if (!s || R(id).status === 'working') return false;
   let news = []; try { news = board.suggestionNews(id); } catch {}
-  send(id, `Wake (${why}), ${new Date().toLocaleString()}. Read your charter and the end of your journal, decide the single most valuable thing to do now, do it, verify it, append a dated journal entry, then end with a status line. You have ${s.maxTurns ?? 40} turns this wake; journal findings as you confirm them.${news.length ? `\n\nYour suggestions, decided by the lead:\n${news.map((x) => `- ${x}`).join('\n')}` : ''}`, 'harness');
+  send(id, `Wake (${why}), ${new Date().toLocaleString()}. Read your charter and the end of your journal, decide the single most valuable thing to do now, do it, verify it, append a dated journal entry, then end with a status line. You have ${s.maxTurns ?? 40} turns this wake; journal findings as you confirm them.${news.length ? `\n\nYour suggestions, decided by the lead:\n${news.map((x) => `- ${x}`).join('\n')}` : ''}`, 'harness', { asker });
   return true;
 }
 
@@ -1237,7 +1241,10 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/board') return json(res, { goals: board.goals(), tasks: board.tasks() });
     if (url.pathname === '/api/goals' && req.method === 'POST') return json(res, board.goalOp(await body(req, res)));
     if (url.pathname === '/api/tasks' && req.method === 'POST') {
-      const b = await body(req, res), r = await board.taskOp(b);
+      const b = await body(req, res);
+      // Filed in a turn the user or the lead started: their ask, not the squiggle's own idea (Proactive).
+      if (b.op === 'add' && !b.asked) { const c = await callerSquiggle(req); if (c && R(c).asked?.length) b.asked = R(c).asked[0]; }
+      const r = await board.taskOp(b);
       // A new suggestion rides along with the next team report to the lead; it never wakes anyone on its own (t825).
       if (b.op === 'suggest' && !r.dup) inbox.push(`[${(r.by && loadSquiggle(r.by)?.name) || r.by || 'Someone'} · SUGGESTION] ${r.id} ${r.title}${r.evidence ? ` (evidence: ${r.evidence})` : ''}`);
       return json(res, r);
@@ -1360,7 +1367,7 @@ const server = http.createServer(async (req, res) => {
         case 'events': return json(res, tailEvents(id, Number(url.searchParams.get('n') || 400)));
         case 'journal': return json(res, readText(path.join(sqDir(id), 'journal.md')));
         case 'send': send(id, b.text || '', b.from || 'owner', { human: b.human, images: (b.images || []).slice(0, 8).map(saveImage) }); relayMentions(id, b.text || '', b.from || 'owner', b.human); return json(res, 'ok');
-        case 'wake': return json(res, wake(id, b.why || 'asked'));
+        case 'wake': return json(res, wake(id, b.why || 'asked', b.why && b.why !== 'asked' ? 'lead' : 'owner'));
         case 'stop': stop(id); return json(res, 'ok');
         case 'clear': return json(res, clearChat(id));
         case 'screen': return json(res, await screen(id, b));
