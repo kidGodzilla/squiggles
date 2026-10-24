@@ -5,7 +5,7 @@ import os from 'node:os';
 import { execFileSync, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => new Date(Date.now()).toISOString().slice(0, 10); // Date.now, so tests can set the clock
 const TIERS = ['active', 'hold', 'todo', 'done'];
 const STATUSES = ['todo', 'doing', 'review', 'blocked', 'done'];
 // Merge policy per goal. gated: a branch per task, merged from the Merge tab. open: commit to main. Missing means gated.
