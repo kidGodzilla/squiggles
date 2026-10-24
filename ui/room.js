@@ -630,9 +630,16 @@ function keepDraft(ta, key) {
   const save = () => { const all = drafts(); if (ta.value.trim()) all[key] = ta.value; else delete all[key]; try { sessionStorage.squigglesDrafts = JSON.stringify(all); } catch {} };
   ta.addEventListener('input', save); return save;
 }
+// Composer height follows its text (max 140). Sizing a hidden textarea reads scrollHeight 0 and pinned it at 0px, cutting off
+// the placeholder: skip while hidden, and size again when it shows or its width changes.
+function growTa(ta) {
+  const size = () => { if (!ta.clientWidth) return; ta.style.height = 'auto'; ta.style.height = Math.min(140, ta.scrollHeight) + 'px'; };
+  let w = 0; new ResizeObserver(() => { if (ta.clientWidth !== w) { w = ta.clientWidth; size(); } }).observe(ta);
+  return size;
+}
 function wireChat(cw, id) {
   const ta = cw.querySelector('textarea'), head = cw.querySelector('.chead');
-  const autosize = () => { ta.style.height = 'auto'; ta.style.height = Math.min(140, ta.scrollHeight) + 'px'; };
+  const autosize = growTa(ta);
   const draft = keepDraft(ta, id); autosize();
   const form = cw.querySelector('form'); wireAttach(form, ta, cw);
   const send = async () => { const t = ta.value.trim(), images = takeImages(form); if (!t && !images.length) return; ta.value = ''; draft(); autosize(); paintMirror(ta); mentionClose(); await api(`/squiggles/${id}/send`, { text: t, images, from: 'owner', human: me().id }); };
@@ -1124,7 +1131,7 @@ function threadTo(text) {
 {
   const f = $('#meetThread form'), ta = f.querySelector('textarea');
   pinChat($('#meetThread .msgs'));
-  const autosize = () => { ta.style.height = 'auto'; ta.style.height = Math.min(140, ta.scrollHeight) + 'px'; };
+  const autosize = growTa(ta);
   const draft = keepDraft(ta, 'meeting'); autosize();
   wireAttach(f, ta, $('#meetThread'));
   const send = async () => { const t = ta.value.trim(), images = takeImages(f); if (!t && !images.length) return; ta.value = ''; draft(); autosize(); paintMirror(ta); mentionClose(); pinBottom($('#meetThread .msgs')); for (const id of threadTo(t)) await api(`/squiggles/${id}/send`, { text: t, images, from: 'owner', human: me().id }); };
