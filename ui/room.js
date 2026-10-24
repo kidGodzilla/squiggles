@@ -780,6 +780,7 @@ async function roomCommand(ev) {
     case 'peers': loadPeers(); return;
     case 'asks': loadAsks(); return;
     case 'picks': loadPicks(); return;
+    case 'waits': return;
     case 'characters': roomGen(v); S.order.forEach(reskin); if (B.view === 'settings') renderSettings(); break;
   }
   savePrefs(); AUD.apply();
@@ -864,7 +865,7 @@ function lookCustom(p) {
 async function openSheet(id) {
   await refreshMeta(id);
   const s = S.sq[id], p = P(id);
-  const [journal, events] = await Promise.all([api(`/squiggles/${id}/journal`), api(`/squiggles/${id}/events?n=60`)]);
+  const [journal, events, wl] = await Promise.all([api(`/squiggles/${id}/journal`), api(`/squiggles/${id}/events?n=60`), api(`/waits?by=${encodeURIComponent(id)}`).catch(() => [])]);
   const feed = events.map(brief).filter(Boolean).slice(-30).reverse();
   $('#sheetBody').innerHTML = `
     <div class="shead"><div class="tile">${avatarSVG(p, undefined, 'sh_')}</div>
@@ -873,6 +874,7 @@ async function openSheet(id) {
       <button class="btn go" data-a="wake">Wake now</button><button class="btn" data-a="stop">Stop</button>
       <button class="btn" data-a="pause">${s.paused ? 'Resume' : 'Pause'}</button><button class="btn" data-a="meet">New meeting</button>
     </div>
+    ${Array.isArray(wl) && wl.length ? `<h3>Waiting on</h3>${wl.map((w) => `<div class="waitrow"><span>${esc(w.what)}<small>${esc(w.file ? w.file : `pid ${w.pid}`)}${w.host ? ` on ${esc(w.host)}` : ''}, checked every ${w.every < 60000 ? `${Math.round(w.every / 1000)}s` : `${Math.round(w.every / 60000)} min`} until ${new Date(w.until).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}${w.lastFail ? `; check failing: ${esc(w.lastFail)}` : ''}</small></span><button class="btn" data-a="dropwait" data-w="${esc(w.id)}">Drop</button></div>`).join('')}` : ''}
     <div class="row2"><div><label>Name</label><input id="shName" value="${esc(s.name)}"></div><div><label>Role</label><input id="shRole" value="${esc(s.role)}"></div></div>
     <h3>Responsibility</h3><textarea id="shCharter">${esc(s.charter)}</textarea>
     <div class="row2">
@@ -913,6 +915,7 @@ async function openSheet(id) {
       const res = await api(`/squiggles/${id}/remove`, {}); toast(typeof res === 'string' ? res : res.error); $('#sheet').classList.remove('on'); return;
     }
     if (a === 'shuffle') { await restyle(id, { lookSeed: Math.floor(Math.random() * 1e9) }); return openSheet(id); }
+    if (a === 'dropwait') { const r = await api('/waits', { op: 'drop', id: e.target.dataset.w }); if (r?.error) toast(r.error); return openSheet(id); }
     if (a === 'save') Object.assign(S.sq[id], await api(`/squiggles/${id}/update`, { name: $('#shName').value.trim() || s.name, role: $('#shRole').value.trim() || s.role, charter: $('#shCharter').value, cwd: $('#shCwd').value, every: Number($('#shEvery').value) || 0, model: $('#shModel').value || undefined, permissionMode: $('#shPerm').value, effort: $('#shEffort').value || undefined, chrome: $('#shBrowser').value === 'chrome', awake: !!$('#shAwake').value, maxTurns: Number($('#shTurns').value) || 40, autocompact: Number($('#shCompact').value) || undefined, ...($('#shTrust') && { trust: $('#shTrust').value }) }));
     paintTile(id); renderSummary(); $('#sheet').classList.remove('on');
   };

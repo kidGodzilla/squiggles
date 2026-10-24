@@ -13,6 +13,7 @@ import { createFiles } from './files.mjs';
 import { holdGate } from './hold.mjs';
 import { createAsks, runAsk } from './asks.mjs';
 import { createPicks } from './picks.mjs';
+import { createWaits } from './waits.mjs';
 import { trustLevel, trustOf, trustRules } from './trust.mjs';
 import { dropStale } from './stale.mjs';
 import { createLedger } from './cost.mjs';
@@ -166,6 +167,7 @@ const humans = createHumans(DATA, () => {
 const tilde = (v) => path.resolve(String(v).replace(/^~(?=\/|$)/, os.homedir()));
 const asks = createAsks({ file: path.join(RUNS, 'asks.json'), log: path.join(RUNS, 'asks.log') });
 const picks = createPicks({ file: path.join(RUNS, 'picks.json') });
+const waits = createWaits({ file: path.join(RUNS, 'waits.json') });
 // Lead lines pointing the user at an ask that already ran or a Merge no longer in review are dropped; kept in a log event.
 const ledger = createLedger(path.join(RUNS, 'cost.jsonl'));
 const unstale = (id, text) => {
@@ -230,7 +232,7 @@ function resultEvent(c) {
   return { k: 'out', tid: c.tool_use_id, text: text.slice(0, 6000), err: !!c.is_error, imgs };
 }
 const statusLine = (text) => {
-  const m = /^\s*(DONE|IDLE|BLOCKED|RETHINK):\s*(.*)$/im.exec(text || '');
+  const m = /^\s*(DONE|IDLE|BLOCKED|RETHINK|WAITING):\s*(.*)$/im.exec(text || '');
   return m ? { status: m[1].toLowerCase(), note: m[2].trim() } : null;
 };
 
@@ -277,7 +279,7 @@ function launch(s) {
   if (s.lead) args.push('--allowedTools', `Bash(${cli} *)`, 'Read', 'Grep', 'Glob', `Edit(${SQ}/**)`, `Write(${SQ}/**)`, `Edit(${DATA}/goals.json)`, `Edit(${DATA}/config.json)`);
   // A squiggle may see the team and rewrite its own responsibility and journal, nobody else's.
   else args.push('--allowedTools', `Bash(${cli} list)`, `Bash(${cli} charter ${s.id} *)`, `Bash(${cli} charter ${s.id})`, `Edit(${sqDir(s.id)}/journal.md)`,
-    `Bash(${cli} tasks*)`, `Bash(${cli} task *)`, `Bash(${cli} goals)`, `Bash(${cli} restart)`, `Bash(${cli} room reload)`);
+    `Bash(${cli} tasks*)`, `Bash(${cli} task *)`, `Bash(${cli} goals)`, `Bash(${cli} wait *)`, `Bash(${cli} waits*)`, `Bash(${cli} restart)`, `Bash(${cli} room reload)`);
   const settings = path.join(sqDir(s.id), 'settings.json');
   if (fs.existsSync(settings)) args.push('--settings', settings);
   if (r.sessionId) args.push('--resume', r.sessionId);
@@ -605,6 +607,8 @@ function turnEnded(s, text, isError, subtype) {
     : subtype === 'interrupted' ? { status: 'idle', note: 'stopped' }
     : subtype === 'error_max_turns' ? { status: 'error', note: `hit the turn cap (${s.maxTurns ?? 40}); ${lastSaved(s)}; fresh process next wake` }
     : isError ? { status: 'error', note: 'turn failed' } : statusLine(text) || { status: 'idle', note: '' };
+  // WAITING needs a wait the harness checks; without one nothing would ever wake it.
+  if (st.status === 'waiting' && subtype !== 'capacity') { let open = []; try { open = waits.list({ by: s.id }); } catch {} if (!open.length) Object.assign(st, { status: 'blocked', note: `said WAITING but filed no wait: ${st.note}` }); }
   R(s.id).lastEnd = now();
   { const r = R(s.id), u = r.usage || {}, m = r.usageMark || {};
     const sp = r.spent || (r.usageMark ? { in: (u.in || 0) - (m.in || 0), out: (u.out || 0) - (m.out || 0) } : {}); // no mark yet: tokens so far are all-time
@@ -769,6 +773,20 @@ setInterval(() => {
     const last = Date.parse(r.lastWake || 0) || 0;
     if (r.status !== 'working' && Date.now() >= dueAt(s.id, s.every, last) && timed(`wake ${s.id}`, () => wake(s.id))) started.add(p);
   }
+}, 30000);
+
+// ---------- waits: the harness checks a squiggle's long job and wakes it when it's over (waits.mjs) ----------
+let waitTick = false;
+setInterval(async () => {
+  if (waitTick) return; waitTick = true;
+  try {
+    const ended = await waits.tick({ skip: (id) => !!loadSquiggle(id)?.paused });
+    for (const w of ended) try {
+      const how = { done: 'is over', timedout: 'timed out', failed: 'could not be checked' }[w.status] || w.status;
+      send(w.by, `Wait (${w.id} ${how}), ${new Date().toLocaleString()}: ${w.what}${w.task ? ` [${w.task}]` : ''}\n${w.result}\n\nPick it up from here, journal it and end with a status line.`, 'harness');
+    } catch (e) { console.error('wait', w.id, e.message); }
+    if (ended.length) broadcast('*room', { k: 'room', action: 'waits' });
+  } catch (e) { console.error('waits', e.message); } finally { waitTick = false; }
 }, 30000);
 
 // ---------- meetings: at the start time, wake the attendees with the agenda and open the meeting view ----------
@@ -1289,6 +1307,19 @@ const server = http.createServer(async (req, res) => {
     }
     // Picks: the asker is the calling squiggle's process tree. The owner (unlocked page) or the lead relaying their word
     // picks; the asker, the lead or the owner drops. The answer goes back to the asker.
+    // Waits: a squiggle files its own; it, the lead or the user drops one.
+    if (url.pathname === '/api/waits' && req.method === 'GET') return json(res, waits.list({ all: url.searchParams.get('all') === '1', by: url.searchParams.get('by') || undefined }));
+    if (url.pathname === '/api/waits' && req.method === 'POST') {
+      const b = await body(req, res), who = await callerSquiggle(req);
+      try {
+        if (b.op === 'add') { const w = waits.add({ ...b, by: who }); broadcast('*room', { k: 'room', action: 'waits' }); return json(res, w); }
+        if (b.op === 'drop') {
+          const boss = !who || !!loadSquiggle(who)?.lead; // the page is past the room gate already; a drop reaches nothing outside
+          const w = waits.drop(String(b.id || ''), { by: who || 'owner', boss }); broadcast('*room', { k: 'room', action: 'waits' }); return json(res, w);
+        }
+        return json(res, { error: 'op must be add or drop' }, 400);
+      } catch (e) { return json(res, { error: e.message }, e.code || 400); }
+    }
     if (url.pathname === '/api/picks' && req.method === 'GET') return json(res, picks.list({ all: url.searchParams.get('all') === '1' }));
     if (url.pathname === '/api/picks' && req.method === 'POST') {
       const b = await body(req, res), who = await callerSquiggle(req), lead = !!(who && loadSquiggle(who)?.lead);
