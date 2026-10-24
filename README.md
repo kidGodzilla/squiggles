@@ -2,6 +2,8 @@
 
 A room for a small team of Claude Code agents. Each squiggle owns one area, wakes on a schedule, keeps a journal and works from a shared task board. You talk to the lead; the lead hires, briefs and checks the rest.
 
+![A room with the lead and four squiggles](docs/screenshot.png)
+
 A fresh room has only the lead. It asks your name and what you work on, turns that into goals, and proposes the first hires.
 
 ## Requirements

@@ -85,6 +85,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Merge merges every goal repo carrying the task's branch (Repo shows "api + web"; detail lists "Also merges"). `repo:branch` accepts a goal repo's bare name.
 - Picks: `pick ask "<question>" "<option>" "<option>" [--images a,b] [--task <id>]` files a choice for the user; open picks collect on one card above the lead chat composer, options as buttons (images shown when they live in files/ or research/). A tap answers and the asker is told; the lead relays a spoken answer with `pick <id> <option>`. `picks [all]`, `pick drop <id>`. Answering needs the room passcode.
 ### Changed
+- README shows a screenshot of the room.
 - `restart` is refused when no server code or `config.json` changed since the server started (UI changes need only `room reload`, prompts the next wake). `restart force` restarts anyway.
 - Squiggle shells use nvm's Node (the repo's `.nvmrc`, else nvm's default) ahead of Homebrew's. No change without nvm.
 - Squiggle prompt: ask only for the user's decisions, check before redoing an irreversible step, declined suggestions stay declined, copy ids from their source, fix or switch off a check that keeps failing.
