@@ -395,7 +395,7 @@ const pathImgs = (raw) => { const seen = new Set(), out = []; for (const m of ra
 function md(src) {
   const blocks = [], text = String(src || '').replace(/```(\w*)\n?([\s\S]*?)```/g, (_, l, code) => { blocks.push(`<pre><code>${esc(code.replace(/\n$/, ''))}</code></pre>`); return `\u0000${blocks.length - 1}\u0000`; });
   const inline = (s) => { const im = []; s = s.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (all, alt, u) => { const f = fileUrl(u); if (!f) return `[${alt || u}](${u})`; im.push(mdImg(f, alt)); return `\u0001${im.length - 1}\u0001`; }); return inline0(s).replace(/\u0001(\d+)\u0001/g, (_, i) => im[+i]); };
-  const inline0 = (s) => esc(s).replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>').replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>').replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  const inline0 = (s) => esc(s).replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>').replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>').replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>').replace(/\[([^\]]+)\]\(1on1:([a-z0-9_-]+)\)/g, '<a href="#" class="go1" data-sq="$2">$1</a>');
   return text.split(/\n{2,}/).map((para) => {
     if (/^\u0000\d+\u0000$/.test(para.trim())) return blocks[+para.trim().slice(1, -1)];
     const lines = para.split('\n');
@@ -999,6 +999,8 @@ $('#inboxBox').onclick = (e) => { if (e.target.id === 'inboxBox' || e.target.dat
 const closeMore = () => { $('#morePanel').classList.remove('on'); $('#moreBtn').setAttribute('aria-expanded', 'false'); };
 $('#moreBtn').onclick = (e) => { e.stopPropagation(); const on = $('#morePanel').classList.toggle('on'); $('#moreBtn').setAttribute('aria-expanded', String(on)); };
 document.addEventListener('click', (e) => { if (!e.target.closest('.more')) closeMore(); });
+// [Ann](1on1:web) in a message opens that squiggle's 1:1.
+document.addEventListener('click', (e) => { const a = e.target.closest('a.go1'); if (!a) return; e.preventDefault(); if (S.sq[a.dataset.sq]) oneOnOne(a.dataset.sq); });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMore(); });
 // The office (setView('lead'|'one') in board.js): one squiggle alone on the stage, its chat docked beside it, nobody else speaks or shares.
 // The Lead tab is the lead's office; clicking any other tile opens that squiggle's.
