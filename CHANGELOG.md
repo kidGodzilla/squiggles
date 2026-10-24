@@ -23,7 +23,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - An ask cut off by a server restart is marked interrupted at boot and its filer is told; its output is lost.
 
 ### Added
-- Proactive: a squiggle that finishes a note it filed itself shows "Proactive" instead of Done (tile, Team, 1:1, header count, toast, `list`), and the lead's team report says which notes were its own idea.
+- Proactive: a squiggle that finishes a note it filed itself in a turn nobody asked for (stamped by the server) shows "Proactive" instead of Done (tile, Team, 1:1, header count, toast, `list`), and the lead's team report says which notes were its own idea.
 - Trust per squiggle (Low, Medium, High, Very high) in Settings, the squiggle sheet and `set <id> trust <level>`: sets how far it acts on its own ideas. Low only suggests (the server refuses its own `task add`); only the user or the lead can change it.
 - Notes filed in a turn the user or the lead started are marked `asked` and don't count as Proactive; `task add ... --asked [owner|lead]` marks one filed later.
 - Calendar on desktop: week hour grid and a month view, with a Week/Month switch kept in the URL. `room view calendar week|month`.

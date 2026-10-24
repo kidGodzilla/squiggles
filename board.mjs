@@ -119,9 +119,10 @@ const STOP = new Set('the a an and or of to in on for with is are be no not it i
 const words = (s) => new Set(String(s).toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').split(/\s+/).filter((w) => w.length > 2 && !STOP.has(w)));
 // Two titles name the same thing when most of their words overlap (Jaccard over content words).
 // Proactive: done tasks a squiggle filed for itself (by is its own id), finished at or after since.
-// Not its own idea: filed for someone's request (asked: set by the server when the user or the lead started that turn, or --asked).
+// Its own idea: `idea` is stamped by the server on a note a squiggle filed in a turn nobody asked for (a scheduled wake).
+// Not its own idea: filed for someone's request (asked: the user or the lead started that turn, or --asked), or older than the stamp.
 export const askedFor = (t) => !!t.asked;
-export const ownIdeas = (tasks, id, since) => { const t0 = Date.parse(since) || 0; return tasks.filter((t) => t.owner === id && t.by === id && !askedFor(t) && t.status === 'done' && (t.finishedAt || 0) >= t0).map((t) => t.id); };
+export const ownIdeas = (tasks, id, since) => { const t0 = Date.parse(since) || 0; return tasks.filter((t) => t.owner === id && t.by === id && t.idea && !askedFor(t) && t.status === 'done' && (t.finishedAt || 0) >= t0).map((t) => t.id); };
 export function similar(a, b) { const x = words(a), y = words(b); if (!x.size || !y.size) return false; let i = 0; for (const w of x) if (y.has(w)) i++; return i / (x.size + y.size - i) >= 0.5; }
 export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {}) {
   const GOALS = path.join(root, 'goals.json'), TASKS = path.join(root, 'tasks.json');
@@ -230,7 +231,7 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
     task.repo = repo; task.branch = have?.branch || br; task.worktrees = [...new Set([...(task.worktrees || []), p])]; task.confirmed = today();
     saveTasks(t); return { ...task, path: p, created: !have };
   }
-  function taskOp({ op, id, title, goal, owner, status, note, by, asked, parent, split, titles, branch, act, text, n, who, repo: repoArg, evidence, why }) {
+  function taskOp({ op, id, title, goal, owner, status, note, by, asked, idea, parent, split, titles, branch, act, text, n, who, repo: repoArg, evidence, why }) {
     const t = tasks();
     // Suggestions (t825): a squiggle notices something outside its task and files it for the lead, unowned and off every goal.
     // Similar titles (open or declined) count as the same suggestion. accept turns it into a normal task; decline closes it.
@@ -246,7 +247,7 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
       if (!title) throw new Error('a task needs a title');
       const n = lastId(t) + 1;
       const task = { id: 't' + n, title, status: STATUSES.includes(status) ? status : 'todo', created: today(), confirmed: today(),
-        ...(goal ? { goal } : {}), ...(owner ? { owner } : {}), ...(note ? { note } : {}), ...(by ? { by } : {}), ...(asked ? { asked: String(asked).slice(0, 40) } : {}), ...(parent ? { parent } : {}), ...(split ? { split: true } : {}) };
+        ...(goal ? { goal } : {}), ...(owner ? { owner } : {}), ...(note ? { note } : {}), ...(by ? { by } : {}), ...(asked ? { asked: String(asked).slice(0, 40) } : idea ? { idea: true } : {}), ...(parent ? { parent } : {}), ...(split ? { split: true } : {}) };
       t.push(task); saveTasks(t); return task;
     }
     const task = t.find((x) => x.id === id);

@@ -5,9 +5,10 @@ import { ownIdeas } from '../board.mjs';
 test('proactive: done this wake, filed by the squiggle itself', () => {
   const since = '2026-10-24T10:00:00.000Z', at = Date.parse(since);
   const tasks = [
-    { id: 't1', owner: 'ux', by: 'ux', status: 'done', finishedAt: at + 5 },
+    { id: 't1', owner: 'ux', by: 'ux', idea: true, status: 'done', finishedAt: at + 5 },
+    { id: 't6', owner: 'ux', by: 'ux', status: 'done', finishedAt: at + 5 }, // filed before the stamp, or not by a squiggle's own turn
     { id: 't2', owner: 'ux', by: 'lead', status: 'done', finishedAt: at + 5 }, // assigned by the lead
-    { id: 't3', owner: 'ux', by: 'ux', status: 'done', finishedAt: at - 5 }, // an earlier wake
+    { id: 't3', owner: 'ux', by: 'ux', idea: true, status: 'done', finishedAt: at - 5 }, // an earlier wake
     { id: 't4', owner: 'ux', by: 'ux', status: 'doing' },
     { id: 't5', owner: 'seo', by: 'seo', status: 'done', finishedAt: at + 5 },
   ];
@@ -16,7 +17,7 @@ test('proactive: done this wake, filed by the squiggle itself', () => {
 });
 
 test('proactive: a note filed for the user or the lead is not its own idea', () => {
-  const since = '2026-10-24T10:00:00.000Z', at = Date.parse(since), done = { owner: 'ops', by: 'ops', status: 'done', finishedAt: at + 5 };
+  const since = '2026-10-24T10:00:00.000Z', at = Date.parse(since), done = { owner: 'ops', by: 'ops', idea: true, status: 'done', finishedAt: at + 5 };
   const tasks = [
     { id: 't1', title: 'GlitchTip: one project per app', asked: 'lead', ...done }, // filed in a turn the lead started
     { id: 't2', title: 'Trust levels per squiggle', asked: 'owner', ...done },

@@ -1245,7 +1245,7 @@ const server = http.createServer(async (req, res) => {
       const b = await body(req, res);
       // Filed in a turn the user or the lead started: their ask, not the squiggle's own idea (Proactive).
       // Low trust: that squiggle suggests, never files its own ideas (a note for the user's or the lead's ask is fine).
-      if (b.op === 'add') { const c = await callerSquiggle(req), cs = c && loadSquiggle(c); if (cs && !b.asked && R(c).asked?.length) b.asked = R(c).asked[0]; if (cs && !cs.lead && !b.asked && trustOf(cs) === 'low') return json(res, { error: `${cs.name}'s trust is Low: suggest it instead` }, 403); }
+      if (b.op === 'add') { const c = await callerSquiggle(req), cs = c && loadSquiggle(c); if (cs && !b.asked && R(c).asked?.length) b.asked = R(c).asked[0]; if (cs && !b.asked) b.idea = true; else delete b.idea; if (cs && !cs.lead && !b.asked && trustOf(cs) === 'low') return json(res, { error: `${cs.name}'s trust is Low: suggest it instead` }, 403); }
       const r = await board.taskOp(b);
       // A new suggestion rides along with the next team report to the lead; it never wakes anyone on its own (t825).
       if (b.op === 'suggest' && !r.dup) inbox.push(`[${(r.by && loadSquiggle(r.by)?.name) || r.by || 'Someone'} · SUGGESTION] ${r.id} ${r.title}${r.evidence ? ` (evidence: ${r.evidence})` : ''}`);
