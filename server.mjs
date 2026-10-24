@@ -12,6 +12,7 @@ import { createBoard } from './board.mjs';
 import { createFiles } from './files.mjs';
 import { holdGate } from './hold.mjs';
 import { createAsks, runAsk } from './asks.mjs';
+import { createPicks } from './picks.mjs';
 import { dropStale } from './stale.mjs';
 import { createLedger } from './cost.mjs';
 import { load as ownerLoad } from './load.mjs';
@@ -163,6 +164,7 @@ const humans = createHumans(DATA, () => {
 }, { ownerName: CONFIG.userName || 'You' });
 const tilde = (v) => path.resolve(String(v).replace(/^~(?=\/|$)/, os.homedir()));
 const asks = createAsks({ file: path.join(RUNS, 'asks.json'), log: path.join(RUNS, 'asks.log') });
+const picks = createPicks({ file: path.join(RUNS, 'picks.json') });
 // Lead lines pointing the user at an ask that already ran or a Merge no longer in review are dropped; kept in a log event.
 const ledger = createLedger(path.join(RUNS, 'cost.jsonl'));
 const unstale = (id, text) => {
@@ -1270,6 +1272,31 @@ const server = http.createServer(async (req, res) => {
           return json(res, a);
         }
         return json(res, { error: 'op must be file, deny or run' }, 400);
+      } catch (e) { return json(res, { error: e.message }, e.code || 400); }
+    }
+    // Picks: the asker is the calling squiggle's process tree. The owner (unlocked page) or the lead relaying their word
+    // picks; the asker, the lead or the owner drops. The answer goes back to the asker.
+    if (url.pathname === '/api/picks' && req.method === 'GET') return json(res, picks.list({ all: url.searchParams.get('all') === '1' }));
+    if (url.pathname === '/api/picks' && req.method === 'POST') {
+      const b = await body(req, res), who = await callerSquiggle(req), lead = !!(who && loadSquiggle(who)?.lead);
+      const owner = () => { pass.session(req, 'answering a pick'); return 'owner'; };
+      try {
+        if (b.op === 'ask') {
+          if (!who) return json(res, { error: 'squiggles file picks: pick ask "<question>" "<option>" "<option>"' }, 403);
+          const p = picks.ask({ by: who, question: b.question, options: b.options, task: b.task });
+          broadcast('*room', { k: 'room', action: 'picks' }); return json(res, p);
+        }
+        if (b.op === 'pick' || b.op === 'drop') {
+          let by = who;
+          if (!who) { try { by = owner(); } catch (e) { return json(res, { error: e.message, ...(e.unlock && { unlock: true }) }, e.code || 403); } }
+          const cur = picks.list({ all: true }).find((x) => x.id === String(b.id || ''));
+          if (who && !lead && (b.op === 'pick' || cur?.by !== who)) return json(res, { error: b.op === 'pick' ? `${User} picks, on the card in the lead chat` : `${b.id} isn't yours to drop` }, 403);
+          const p = b.op === 'pick' ? picks.pick(String(b.id || ''), b.option, { by }) : picks.drop(String(b.id || ''), { by });
+          broadcast('*room', { k: 'room', action: 'picks' });
+          if (p.status === 'picked') try { send(p.by, `${User} picked "${p.answer}" for ${p.id}${p.task ? ` (${p.task})` : ''}: ${p.question}`, 'harness'); } catch (e) { console.error('pick answer', p.id, e.message); }
+          return json(res, p);
+        }
+        return json(res, { error: 'op must be ask, pick or drop' }, 400);
       } catch (e) { return json(res, { error: e.message }, e.code || 400); }
     }
     if (url.pathname === '/api/files' && req.method === 'GET') return json(res, { files: files.list(url.searchParams.get('q') || '') });

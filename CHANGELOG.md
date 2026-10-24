@@ -80,6 +80,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - After-merge list beside needs: `task after <id> add|done|undo|drop|clear` for the user's own steps after merging (a one-time migration). Shown on the Merge tab and in `merges` until ticked. A needs line starting "After" is refused.
 - Shared prompt: no routine deploy or self-check chores in review notes or needs; checking your own work after a merge is the squiggle's job.
 - Merge merges every goal repo carrying the task's branch (Repo shows "api + web"; detail lists "Also merges"). `repo:branch` accepts a goal repo's bare name.
+- Picks: `pick ask "<question>" "<option>" "<option>" [--images a,b] [--task <id>]` files a choice for the user; open picks collect on one card above the lead chat composer, options as buttons (images shown when they live in files/ or research/). A tap answers and the asker is told; the lead relays a spoken answer with `pick <id> <option>`. `picks [all]`, `pick drop <id>`. Answering needs the room passcode.
 ### Changed
 - `restart` is refused when no server code or `config.json` changed since the server started (UI changes need only `room reload`, prompts the next wake). `restart force` restarts anyway.
 - Squiggle shells use nvm's Node (the repo's `.nvmrc`, else nvm's default) ahead of Homebrew's. No change without nvm.

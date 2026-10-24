@@ -517,7 +517,7 @@ function openChat(id) {
   Object.assign(cw.style, { left: Math.max(8, Math.min(innerWidth - 200, x)) + 'px', top: Math.max(60, Math.min(innerHeight - 80, y)) + 'px', width: (saved?.w || W) + 'px', height: (saved?.h || H) + 'px' });
   $('#chats').appendChild(cw); pinChat(cw.querySelector('.msgs'));
   for (const line of S.hist[id] || []) appendLine(cw, line, false);
-  wireChat(cw, id); paintTile(id); front(cw); clearUnread(id); window.paintAsks?.(cw);
+  wireChat(cw, id); paintTile(id); front(cw); clearUnread(id); window.paintAsks?.(cw); window.paintPicks?.(cw);
   cw.querySelector('textarea').focus();
   return cw;
 }
@@ -770,6 +770,7 @@ async function roomCommand(ev) {
     case 'share': paintShare(ev.value); break;
     case 'peers': loadPeers(); return;
     case 'asks': loadAsks(); return;
+    case 'picks': loadPicks(); return;
     case 'characters': roomGen(v); S.order.forEach(reskin); if (B.view === 'settings') renderSettings(); break;
   }
   savePrefs(); AUD.apply();
@@ -792,7 +793,7 @@ async function load() {
   renderStage(); if (B.view === 'settings' && typeof renderSettings === 'function') renderSettings();
   await Promise.all(S.order.map(async (id) => { for (const ev of await api(`/squiggles/${id}/events?n=${S.sq[id].lead ? 300 : 150}`)) apply(id, ev, false); }));
   for (const id of S.order) paintTile(id);
-  document.querySelectorAll('.cw').forEach((cw) => window.paintAsks?.(cw));
+  document.querySelectorAll('.cw').forEach((cw) => { window.paintAsks?.(cw); window.paintPicks?.(cw); });
   window.onBoard?.();
   renderJoinCast();
 }

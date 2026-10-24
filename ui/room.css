@@ -773,6 +773,15 @@ body.v-one.screen:not(.v-meet) #chats .cw.office { left: auto !important; width:
 .askb { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 6px }
 .asksb { font-weight: 600 }
 @media (pointer: coarse) { .askb .chip, .asksb { min-height: 44px } .ask summary { line-height: 44px } }
+/* Picks: one card above the composer */
+.picks { flex: none; max-height: 45%; overflow: auto; margin: 0 8px 6px; border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; background: var(--panel) }
+.pickh { font-size: 12px; font-weight: 600; color: var(--dim) }
+.pick + .pick { border-top: 1px solid var(--line); margin-top: 6px; padding-top: 4px }
+.pickq { margin: 4px 0; font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere } .pickq small { color: var(--dim) }
+.picko { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 4px } .picko .chip { height: auto; min-height: 30px; max-width: 100%; text-align: left; white-space: normal }
+.picko.img .chip { display: flex; flex-direction: column; gap: 4px; align-items: stretch; width: calc(50% - 3px); padding: 4px }
+.picko.img img { width: 100%; max-height: 160px; object-fit: contain; border-radius: 6px; background: var(--panel2) }
+@media (pointer: coarse) { .picko .chip { min-height: 44px } }
 /* Files preview */
 .fprev .dh { align-items: center } .fprev .dh h2 { flex: 0 1 auto; margin: 0; font-size: 16px } .fprev .dh .chip { height: 28px; display: inline-flex; align-items: center; padding: 0 10px; text-decoration: none }
 .fprev .fpb { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column }
