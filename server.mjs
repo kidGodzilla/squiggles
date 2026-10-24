@@ -26,6 +26,7 @@ import { makeGuard, tailnetName } from './guard.mjs';
 import { makePasscode } from './passcode.mjs';
 import { createPeers, fence, checkName } from './peers.mjs';
 import { callerChain } from './caller.mjs';
+import { codeStamp, codeChanged } from './codestamp.mjs';
 
 const home = (p) => String(p || '').replace(/^~(?=\/|$)/, os.homedir());
 // Code (ROOT) is written by git only; the room lives in DATA. See docs/upgrading.md.
@@ -660,6 +661,8 @@ function broadcast(id, ev) {
 // Restart without killing anyone mid-turn: wait until nobody is working, then exit; the login item starts the server again.
 // Started by hand (no login item), start the replacement ourselves; it waits for this one to free the port.
 let restartPending = false, quitting = false, restartBy = '';
+// Server code and config as loaded: a restart with neither changed would only hold the user's chat.
+const CODE_EXTRA = [path.join(DATA, 'config.json')], CODE0 = codeStamp(ROOT, CODE_EXTRA);
 const hold = holdGate();
 // The user's chat held past the cap: send everything held, then hold nothing for a while; the restart stays due.
 function capHold() {
@@ -1204,6 +1207,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/restart' && req.method === 'POST') {
       const b = await body(req, res);
       if (b.op) { try { return json(res, restartOp(b.op, b.by)); } catch (e) { return json(res, { error: e.message }, 400); } }
+      if (!b.force && !codeChanged(ROOT, CODE0, CODE_EXTRA).length) return json(res, 'no server code or config changed since this server started: no restart needed. UI changes: room reload. Prompts: next wake. To restart anyway: restart force');
       if (gate?.phase === 'later') return json(res, `${User} postponed the restart; it runs once they are idle on the page (restart now skips that)`);
       restartBy = whoAsked(b.by) || 'owner'; restartPending = true; setTimeout(maybeRestart, 500);
       return json(res, `restarting as soon as nobody is mid-turn${clients.size ? `, after a 10s countdown on ${USER}'s page` : ''}`);
