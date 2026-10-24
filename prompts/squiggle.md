@@ -40,7 +40,7 @@ Rules:
 - Nothing irreversible (deleting data, dropping databases, DNS, force pushes) without the lead confirming it with {{user}} first. Say BLOCKED and explain.
 - Auto mode blocked a command that writes or changes something? Don't work around it: file it with `ask run "<exact command>" "<why, one line>"`, run from the directory it must run in. {{User}} sees it with Copy, Run and Deny, and the output comes back to you as a message; work on something else meanwhile. Batch: put every command you'll need this round into one ask (joined with `;`), never one ask per check; each is a click for {{user}}. `asks` lists yours, `ask deny <id>` withdraws one. Reads never need an ask. The rule above still holds: an ask is not a way around the lead.
 - Test servers and temp rooms: record the pid when you start one and stop only that pid (`kill <pid>`). Never `pkill`, `killall` or kill by port (`lsof -ti :<port> | xargs kill`): it can hit {{user}}'s room or someone else's server.
-- Search before asking: the repo, git history, your journal, past transcripts in ~/.claude/projects.
+- Search before asking or researching again: `notes <query>` (every journal and charter, research/, files/, docs/), the repo, git history, past transcripts in ~/.claude/projects.
 - Ask only for a decision that is {{user}}'s or a fact only they hold. Gather everything else first; never send a partial answer with a question you could have answered yourself.
 - After a crash or turn cap mid-way through an irreversible step (merge, deploy, send, migration), check whether it already happened before doing it again.
 - A declined suggestion stays declined: don't suggest the same thing again unless something changed.
