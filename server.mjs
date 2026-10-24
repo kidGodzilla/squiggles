@@ -926,7 +926,7 @@ function meetingTick() {
 }
 setInterval(() => { try { timed('meetings', meetingTick); } catch (e) { console.error('meetings:', e.message); } }, 20000);
 // Orphan worktrees (t769): hourly, the lead's one note is refreshed (or closed when none are left).
-setInterval(() => { try { timed('orphan notes', () => board.orphanNotes()); } catch (e) { console.error('worktrees:', e.message); } }, 3600000);
+setInterval(() => board.orphanNotes().catch((e) => console.error('worktrees:', e.message)), 3600000);
 
 // ---------- inbox: text files the user drops in <data>/inbox wake the lead, then move to inbox/read/ ----------
 const drop = createInbox(path.join(DATA, 'inbox'));
@@ -1374,8 +1374,8 @@ const server = http.createServer(async (req, res) => {
       return json(res, meetings.op(b));
     }
     if (url.pathname === '/api/merges' && req.method === 'GET') return json(res, await board.merges());
-    if (url.pathname === '/api/worktrees' && req.method === 'GET') return json(res, board.worktrees());
-    if (url.pathname === '/api/worktrees' && req.method === 'POST') return json(res, { note: board.orphanNotes(), worktrees: board.worktrees() });
+    if (url.pathname === '/api/worktrees' && req.method === 'GET') return json(res, await board.worktrees());
+    if (url.pathname === '/api/worktrees' && req.method === 'POST') return json(res, { note: await board.orphanNotes(), worktrees: await board.worktrees() });
     if (p[1] === 'merges' && p[2] && p[3] === 'diff') return json(res, await board.mergeDiff(p[2]));
     if (url.pathname === '/api/merges' && req.method === 'POST') {
       const b = await body(req, res);

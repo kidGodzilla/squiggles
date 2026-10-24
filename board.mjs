@@ -84,12 +84,9 @@ const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(
 export const WT = process.env.AGENTS_WT || path.join(os.homedir(), 'wt');
 const isLink = (p) => { try { return fs.lstatSync(p).isSymbolicLink(); } catch { return false; } };
 // Uncommitted changes in a worktree, not counting an untracked node_modules symlink (the usual way to share installs).
-const dirtyOf = (p) => git(p, ['status', '--porcelain']).split('\n').filter(Boolean).filter((l) => !(/^\?\? node_modules\/?$/.test(l) && isLink(path.join(p, 'node_modules'))));
+const dirtyOfA = async (p) => (await gitA(p, ['status', '--porcelain'])).split('\n').filter(Boolean).filter((l) => !(/^\?\? node_modules\/?$/.test(l) && isLink(path.join(p, 'node_modules'))));
 // Extra worktrees of a repo (not its main checkout): { path, branch, head, locked }.
-export function worktreesOf(repo) {
-  let list; try { list = git(repo, ['worktree', 'list', '--porcelain']); } catch { return []; }
-  return parseWorktrees(list);
-}
+const worktreesOfA = async (repo) => { try { return parseWorktrees(await gitA(repo, ['worktree', 'list', '--porcelain'])); } catch { return []; } };
 const parseWorktrees = (list) => {
   return list.split(/\n\n+/).slice(1).map((b) => ({ path: b.match(/^worktree (.+)$/m)?.[1], branch: b.match(/^branch refs\/heads\/(.+)$/m)?.[1] || '', head: b.match(/^HEAD (\w+)/m)?.[1]?.slice(0, 8) || '', locked: /^locked/m.test(b), prunable: /^prunable/m.test(b) })).filter((w) => w.path);
 };
@@ -97,13 +94,11 @@ const parseWorktrees = (list) => {
 // Off the event loop: removing a checkout of a big repo blocks for seconds.
 async function dropWorktreesA(repo, branch, paths = []) {
   const out = { removed: [], kept: [] };
-  let list; try { list = parseWorktrees(await gitA(repo, ['worktree', 'list', '--porcelain'])); } catch { list = []; }
-  for (const w of list) {
+  for (const w of await worktreesOfA(repo)) {
     if (!((branch && w.branch === branch) || paths.includes(w.path))) continue;
     try {
       if (!fs.existsSync(w.path)) { out.removed.push(w.path); continue; }
-      const dirty = (await gitA(w.path, ['status', '--porcelain'])).split('\n').filter(Boolean).filter((l) => !(/^\?\? node_modules\/?$/.test(l) && isLink(path.join(w.path, 'node_modules'))));
-      if (w.locked || dirty.length) throw new Error('dirty');
+      if (w.locked || (await dirtyOfA(w.path)).length) throw new Error('dirty');
       if (isLink(path.join(w.path, 'node_modules'))) fs.unlinkSync(path.join(w.path, 'node_modules'));
       await gitA(repo, ['worktree', 'remove', w.path]); out.removed.push(w.path);
     } catch { out.kept.push(w.path); }
@@ -226,7 +221,7 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
   // Checkouts run async (10-23): a sync worktree add froze every chat for a minute while Xcode builds loaded the disk.
   const adding = new Map();
   async function addWorktree(id, repo, at, br) {
-    const have = worktreesOf(repo).find((w) => w.path === at || (w.branch === br && fs.existsSync(w.path)));
+    const have = (await worktreesOfA(repo)).find((w) => w.path === at || (w.branch === br && fs.existsSync(w.path)));
     if (!have) {
       fs.mkdirSync(WT, { recursive: true });
       await gitA(repo, hasBranch(repo, br) ? ['worktree', 'add', '--quiet', at, br] : ['worktree', 'add', '--quiet', '-b', br, at, baseOf(repo)]);
@@ -392,15 +387,15 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
   // Resolves when every pending retire is done (tests, clean shutdown).
   const retired = () => Promise.all([...retiring]);
   // Every extra worktree in the goals' repos, with the task that owns it (t769). No live task = orphan.
-  function worktrees() {
+  async function worktrees() {
     let wtReal = WT; try { wtReal = fs.realpathSync(WT); } catch {}
     const t = tasks(), seen = new Set(), out = [], rc = {}, realOf = (r) => r ? (rc[r] ??= (() => { try { return fs.realpathSync(expand(r)); } catch { return ''; } })()) : '';
     for (const repo of TIERS.flatMap((x) => goals()[x]).flatMap((g) => g.repos || [])) {
       let real; try { real = fs.realpathSync(expand(repo)); } catch { continue; } if (seen.has(real)) continue; seen.add(real);
-      for (const w of worktreesOf(repo)) {
+      for (const w of await worktreesOfA(repo)) { // off the loop
         if (/\/(merge-t\d+-|branch-d-)[^/]+$/.test(w.path)) continue; // the Merge tab's own temp worktrees, gone in a moment
         const task = t.find((x) => x.status !== 'done' && ((x.worktrees || []).includes(w.path) || (w.branch && x.branch === w.branch && realOf(x.repo) === real))) || null;
-        let dirty = 0; try { dirty = fs.existsSync(w.path) ? dirtyOf(w.path).length : 0; } catch {}
+        let dirty = 0; try { dirty = fs.existsSync(w.path) ? (await dirtyOfA(w.path)).length : 0; } catch {}
         out.push({ repo: real, path: w.path, branch: w.branch, head: w.head, dirty, missing: !fs.existsSync(w.path), home: w.path.startsWith(wtReal + '/'),
           task: task?.id || '', status: task?.status || '', owner: task?.owner || '', title: task?.title || '', orphan: !task });
       }
@@ -408,8 +403,8 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
     return out;
   }
   // The lead keeps one note listing orphan worktrees (t769): refreshed when the list changes, done when there are none.
-  function orphanNotes() {
-    const t = tasks(), list = worktrees().filter((x) => x.orphan), cur = t.find((x) => x.status !== 'done' && x.owner === 'lead' && String(x.title).startsWith('Orphan worktrees'));
+  async function orphanNotes() {
+    const list = (await worktrees()).filter((x) => x.orphan), t = tasks(), cur = t.find((x) => x.status !== 'done' && x.owner === 'lead' && String(x.title).startsWith('Orphan worktrees'));
     const note = list.map((w) => `${w.path} (${path.basename(w.repo)}${w.branch ? ` ${w.branch}` : ' detached'}${w.dirty ? `, ${w.dirty} uncommitted` : ''})`).join('; ');
     if (!list.length) return cur ? taskOp({ op: 'move', id: cur.id, status: 'done', note: 'no orphan worktrees left' }) : null;
     const title = `Orphan worktrees: ${list.length} with no live task. Find each owner (task edit <id> branch repo:branch) or remove it if clean and merged. See: worktrees`;
