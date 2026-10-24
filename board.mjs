@@ -88,8 +88,11 @@ const dirtyOf = (p) => git(p, ['status', '--porcelain']).split('\n').filter(Bool
 // Extra worktrees of a repo (not its main checkout): { path, branch, head, locked }.
 export function worktreesOf(repo) {
   let list; try { list = git(repo, ['worktree', 'list', '--porcelain']); } catch { return []; }
-  return list.split(/\n\n+/).slice(1).map((b) => ({ path: b.match(/^worktree (.+)$/m)?.[1], branch: b.match(/^branch refs\/heads\/(.+)$/m)?.[1] || '', head: b.match(/^HEAD (\w+)/m)?.[1]?.slice(0, 8) || '', locked: /^locked/m.test(b), prunable: /^prunable/m.test(b) })).filter((w) => w.path);
+  return parseWorktrees(list);
 }
+const parseWorktrees = (list) => {
+  return list.split(/\n\n+/).slice(1).map((b) => ({ path: b.match(/^worktree (.+)$/m)?.[1], branch: b.match(/^branch refs\/heads\/(.+)$/m)?.[1] || '', head: b.match(/^HEAD (\w+)/m)?.[1]?.slice(0, 8) || '', locked: /^locked/m.test(b), prunable: /^prunable/m.test(b) })).filter((w) => w.path);
+};
 // Worktrees on a branch or at one of the given paths (t292, t769): clean ones are removed (never --force), dirty or locked kept; then prune.
 export function dropWorktrees(repo, branch, paths = []) {
   const out = { removed: [], kept: [] };
@@ -103,6 +106,23 @@ export function dropWorktrees(repo, branch, paths = []) {
     } catch { out.kept.push(w.path); }
   }
   try { git(repo, ['worktree', 'prune']); } catch {}
+  return out;
+}
+// The same off the event loop : removing a checkout of a big repo blocks for seconds.
+async function dropWorktreesA(repo, branch, paths = []) {
+  const out = { removed: [], kept: [] };
+  let list; try { list = parseWorktrees(await gitA(repo, ['worktree', 'list', '--porcelain'])); } catch { list = []; }
+  for (const w of list) {
+    if (!((branch && w.branch === branch) || paths.includes(w.path))) continue;
+    try {
+      if (!fs.existsSync(w.path)) { out.removed.push(w.path); continue; }
+      const dirty = (await gitA(w.path, ['status', '--porcelain'])).split('\n').filter(Boolean).filter((l) => !(/^\?\? node_modules\/?$/.test(l) && isLink(path.join(w.path, 'node_modules'))));
+      if (w.locked || dirty.length) throw new Error('dirty');
+      if (isLink(path.join(w.path, 'node_modules'))) fs.unlinkSync(path.join(w.path, 'node_modules'));
+      await gitA(repo, ['worktree', 'remove', w.path]); out.removed.push(w.path);
+    } catch { out.kept.push(w.path); }
+  }
+  try { await gitA(repo, ['worktree', 'prune']); } catch {}
   return out;
 }
 // branch -d, never -D: git refuses if it isn't merged. -d checks against HEAD, so run it where the base is checked out, else in a temp worktree.
@@ -485,11 +505,12 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
   async function mergeSweep(q = memo()) {
     const closed = (await pool(inQueue(), 6, async (t) => ({ id: t.id, why: await mergedOutside(t, q) }))).filter((x) => x.why);
     if (!closed.length) return closed;
+    // git first, off the loop ; then read, change and save the board in one sync step so no other write is lost.
+    for (const c of closed) { const x = tasks().find((k) => k.id === c.id); if (x?.status === 'review') c.w = await dropWorktreesA(x.repo, x.branch, x.worktrees || []); }
     const t = tasks();
     for (const c of closed) {
-      const x = t.find((k) => k.id === c.id);
-      if (x?.status !== 'review') { c.why = ''; continue; } // moved while git ran
-      const w = dropWorktrees(x.repo, x.branch, x.worktrees || []);
+      const x = t.find((k) => k.id === c.id), w = c.w; delete c.w;
+      if (x?.status !== 'review' || !w) { c.why = ''; continue; } // moved while git ran
       x.worktrees = (x.worktrees || []).filter((p) => w.kept.includes(p)); if (!x.worktrees.length) delete x.worktrees;
       if (w.removed.length) c.worktrees = w.removed;
       const why = c.why + (w.kept.length ? `; worktree with uncommitted work kept: ${w.kept.join(', ')}` : '');
@@ -580,7 +601,7 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
   // Merge one repo's side of a review branch into its base; returns { sha, removed, kept } worktrees.
   async function mergeRepo(id, r) {
     if (r.head === r.branch) throw new Error(`${r.repo} has ${r.branch} checked out: switch it away first`);
-    const wts = git(r.repo, ['worktree', 'list', '--porcelain']).split(/\n\n+/);
+    const wts = (await gitA(r.repo, ['worktree', 'list', '--porcelain'])).split(/\n\n+/);
     const onBase = wts.find((b) => b.match(/^branch (.+)$/m)?.[1] === `refs/heads/${r.base}`)?.match(/^worktree (.+)$/m)?.[1];
     let sha, tmp, w;
     try {
@@ -596,16 +617,16 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
           throw new Error(/commit your changes or stash/i.test(out) ? `${r.base} is checked out at ${at} with uncommitted changes the merge would overwrite: commit or stash them, then merge again` : out.split('\n').filter(Boolean).slice(-3).join(' ') || 'merge failed');
         }
       }
-      sha = git(r.repo, ['rev-parse', '--short', r.base]);
+      sha = await gitA(r.repo, ['rev-parse', '--short', r.base]);
       // A branch checked out in a worktree can't be deleted: remove clean worktrees first; a dirty one keeps the branch.
       // branch -d checks against HEAD, so run it where the base is checked out (the user's HEAD may be elsewhere).
-      w = dropWorktrees(r.repo, r.branch, r.worktrees || []);
+      w = await dropWorktreesA(r.repo, r.branch, r.worktrees || []);
       if (!w.kept.length) {
         let at = onBase || tmp;
         if (!at) { tmp = fs.mkdtempSync(path.join(os.tmpdir(), `merge-${id}-`)); fs.rmdirSync(tmp); await gitA(r.repo, ['worktree', 'add', '--quiet', '--detach', tmp, r.base]); at = tmp; }
-        git(at, ['branch', '-d', r.branch]);
+        await gitA(at, ['branch', '-d', r.branch]);
       }
-    } finally { if (tmp) { try { git(r.repo, ['worktree', 'remove', tmp]); } catch {} try { git(r.repo, ['worktree', 'prune']); } catch {} } }
+    } finally { if (tmp) { try { await gitA(r.repo, ['worktree', 'remove', tmp]); } catch {} try { await gitA(r.repo, ['worktree', 'prune']); } catch {} } }
     return { sha, removed: w.removed, kept: w.kept };
   }
   // The author hears what became of their suggestions at their next wake, once (t825).
