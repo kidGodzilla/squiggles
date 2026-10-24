@@ -382,7 +382,7 @@ const IMG_PATH = /(?:~|\/)[^\s`'"()<>\[\]]*\.(?:png|jpe?g|gif|webp)(?=$|[\s`'"()
 function fileUrl(p) {
   p = String(p || '').replace(/^~(?=\/)/, S.home || '~');
   if (/^\/files\/[^?#\\%]+$/.test(p) && !/\/\.|\.\./.test(p)) return p; // no %2e or \: the browser would resolve them out of /files/
-  for (const [src, dir] of Object.entries(S.roots || {})) {
+  for (const [src, dir] of [...Object.entries(S.roots || {}), ...Object.entries(S.realRoots || {})]) {
     if (!p.startsWith(dir + '/')) continue;
     const rel = p.slice(dir.length + 1); if (!rel || rel.split('/').some((x) => !x || x.startsWith('.'))) return null;
     return src === 'files' && !rel.includes('/') ? `/files/${encodeURIComponent(rel)}` : `/files/@${src}/${rel.split('/').map(encodeURIComponent).join('/')}`;
@@ -789,7 +789,7 @@ function showLimit(until) {
 }
 async function load() {
   api('/limit').then((l) => showLimit(l.until || 0));
-  const room = await api('/room').catch(() => ({})); roomGen(room.characters || 'cast'); S.roots = room.fileRoots || {}; S.home = room.home || '';
+  const room = await api('/room').catch(() => ({})); roomGen(room.characters || 'cast'); S.roots = room.fileRoots || {}; S.realRoots = room.fileReal || {}; S.home = room.home || '';
   const list = await api('/squiggles').catch(() => null);
   // A failed read must not empty the room (t671): keep what's on screen and try again.
   if (!Array.isArray(list)) { setTimeout(load, 2000); return; }

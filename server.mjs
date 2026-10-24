@@ -1081,6 +1081,7 @@ const pass = makePasscode({ read: () => roomCfg().passcode, write: (v) => { cons
 // Anyone else needs a browser session unlocked with the room passcode, so gated merges need one set. Unknown callers are
 // refused: a squiggle's detached process looks like the user's terminal.
 // Process tree before the cookie (t1423): a squiggle holding a session cookie is still a squiggle.
+const realRoots = () => Object.fromEntries(Object.entries(files.SOURCES).map(([k, d]) => { try { return [k, fs.realpathSync(d)]; } catch { return [k, d]; } }).filter(([k, d]) => d !== files.SOURCES[k]));
 async function callerSquiggle(req) {
   const procs = new Map([...rt].filter(([, r]) => r.proc?.pid).map(([id, r]) => [r.proc.pid, id]));
   return (await callerChain(req)).map((p) => procs.get(p)).find(Boolean) || '';
@@ -1229,7 +1230,7 @@ const server = http.createServer(async (req, res) => {
       const d = setDefaults(await body(req, res)); broadcast('*room', { k: 'room', action: 'defaults' }); return json(res, d);
     }
     if (url.pathname === '/api/defaults') return json(res, teamDefaults());
-    if (url.pathname === '/api/room') { const { passcode, ...c } = roomCfg(); return json(res, { ...c, fileRoots: files.SOURCES, home: os.homedir() }); } // never the passcode hash; fileRoots: chat images
+    if (url.pathname === '/api/room') { const { passcode, ...c } = roomCfg(); return json(res, { ...c, fileRoots: files.SOURCES, fileReal: realRoots(), home: os.homedir() }); } // never the passcode hash; fileRoots: chat images; fileReal: the same behind symlinks (CLI paths are realpaths)
     if (url.pathname === '/api/board') return json(res, { goals: board.goals(), tasks: board.tasks() });
     if (url.pathname === '/api/goals' && req.method === 'POST') return json(res, board.goalOp(await body(req, res)));
     if (url.pathname === '/api/tasks' && req.method === 'POST') {

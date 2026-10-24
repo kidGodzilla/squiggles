@@ -116,6 +116,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - The lead's "Handled." replies fold with the reports they answer into one line that opens to list them.
 
 ### Fixed
+- Images in picks and chat show when the data dir sits behind a symlink (such as /tmp on macOS); the CLI's realpaths now match.
 - Chat composers no longer open at 0px high, clipping the placeholder, when wired while hidden; they size when shown or resized.
 - `load` and Goals count a shipped task on the local day it finished; east of UTC it showed as yesterday until UTC midnight. Tasks now record `finishedAt`.
 - The lead no longer tells you to press Run on an ask that already ran, or Merge on a task no longer in review: those lines are dropped (noted in the log).
