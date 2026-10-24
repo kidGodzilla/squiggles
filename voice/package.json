@@ -1,0 +1,11 @@
+{
+  "name": "squiggles-kokoro",
+  "private": true,
+  "description": "Kokoro TTS for the room's voices. Installed by voice/kokoro.cjs with npm ci --ignore-scripts.",
+  "dependencies": {
+    "kokoro-js": "1.2.1"
+  },
+  "overrides": {
+    "sharp": "^0.35.5"
+  }
+}

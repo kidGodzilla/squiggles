@@ -6,7 +6,7 @@ import path from 'node:path';
 const list = (dir, ok) => { try { return fs.readdirSync(dir).filter(ok).map((f) => path.join(dir, f)); } catch { return []; } };
 // extra: files outside the code read once at start, such as the data dir's config.json.
 export const serverFiles = (root, extra = []) => [
-  ...list(root, (f) => f.endsWith('.mjs')), ...list(path.join(root, 'migrations'), (f) => f.endsWith('.mjs')),
+  ...list(root, (f) => f.endsWith('.mjs')), ...list(path.join(root, 'migrations'), (f) => f.endsWith('.mjs')), ...list(path.join(root, 'voice'), (f) => f === 'kokoro.cjs'),
   path.join(root, 'ui', 'cast.js'), ...list(path.join(root, 'ui', 'gen'), () => true), path.join(root, 'package.json'), ...extra,
 ];
 const stat = (f) => { try { return fs.statSync(f).mtimeMs; } catch { return 0; } };

@@ -2,7 +2,7 @@
 // Kokoro worker: loads the Kokoro-82M model once, then reads one JSON request per stdin line ({ id, text, voice, speed, out }),
 // writes a 16-bit WAV to `out` and answers { id, ok, seconds } or { id, ok: false, error }. Started by kokoro.js.
 const fs = require('fs'), path = require('path'), readline = require('readline'), { createRequire } = require('module');
-const MODEL = 'onnx-community/Kokoro-82M-v1.0-ONNX';
+const MODEL = 'onnx-community/Kokoro-82M-v1.0-ONNX', REVISION = '1939ad2a8e416c0acfeecc08a694d14ef25f2231';   // pinned model commit, not whatever main is today
 const send = (o) => fs.writeSync(1, JSON.stringify(o) + '\n');
 const finite = (samples) => { for (let i = 0; i < samples.length; i++) if (samples[i] !== samples[i]) return false; return true; };   // a quantised model can return NaN for a whole line, which would be written as silence
 function wav(samples, rate) {   // Float32 in [-1, 1] → 16-bit mono WAV
@@ -15,7 +15,9 @@ async function main() {
   const dir = process.env.SQUIGGLES_KOKORO_DIR, dtype = process.env.SQUIGGLES_KOKORO_DTYPE || 'q4f16';
   const req = createRequire(path.join(dir, 'node_modules', 'x.js'));   // resolve from the install folder, not from the extension
   const tf = req('@huggingface/transformers'); tf.env.cacheDir = path.join(dir, 'models');
-  const { KokoroTTS } = req('kokoro-js'); const tts = await KokoroTTS.from_pretrained(MODEL, { dtype, device: 'cpu' });
+  // KokoroTTS.from_pretrained drops `revision`, so the model and tokenizer load here and go to its constructor.
+  const { KokoroTTS } = req('kokoro-js'), opts = { revision: process.env.SQUIGGLES_KOKORO_REVISION || REVISION };
+  const tts = new KokoroTTS(...await Promise.all([tf.StyleTextToSpeech2Model.from_pretrained(MODEL, { ...opts, dtype, device: 'cpu' }), tf.AutoTokenizer.from_pretrained(MODEL, opts)]));
   send({ ready: true });
   for await (const line of readline.createInterface({ input: process.stdin })) {
     let m; try { m = JSON.parse(line); } catch { continue; }

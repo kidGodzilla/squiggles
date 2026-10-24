@@ -15,3 +15,11 @@ test('restart only when server code changed: UI and prompts do not count', () =>
   assert.deepEqual(codeChanged(root, s0).sort(), ['board.mjs', 'cost.mjs', 'ui/gen/a.js']);
   fs.rmSync(root, { recursive: true });
 });
+
+test('the voice module the server requires counts as server code', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'stamp-')), f = path.join(root, 'voice', 'kokoro.cjs');
+  fs.mkdirSync(path.dirname(f)); fs.writeFileSync(f, 'x');
+  const s0 = codeStamp(root), t = new Date(Date.now() + 5000); fs.utimesSync(f, t, t);
+  assert.deepEqual(codeChanged(root, s0), ['voice/kokoro.cjs']);
+  fs.rmSync(root, { recursive: true });
+});

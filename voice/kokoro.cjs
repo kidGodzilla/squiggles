@@ -4,7 +4,7 @@ const fs = require('fs'), os = require('os'), path = require('path'), { spawn } 
 
 const WIN = process.platform === 'win32';
 const DIR = process.env.SQUIGGLES_KOKORO_DIR || (WIN ? path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), 'squiggles', 'kokoro') : path.join(os.homedir(), '.cache', 'squiggles', 'kokoro'));
-const PKG = 'kokoro-js@1.2.1', DTYPE = 'q4', SIZE_MB = 730, MAX_RESTARTS = 3;
+const DTYPE = 'q4', SIZE_MB = 730, MAX_RESTARTS = 3;
 const WORKER = process.env.SQUIGGLES_KOKORO_WORKER || path.join(__dirname, 'kokoro-worker.cjs'), LOG = path.join(DIR, 'install.log');
 
 // In the order agents get them (the lead takes the first), so successive agents sound distinct. French has a single voice in Kokoro.
@@ -13,6 +13,9 @@ const voices = () => VOICES, hasVoice = (n) => VOICES.some((v) => v.name === n);
 const speedFor = (wpm) => Math.max(0.5, Math.min(2, Math.round((wpm / 178) * 20) / 20));   // 178 words a minute is about Kokoro's natural pace
 const exists = (f) => { try { fs.statSync(f); return true; } catch { return false; } };
 const installed = () => exists(path.join(DIR, 'node_modules', 'kokoro-js', 'package.json'));
+// Pinned: this folder's package.json and lockfile (kokoro-js 1.2.1, sharp overridden past its CVEs) are what npm ci installs.
+const LOCK = ['package.json', 'package-lock.json'], read = (f) => { try { return fs.readFileSync(f, 'utf8'); } catch { return ''; } };
+const pinned = () => LOCK.every((f) => read(path.join(DIR, f)) === read(path.join(__dirname, f)));
 
 function findNpm() {
   const home = os.homedir(), names = WIN ? ['npm.cmd', 'npm.bat', 'npm'] : ['npm'], cands = [];
@@ -23,13 +26,13 @@ function findNpm() {
   return cands.find((c) => c && exists(c)) || null;
 }
 
-// ---- install: `npm install --prefix DIR kokoro-js@x`, output in DIR/install.log, one job at a time
+// ---- install: `npm ci` of the pinned lockfile into DIR, no install scripts; output in DIR/install.log, one job at a time
 let job = null, lastError = '';
 function install() {
-  if (job || installed()) return status();
+  if (job || (installed() && pinned())) return status();
   const npm = findNpm(); if (!npm) { lastError = 'npm not found'; return status(); }
-  fs.mkdirSync(DIR, { recursive: true }); lastError = '';
-  const out = fs.openSync(LOG, 'w'), args = ['install', '--prefix', DIR, '--no-audit', '--no-fund', PKG];
+  fs.mkdirSync(DIR, { recursive: true }); lastError = ''; for (const f of LOCK) fs.copyFileSync(path.join(__dirname, f), path.join(DIR, f));
+  const out = fs.openSync(LOG, 'w'), args = ['ci', '--prefix', DIR, '--ignore-scripts', '--no-audit', '--no-fund'];
   const env = { ...process.env, PATH: [path.dirname(npm), process.env.PATH].filter(Boolean).join(path.delimiter) };   // npm's shebang needs `node` beside it; a Finder-launched app has a bare PATH
   job = WIN && /\.(cmd|bat)$/i.test(npm) ? spawn('"' + npm + '"', args.map((a) => (a === DIR ? '"' + a + '"' : a)), { shell: true, env, stdio: ['ignore', out, out], windowsHide: true }) : spawn(npm, args, { env, stdio: ['ignore', out, out], windowsHide: true });
   const done = (why) => { job = null; try { fs.closeSync(out); } catch {} if (why) lastError = why; else warm(); };
@@ -73,7 +76,7 @@ function synth(text, voice, speed, out) {
 }
 function status() {
   let log = ''; try { log = fs.readFileSync(LOG, 'utf8').slice(-400); } catch {}
-  return { dir: DIR, sizeMb: SIZE_MB, installed: installed(), installing: !!job, ready: !!(worker && worker.ready), gaveUp: restarts >= MAX_RESTARTS, error: lastError || null, npm: !!findNpm(), log };
+  return { dir: DIR, sizeMb: SIZE_MB, installed: installed(), pinned: pinned(), installing: !!job, ready: !!(worker && worker.ready), gaveUp: restarts >= MAX_RESTARTS, error: lastError || null, npm: !!findNpm(), log };
 }
 function shutdown() {
   for (const j of queue.splice(0)) j.reject(new Error('kokoro shut down'));

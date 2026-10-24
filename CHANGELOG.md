@@ -5,6 +5,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 ## 0.1.2 (unreleased)
 
 ### Security
+- Voice install is pinned: `npm ci --ignore-scripts` from a shipped lockfile (kokoro-js 1.2.1, sharp 0.35.5 past its advisories) and a fixed model revision. An existing install whose lockfile differs is reinstalled.
 - Image paths in agent messages can no longer use %2e or backslashes to make the page fetch a path outside /files/.
 - Restart and quit requests log who asked as one line of at most 40 characters, so a caller can't forge shutdown log lines.
 - `calendar` leaves out invite locations and notes unless `--notes`, then marks them untrusted; control characters in titles, calendars and attendees become spaces. Attendees are listed.
