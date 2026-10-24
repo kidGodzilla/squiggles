@@ -444,7 +444,7 @@ function renderTeam() {
   $('#teamList').innerHTML = list.map((s) => {
     const owns = allGoals().filter((g) => g.owner === s.id && g.tier !== 'done').map((g) => g.title);
     const care = charterLine(s.charter, 'What you care about'), guard = charterLine(s.charter, 'What you guard');
-    const st = s.paused ? 'Paused' : STATUS_WORD[s.status] || 'Idle';
+    const st = s.paused ? 'Paused' : statusWord(s) || 'Idle';
     return `<div class="tm ${s.paused ? 'paused' : rank(s) < 2 ? 'stuck' : ''}" data-sq="${esc(s.id)}" tabindex="0" title="Open a 1:1 with ${esc(s.name)}">
       <div class="tmh">${face(s.id, 'tm' + s.id + '_')}<div><b>${esc(s.name)}${s.lead && !/lead/i.test(s.name) ? ' (lead)' : ''}</b><small>${esc(s.role)}</small></div><span class="tmst ${s.paused ? '' : esc(s.status || '')}">${esc(st)}</span></div>
       ${s.note ? `<div class="tmnote" title="${esc(s.note)}">${esc(s.note)}</div>` : ''}

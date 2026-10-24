@@ -190,18 +190,20 @@ function renderStage() {
   layout(); renderSummary();
 }
 const STATUS_WORD = { working: 'Working', done: 'Done', idle: '', blocked: 'Blocked', rethink: 'Rethink', error: 'Error', waiting: 'Waiting' };
+// Proactive: Done, on a task the squiggle filed itself.
+const statusWord = (s, st = s.status) => (st === 'done' && s.proactive?.length ? 'Proactive' : STATUS_WORD[st]);
 function paintTile(id) {
   const s = S.sq[id], t = tileOf(id); if (!t) return;
   const st = s.paused ? 'paused' : s.status || 'idle';
   for (const k of ['working', 'done', 'blocked', 'rethink', 'error', 'paused']) t.classList.toggle(k, st === k);
-  const el = t.querySelector('.status'); el.className = 'status ' + st; el.textContent = s.paused ? 'Paused' : STATUS_WORD[st] ?? st;
-  el.title = s.note || '';
+  const el = t.querySelector('.status'); el.className = 'status ' + st; el.textContent = s.paused ? 'Paused' : statusWord(s, st) ?? st;
+  el.title = st === 'done' && s.proactive?.length ? `Its own idea: ${s.proactive.join(', ')}${s.note ? `. ${s.note}` : ''}` : s.note || '';
   const cb = t.querySelector('.chatbtn'), n = S.unread[id] || 0;
   cb.textContent = n ? `${n} new` : 'Chat'; cb.classList.toggle('unread', !!n);
   if (id === leadId()) $('.tabs [data-view=lead]').innerHTML = n ? `Lead <span class="tcount" title="${n} new from the lead">${n}</span>` : 'Lead';
   paintSubs(id);
   const cw = document.getElementById('cw-' + id);
-  if (cw) cw.querySelector('.chead small').textContent = (s.paused ? 'Paused' : STATUS_WORD[st] || 'Here') + (s.note && st !== 'idle' ? ` · ${s.note}` : '') ;
+  if (cw) cw.querySelector('.chead small').textContent = (s.paused ? 'Paused' : statusWord(s, st) || 'Here') + (s.note && st !== 'idle' ? ` · ${s.note}` : '') ;
 }
 // Subagents (t4): a small tile per live Agent call, pinned to its squiggle's tile until it finishes.
 function paintSubs(id) {
@@ -211,8 +213,8 @@ function paintSubs(id) {
 }
 function renderSummary() {
   if (typeof B !== 'undefined' && B.view === 'team') renderTeam();
-  const n = {}; for (const id of S.order) { const s = S.sq[id]; const k = s.paused ? 'paused' : s.status || 'idle'; n[k] = (n[k] || 0) + 1; }
-  const parts = [['working', 'working'], ['blocked', 'blocked'], ['rethink', '<i>need a </i>rethink'], ['done', 'done'], ['paused', 'paused']].filter(([k]) => n[k]);
+  const n = {}; for (const id of S.order) { const s = S.sq[id]; const k = s.paused ? 'paused' : statusWord(s) === 'Proactive' ? 'proactive' : s.status || 'idle'; n[k] = (n[k] || 0) + 1; }
+  const parts = [['working', 'working'], ['blocked', 'blocked'], ['rethink', '<i>need a </i>rethink'], ['done', 'done'], ['proactive', 'proactive'], ['paused', 'paused']].filter(([k]) => n[k]);
   $('#moreCount').textContent = `${S.order.length} in the room`;
   $('#summary').innerHTML = parts.map(([k, w]) => k === 'blocked' || k === 'rethink'
     ? `<button class="${k}" data-k="${k}" title="Show who">${n[k]} ${w}</button>` : `<span class="${k}">${n[k]} ${w}</span>`).join('');
@@ -429,7 +431,7 @@ const chatLine = (id, ev) => {
     return { cls: 'm sys', rep, text: rep ? `${from}: ${ev.text.split('\n').filter((l) => l.startsWith('[')).length}` : `${from}: ${ev.text.split('\n')[0].slice(0, 80)}` };
   }
   if (ev.k === 'say') { const t = ev.text.replace(/^\s*(DONE|IDLE):.*$/gim, '').trim(); if (HANDLED.test(t)) return { handled: true }; return t ? { cls: 'm lead', html: (ev.by ? `<b class="by">${esc(S.sq[ev.by]?.name || ev.by)}</b>` : '') + mentionHtml(md(t)) + `<span class="when">${when(ev.ts)}</span>` } : null; }
-  if (ev.k === 'end' && !s?.lead && ev.status !== 'idle' && ev.note) return { cls: 'm sys', text: `${STATUS_WORD[ev.status] || ev.status}: ${ev.note}` };
+  if (ev.k === 'end' && !s?.lead && ev.status !== 'idle' && ev.note) return { cls: 'm sys', text: `${(ev.status === 'done' && ev.proactive?.length ? 'Proactive' : STATUS_WORD[ev.status]) || ev.status}: ${ev.note}` };
   return null;
 };
 // The lead answers most team reports with just "Handled." (t801): the reply and the report it answers fold into
@@ -719,12 +721,12 @@ function apply(id, ev, live) {
       if (!ev.gone && (ev.kind === 'image' || ev.kind === 'url' || ev.kind === 'video')) seen(id, ev.kind === 'image' ? { view: 'image', title: ev.title, imgs: [ev.url] } : { view: ev.kind === 'url' ? 'page' : 'video', title: ev.title, url: ev.url }, ev.ts);
       if (pinOne() === id) syncPin(); else if (live && S.vis[id]) showPresent(id); break;
     case 'state':
-      s.status = ev.status; s.note = ev.note; paintTile(id); renderSummary();
+      s.status = ev.status; s.note = ev.note; s.proactive = ev.proactive; paintTile(id); renderSummary();
       if (ev.status !== 'working') setAct(id, '');
       break;
     case 'end':
       if (!live || (S.office && !S.officeIds.includes(id))) break;
-      if (ev.status === 'done') { pop(id); AUD.ding(); if (!s.lead) { toast(`${s.name}: done`); if (ev.note) say(id, firstSentences(ev.note, 1, 160), { label: 'Done' }); } }
+      if (ev.status === 'done') { const w = ev.proactive?.length ? 'Proactive' : 'Done'; pop(id); AUD.ding(); if (!s.lead) { toast(`${s.name}: ${w.toLowerCase()}`); if (ev.note) say(id, firstSentences(ev.note, 1, 160), { label: w }); } }
       if (ev.status === 'blocked' || ev.status === 'rethink') { AUD.alarm(); toast(`${s.name} is ${ev.status === 'blocked' ? 'blocked' : 'asking for a rethink'}`); }
       break;
     case 'meta': if (live) refreshMeta(id); break;
@@ -866,7 +868,7 @@ async function openSheet(id) {
   const feed = events.map(brief).filter(Boolean).slice(-30).reverse();
   $('#sheetBody').innerHTML = `
     <div class="shead"><div class="tile">${avatarSVG(p, undefined, 'sh_')}</div>
-      <div><h2>${esc(s.name)}</h2><small>${esc(s.role)}</small><small>${esc(s.paused ? 'Paused' : STATUS_WORD[s.status] || 'Idle')}${s.note ? ` · ${esc(s.note)}` : ''}</small></div></div>
+      <div><h2>${esc(s.name)}</h2><small>${esc(s.role)}</small><small>${esc(s.paused ? 'Paused' : statusWord(s) || 'Idle')}${s.note ? ` · ${esc(s.note)}` : ''}</small></div></div>
     <div class="actions" style="justify-content:flex-start">
       <button class="btn go" data-a="wake">Wake now</button><button class="btn" data-a="stop">Stop</button>
       <button class="btn" data-a="pause">${s.paused ? 'Resume' : 'Pause'}</button><button class="btn" data-a="meet">New meeting</button>

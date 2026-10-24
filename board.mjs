@@ -118,6 +118,8 @@ function deleteMerged(repo, branch, into) {
 const STOP = new Set('the a an and or of to in on for with is are be no not it its this that from at by as has have'.split(' '));
 const words = (s) => new Set(String(s).toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').split(/\s+/).filter((w) => w.length > 2 && !STOP.has(w)));
 // Two titles name the same thing when most of their words overlap (Jaccard over content words).
+// Proactive: done tasks a squiggle filed for itself (by is its own id), finished at or after since.
+export const ownIdeas = (tasks, id, since) => { const t0 = Date.parse(since) || 0; return tasks.filter((t) => t.owner === id && t.by === id && t.status === 'done' && (t.finishedAt || 0) >= t0).map((t) => t.id); };
 export function similar(a, b) { const x = words(a), y = words(b); if (!x.size || !y.size) return false; let i = 0; for (const w of x) if (y.has(w)) i++; return i / (x.size + y.size - i) >= 0.5; }
 export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {}) {
   const GOALS = path.join(root, 'goals.json'), TASKS = path.join(root, 'tasks.json');

@@ -23,6 +23,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - An ask cut off by a server restart is marked interrupted at boot and its filer is told; its output is lost.
 
 ### Added
+- Proactive: a squiggle that finishes a note it filed itself shows "Proactive" instead of Done (tile, Team, 1:1, header count, toast, `list`), and the lead's team report says which notes were its own idea.
 - Calendar on desktop: week hour grid and a month view, with a Week/Month switch kept in the URL. `room view calendar week|month`.
 - `notes <query>`: search every journal and charter, research/, files/ and docs/ for what was already written down. Squiggles are told to check it before researching again.
 - Chat links `[Name](1on1:<id>)` open that squiggle's 1:1; the lead and squiggle prompts say how to use them.

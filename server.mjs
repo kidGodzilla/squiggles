@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import vm from 'node:vm';
-import { createBoard } from './board.mjs';
+import { createBoard, ownIdeas } from './board.mjs';
 import { createFiles } from './files.mjs';
 import { holdGate } from './hold.mjs';
 import { createAsks, runAsk } from './asks.mjs';
@@ -182,14 +182,16 @@ function keepAwake(id, on) {
   if (on && !r.caff) { const c = r.caff = spawn('caffeinate', ['-dimsu', '-w', String(process.pid)], { stdio: 'ignore' }); c.on('exit', () => { if (r.caff === c) r.caff = null; }); }
   if (!on && r.caff) { r.caff.kill(); r.caff = null; }
 }
-function setStatus(id, status, note) {
+function setStatus(id, status, note, proactive) {
   const r = R(id);
   keepAwake(id, status === 'working' && !!loadSquiggle(id)?.awake);
   r.status = status; if (status !== 'working') r.step = null;
   if (note !== undefined) r.note = note;
+  if (proactive?.length) r.proactive = proactive; else delete r.proactive;
   saveState();
-  emit(id, { k: 'state', status, note: r.note || '' });
+  emit(id, { k: 'state', status, note: r.note || '', ...(r.proactive && { proactive: r.proactive }) });
 }
+const ownTasks = (id, since) => { try { return ownIdeas(board.tasks(), id, since); } catch { return []; } }; // Proactive
 
 // Subagents (t4): live while a squiggle's Agent call runs; the page shows each as a temporary tile.
 function subStart(id, ev) {
@@ -604,10 +606,11 @@ function turnEnded(s, text, isError, subtype) {
     r.usageMark = { ...u }; delete r.spent;
     if (sp.in || sp.out || sp.cost) try { ledger.add({ id: s.id, wake: r.lastWake, provider: p || 'claude', model: modelFor(s), ...sp }); } catch {} }
   const relay = R(s.id).relay; if (relay?.length && !isError && text?.trim()) { delete R(s.id).relay; saveState(); const said = s.lead ? unstale(s.id, text) : text; if (said.trim()) for (const t of new Set(relay)) emit(t, { k: 'say', text: said, by: s.id }); }
-  emit(s.id, { k: 'end', status: st.status, note: st.note });
-  setStatus(s.id, st.status, st.note);
+  const own = st.status === 'done' && !s.lead ? ownTasks(s.id, R(s.id).lastWake) : [];
+  emit(s.id, { k: 'end', status: st.status, note: st.note, ...(own.length && { proactive: own }) });
+  setStatus(s.id, st.status, st.note, own);
   if (!s.lead && st.status !== 'idle' && st.status !== 'waiting') {
-    inbox.push(`[${s.name} · ${st.status.toUpperCase()}] ${st.note}`);
+    inbox.push(`[${s.name} · ${own.length ? `PROACTIVE (${own.join(', ')}, its own idea)` : st.status.toUpperCase()}] ${st.note}`);
     flushInbox();
   }
   if (s.lead) flushInbox();
