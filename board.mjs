@@ -94,21 +94,7 @@ const parseWorktrees = (list) => {
   return list.split(/\n\n+/).slice(1).map((b) => ({ path: b.match(/^worktree (.+)$/m)?.[1], branch: b.match(/^branch refs\/heads\/(.+)$/m)?.[1] || '', head: b.match(/^HEAD (\w+)/m)?.[1]?.slice(0, 8) || '', locked: /^locked/m.test(b), prunable: /^prunable/m.test(b) })).filter((w) => w.path);
 };
 // Worktrees on a branch or at one of the given paths (t292, t769): clean ones are removed (never --force), dirty or locked kept; then prune.
-export function dropWorktrees(repo, branch, paths = []) {
-  const out = { removed: [], kept: [] };
-  for (const w of worktreesOf(repo)) {
-    if (!((branch && w.branch === branch) || paths.includes(w.path))) continue;
-    try {
-      if (!fs.existsSync(w.path)) { out.removed.push(w.path); continue; } // gone already: prune drops it
-      if (w.locked || dirtyOf(w.path).length) throw new Error('dirty');
-      if (isLink(path.join(w.path, 'node_modules'))) fs.unlinkSync(path.join(w.path, 'node_modules'));
-      git(repo, ['worktree', 'remove', w.path]); out.removed.push(w.path);
-    } catch { out.kept.push(w.path); }
-  }
-  try { git(repo, ['worktree', 'prune']); } catch {}
-  return out;
-}
-// The same off the event loop : removing a checkout of a big repo blocks for seconds.
+// Off the event loop: removing a checkout of a big repo blocks for seconds.
 async function dropWorktreesA(repo, branch, paths = []) {
   const out = { removed: [], kept: [] };
   let list; try { list = parseWorktrees(await gitA(repo, ['worktree', 'list', '--porcelain'])); } catch { list = []; }
@@ -126,16 +112,16 @@ async function dropWorktreesA(repo, branch, paths = []) {
   return out;
 }
 // branch -d, never -D: git refuses if it isn't merged. -d checks against HEAD, so run it where the base is checked out, else in a temp worktree.
-function deleteMerged(repo, branch, into) {
-  const base = into || baseOf(repo); if (!branch || branch === base || !hasBranch(repo, branch)) return false;
-  if (Number(git(repo, ['rev-list', '--count', `${base}..${branch}`])) > 0) return false;
-  const onBase = git(repo, ['worktree', 'list', '--porcelain']).split(/\n\n+/).find((b) => b.match(/^branch (.+)$/m)?.[1] === `refs/heads/${base}`)?.match(/^worktree (.+)$/m)?.[1];
+async function deleteMergedA(repo, branch, into) {
+  const base = into || await baseOfA(repo); if (!branch || branch === base || !(await okA(gitA(repo, ['rev-parse', '--verify', '--quiet', `refs/heads/${branch}`])))) return false;
+  if (Number(await gitA(repo, ['rev-list', '--count', `${base}..${branch}`])) > 0) return false;
+  const onBase = (await gitA(repo, ['worktree', 'list', '--porcelain'])).split(/\n\n+/).find((b) => b.match(/^branch (.+)$/m)?.[1] === `refs/heads/${base}`)?.match(/^worktree (.+)$/m)?.[1];
   let tmp;
   try {
     let at = onBase;
-    if (!at) { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'branch-d-')); fs.rmdirSync(tmp); git(repo, ['worktree', 'add', '--quiet', '--detach', tmp, base]); at = tmp; }
-    git(at, ['branch', '-d', branch]); return true;
-  } catch { return false; } finally { if (tmp) { try { git(repo, ['worktree', 'remove', tmp]); } catch {} try { git(repo, ['worktree', 'prune']); } catch {} } }
+    if (!at) { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'branch-d-')); fs.rmdirSync(tmp); await gitA(repo, ['worktree', 'add', '--quiet', '--detach', tmp, base]); at = tmp; }
+    await gitA(at, ['branch', '-d', branch]); return true;
+  } catch { return false; } finally { if (tmp) { try { await gitA(repo, ['worktree', 'remove', tmp]); } catch {} try { await gitA(repo, ['worktree', 'prune']); } catch {} } }
 }
 const STOP = new Set('the a an and or of to in on for with is are be no not it its this that from at by as has have'.split(' '));
 const words = (s) => new Set(String(s).toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').split(/\s+/).filter((w) => w.length > 2 && !STOP.has(w)));
@@ -309,7 +295,7 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
       t.push(...kids); delete task.split; task.confirmed = today();
       saveTasks(t); return { parent: task, subtasks: kids };
     }
-    if (op === 'drop') { retire(task); t.splice(t.indexOf(task), 1); for (const k of t) if (k.parent === task.id) delete k.parent; }
+    if (op === 'drop') { retire(task, true); t.splice(t.indexOf(task), 1); for (const k of t) if (k.parent === task.id) delete k.parent; }
     else if (op === 'move') {
       if (!STATUSES.includes(status)) throw new Error(`status must be one of ${STATUSES.join(', ')}`);
       if (status === 'review') {
@@ -381,16 +367,30 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
   }
 
   // A finished or dropped task takes its worktrees with it (t769): clean ones go, merged branches are deleted (-d). Dirty ones stay, and say so.
-  function retire(task) {
+  // After the move is saved and off the event loop: removing a big checkout takes seconds. Skipped if the task came back meanwhile.
+  const retiring = new Set();
+  function retire(task, dropped) {
     if (!task.repo || (!task.branch && !task.worktrees?.length)) return;
-    try {
-      if (task.branch === (task.base || baseOf(task.repo))) return;
-      const w = dropWorktrees(task.repo, task.branch, task.worktrees || []), gone = !w.kept.length && deleteMerged(task.repo, task.branch, task.base);
-      task.worktrees = (task.worktrees || []).filter((p) => w.kept.includes(p)); if (!task.worktrees.length) delete task.worktrees;
-      if (w.kept.length) task.note = `worktree with uncommitted work kept: ${w.kept.join(', ')}${task.note ? ` — ${task.note}` : ''}`;
+    const { id, repo, branch, base, worktrees = [] } = task;
+    const live = () => { const x = tasks().find((k) => k.id === id); return dropped ? !x : x?.status === 'done'; };
+    const p = (async () => {
+      await null; // taskOp saves the move first
+      if (branch === (base || await baseOfA(repo))) return;
+      if (!live()) return;
+      const w = await dropWorktreesA(repo, branch, worktrees), gone = !w.kept.length && live() && await deleteMergedA(repo, branch, base);
+      const t = tasks(), x = !dropped && t.find((k) => k.id === id);
+      if (x) {
+        const real = (q) => { try { return fs.realpathSync(q); } catch { return q; } }, out = new Set(w.removed.map(real)); // git names /private/var for /var
+        x.worktrees = (x.worktrees || []).filter((q) => !out.has(q) && !out.has(real(q)) && fs.existsSync(q)); if (!x.worktrees.length) delete x.worktrees;
+        if (w.kept.length) x.note = `worktree with uncommitted work kept: ${w.kept.join(', ')}${x.note ? ` — ${x.note}` : ''}`;
+        saveTasks(t);
+      }
       return { ...w, branchDeleted: gone };
-    } catch {}
+    })().catch(() => {}).finally(() => retiring.delete(p));
+    retiring.add(p);
   }
+  // Resolves when every pending retire is done (tests, clean shutdown).
+  const retired = () => Promise.all([...retiring]);
   // Every extra worktree in the goals' repos, with the task that owns it (t769). No live task = orphan.
   function worktrees() {
     let wtReal = WT; try { wtReal = fs.realpathSync(WT); } catch {}
@@ -640,5 +640,5 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
     return taskOp({ op: 'move', id, status: 'doing', note: `sent back${by ? ` by ${by}` : ''}: ${String(note).trim()}` });
   }
 
-  return { goals, tasks, goalOp, taskOp, suggestionNews, merges, mergeSweep, mergeDiff, merge, mergeState, gated, mergeBack, worktrees, orphanNotes, TIERS, STATUSES, MERGE };
+  return { retired, goals, tasks, goalOp, taskOp, suggestionNews, merges, mergeSweep, mergeDiff, merge, mergeState, gated, mergeBack, worktrees, orphanNotes, TIERS, STATUSES, MERGE };
 }
