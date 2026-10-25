@@ -1108,7 +1108,8 @@ const pass = makePasscode({ read: () => roomCfg().passcode, write: (v) => { cons
 // Process tree before the cookie (t1423): a squiggle holding a session cookie is still a squiggle.
 const realRoots = () => Object.fromEntries(Object.entries(files.SOURCES).map(([k, d]) => { try { return [k, fs.realpathSync(d)]; } catch { return [k, d]; } }).filter(([k, d]) => d !== files.SOURCES[k]));
 async function callerSquiggle(req) {
-  const procs = new Map([...rt].filter(([, r]) => r.proc?.pid).map(([id, r]) => [r.proc.pid, id]));
+  // The turn process, and a Codex app-server (per squiggle, cleared on exit) so its background children count between turns.
+  const procs = new Map([...rt].flatMap(([id, r]) => [r.proc?.pid, r.cx?.proc?.pid].filter(Boolean).map((p) => [p, id])));
   return (await callerChain(req)).map((p) => procs.get(p)).find(Boolean) || '';
 }
 async function merger(req, b) {
