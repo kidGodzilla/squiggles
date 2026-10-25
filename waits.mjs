@@ -33,8 +33,10 @@ export function probe(w, { exec = execFile } = {}) {
     /\bgone\b/.test(r.out) ? { done: true, result: `pid ${w.pid}${where} exited` } : /\balive\b/.test(r.out) ? { done: false } : { fail: (r.err || `exit ${r.code}`).trim().slice(0, 200) });
   const f = w.host ? w.file : home(w.file), q = `'${f}'`;
   // Only a file under /tmp is read back (a job's .exit or .out); anything else just reports that it appeared.
+  // A plain file really in /tmp: no symlink (itself or a parent), no hard link to a file elsewhere.
   const show = /^\/tmp\//.test(f) && !f.includes('..');
-  return sh(`if [ -e ${q} ]; then echo present; ${show ? `head -c ${SHOW} ${q}` : ''}; else echo absent; fi`).then((r) => {
+  const read = `case "$(realpath ${q} 2>/dev/null)" in /tmp/*|/private/tmp/*) [ ! -L ${q} ] && [ -n "$(find ${q} -maxdepth 0 -type f -links 1 2>/dev/null)" ] && head -c ${SHOW} ${q};; esac`;
+  return sh(`if [ -e ${q} ]; then echo present; ${show ? read : ''}; else echo absent; fi`).then((r) => {
     if (/^present\n?/.test(r.out)) { const body = r.out.replace(/^present\n?/, '').trim(); return { done: true, result: `${w.file}${where} appeared${body ? `:\n${mask(body)}` : ''}` }; }
     return /^absent/.test(r.out) ? { done: false } : { fail: (r.err || `exit ${r.code}`).trim().slice(0, 200) };
   });

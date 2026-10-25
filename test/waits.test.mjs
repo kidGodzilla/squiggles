@@ -65,3 +65,17 @@ test('drop: the owner or a boss, once', () => {
   assert.equal(w.drop(a.id, { by: 'lead', boss: true }).droppedBy, 'lead');
   assert.throws(() => w.drop(a.id, { by: 'vex' }), /dropped/);
 });
+
+test('read-back refuses /tmp links to files elsewhere', async () => {
+  const d = fs.mkdtempSync('/tmp/waitlink-'), out = fs.mkdtempSync(path.join(os.homedir(), '.waitlink-'));
+  try {
+    fs.writeFileSync(path.join(out, 'secret'), 'SECRET-OUTSIDE'); fs.writeFileSync(path.join(d, 'ok.exit'), '0');
+    fs.symlinkSync(path.join(out, 'secret'), path.join(d, 'sym')); fs.symlinkSync(out, path.join(d, 'dir'));
+    let hard = true; try { fs.linkSync(path.join(out, 'secret'), path.join(d, 'hard')); } catch { hard = false; }
+    const ok = await probe({ file: path.join(d, 'ok.exit') }); assert.match(ok.result, /appeared:\n0$/);
+    for (const f of ['sym', 'dir/secret', ...(hard ? ['hard'] : [])]) {
+      const r = await probe({ file: path.join(d, f) });
+      assert.equal(r.done, true, f); assert.doesNotMatch(r.result, /SECRET/, f); assert.match(r.result, /appeared$/, f);
+    }
+  } finally { fs.rmSync(d, { recursive: true, force: true }); fs.rmSync(out, { recursive: true, force: true }); }
+});
