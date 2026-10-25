@@ -30,6 +30,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - An ask cut off by a server restart is marked interrupted at boot and its filer is told; its output is lost.
 
 ### Added
+- Waits on a task's status: `wait add "<what>" --task <id> --until done` wakes the squiggle when the task gets there, or if it leaves the board. Up to 7 days; durations take `d`.
 - From your terminal, a change that needs an unlocked room (squiggle settings, charters, hiring, quitting, deleting shared files) asks for the passcode, makes the change, then locks again.
 - Proactive: a squiggle that finishes a note it filed itself in a turn nobody asked for (stamped by the server) shows "Proactive" instead of Done (tile, Team, 1:1, header count, toast, `list`), and the lead's team report says which notes were its own idea.
 - Waits: a squiggle running a long job files `wait add "<what>" --file <path>|--pid <pid> [--host user@host] [--for 4h]` and ends with WAITING; the harness checks it every 2 minutes (fixed probes, never the squiggle's own command) and wakes it with the result. WAITING without an open wait counts as BLOCKED. `waits`, `wait drop <id>`; the squiggle sheet lists them under Waiting on with Drop.

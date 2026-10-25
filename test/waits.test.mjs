@@ -17,15 +17,15 @@ test('dur reads s, m, h and bare minutes', () => {
 test('add refuses bad input and non-squiggles', () => {
   const w = createWaits({ file: tmp() });
   assert.throws(() => w.add({ what: 'x', file: '/tmp/a' }), /only a squiggle/);
-  assert.throws(() => w.add({ by: 'vex', what: 'x' }), /one of/);
-  assert.throws(() => w.add({ by: 'vex', what: 'x', file: '/tmp/a', pid: 3 }), /one of/);
-  assert.throws(() => w.add({ by: 'vex', what: 'x', file: "/tmp/a'; rm -rf ~" }), /plain path/);
-  assert.throws(() => w.add({ by: 'vex', what: 'x', pid: '1; reboot' }), /number/);
-  assert.throws(() => w.add({ by: 'vex', what: 'x', pid: 1, host: '-oProxyCommand=x' }), /host/);
-  assert.throws(() => w.add({ by: 'vex', what: 'x', file: '~/a', host: 'ubuntu@1.2.3.4' }), /absolute/);
-  assert.throws(() => w.add({ by: 'vex', what: 'x', pid: 1, every: '5s' }), /every/);
-  for (let i = 0; i < 5; i++) w.add({ by: 'vex', what: `x${i}`, pid: 1 });
-  assert.throws(() => w.add({ by: 'vex', what: 'x6', pid: 1 }), /5 open/);
+  assert.throws(() => w.add({ by: 'ana', what: 'x' }), /one of/);
+  assert.throws(() => w.add({ by: 'ana', what: 'x', file: '/tmp/a', pid: 3 }), /one of/);
+  assert.throws(() => w.add({ by: 'ana', what: 'x', file: "/tmp/a'; rm -rf ~" }), /plain path/);
+  assert.throws(() => w.add({ by: 'ana', what: 'x', pid: '1; reboot' }), /number/);
+  assert.throws(() => w.add({ by: 'ana', what: 'x', pid: 1, host: '-oProxyCommand=x' }), /host/);
+  assert.throws(() => w.add({ by: 'ana', what: 'x', file: '~/a', host: 'ubuntu@1.2.3.4' }), /absolute/);
+  assert.throws(() => w.add({ by: 'ana', what: 'x', pid: 1, every: '5s' }), /every/);
+  for (let i = 0; i < 5; i++) w.add({ by: 'ana', what: `x${i}`, pid: 1 });
+  assert.throws(() => w.add({ by: 'ana', what: 'x6', pid: 1 }), /5 open/);
 });
 
 test('pid on a host: ssh with a fixed probe; gone ends it, an ssh failure does not', async () => {
@@ -48,7 +48,7 @@ test('a /tmp file is read back masked; other files only reported', async () => {
 test('tick: ends done, failing and timed-out waits; skips paused squiggles; survives a reload', async () => {
   let t = 1e6; const file = tmp(), now = () => t;
   const w = createWaits({ file, now });
-  const a = w.add({ by: 'vex', what: 'scan', pid: 1, task: 't1' }), b = w.add({ by: 'otto', what: 'build', file: '/tmp/b' }), c = w.add({ by: 'mo', what: 'slow', pid: 2, max: '1m' });
+  const a = w.add({ by: 'ana', what: 'scan', pid: 1, task: 't1' }), b = w.add({ by: 'bo', what: 'build', file: '/tmp/b' }), c = w.add({ by: 'mo', what: 'slow', pid: 2, max: '1m' });
   t += 31000;
   assert.deepEqual(await w.tick({ exec: fake({ out: 'alive' }, { out: 'absent' }).exec, skip: (id) => id === 'mo' }), []);
   t += 2 * 6e4;
@@ -60,10 +60,10 @@ test('tick: ends done, failing and timed-out waits; skips paused squiggles; surv
 });
 
 test('drop: the owner or a boss, once', () => {
-  const w = createWaits({ file: tmp() }), a = w.add({ by: 'vex', what: 'x', pid: 1 });
-  assert.throws(() => w.drop(a.id, { by: 'otto' }), /only vex/);
+  const w = createWaits({ file: tmp() }), a = w.add({ by: 'ana', what: 'x', pid: 1 });
+  assert.throws(() => w.drop(a.id, { by: 'bo' }), /only ana/);
   assert.equal(w.drop(a.id, { by: 'lead', boss: true }).droppedBy, 'lead');
-  assert.throws(() => w.drop(a.id, { by: 'vex' }), /dropped/);
+  assert.throws(() => w.drop(a.id, { by: 'ana' }), /dropped/);
 });
 
 test('read-back refuses /tmp links to files elsewhere', async () => {
@@ -78,4 +78,24 @@ test('read-back refuses /tmp links to files elsewhere', async () => {
       assert.equal(r.done, true, f); assert.doesNotMatch(r.result, /SECRET/, f); assert.match(r.result, /appeared$/, f);
     }
   } finally { fs.rmSync(d, { recursive: true, force: true }); fs.rmSync(out, { recursive: true, force: true }); }
+});
+
+// A wait on a board task's status, no file or pid.
+test('a task-state wait needs a task and a known status', () => {
+  const w = createWaits({ file: tmp() });
+  assert.throws(() => w.add({ by: 'ana', what: 'x', state: 'done' }), /--task/);
+  assert.throws(() => w.add({ by: 'ana', what: 'x', task: 't1', state: 'shipped' }), /status/);
+  assert.throws(() => w.add({ by: 'ana', what: 'x', task: 't1', state: 'done', file: '/tmp/a' }), /one of/);
+  const x = w.add({ by: 'ana', what: 'x', task: 't1', state: 'review', max: '3d' });
+  assert.equal(x.state, 'review'); assert.ok(x.until - x.created >= 3 * 24 * 36e5);
+});
+test('a task-state wait ends when the task reaches the status, or is dropped', async () => {
+  let t = 0; const w = createWaits({ file: tmp(), now: () => t });
+  const st = { t1: 'doing', t2: 'todo' }, taskStatus = (id) => st[id];
+  w.add({ by: 'ana', what: 'merge', task: 't1', state: 'done' }); w.add({ by: 'ana', what: 'gone', task: 't2', state: 'review' });
+  t = 60000; assert.deepEqual(await w.tick({ taskStatus }), []);
+  st.t1 = 'done'; delete st.t2; t = 120000;
+  const ended = await w.tick({ taskStatus });
+  assert.deepEqual(ended.map((e) => [e.task, e.status]), [['t1', 'done'], ['t2', 'done']]);
+  assert.match(ended[0].result, /t1 is done/); assert.match(ended[1].result, /t2 is no longer on the board/);
 });

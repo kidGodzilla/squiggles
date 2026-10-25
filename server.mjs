@@ -779,7 +779,8 @@ let waitTick = false;
 setInterval(async () => {
   if (waitTick) return; waitTick = true;
   try {
-    const ended = await waits.tick({ skip: (id) => !!loadSquiggle(id)?.paused });
+    let st; const taskStatus = (id) => (st ??= new Map(board.tasks().map((t) => [t.id, t.status]))).get(id); // read once per pass
+    const ended = await waits.tick({ taskStatus, skip: (id) => !!loadSquiggle(id)?.paused });
     for (const w of ended) try {
       const how = { done: 'is over', timedout: 'timed out', failed: 'could not be checked' }[w.status] || w.status;
       send(w.by, `Wait (${w.id} ${how}), ${new Date().toLocaleString()}: ${w.what}${w.task ? ` [${w.task}]` : ''}\n${w.result}\n\nPick it up from here, journal it and end with a status line.`, 'harness');
@@ -1324,7 +1325,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/waits' && req.method === 'POST') {
       const b = await body(req, res), who = await callerSquiggle(req);
       try {
-        if (b.op === 'add') { const w = waits.add({ ...b, by: who }); broadcast('*room', { k: 'room', action: 'waits' }); return json(res, w); }
+        if (b.op === 'add') { if (b.state && !board.tasks().some((t) => t.id === b.task)) return json(res, { error: `no task ${b.task}` }, 404); const w = waits.add({ ...b, by: who }); broadcast('*room', { k: 'room', action: 'waits' }); return json(res, w); }
         if (b.op === 'drop') {
           const boss = !who || !!loadSquiggle(who)?.lead; // the page is past the room gate already; a drop reaches nothing outside
           const w = waits.drop(String(b.id || ''), { by: who || 'owner', boss }); broadcast('*room', { k: 'room', action: 'waits' }); return json(res, w);
