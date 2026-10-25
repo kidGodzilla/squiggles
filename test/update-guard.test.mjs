@@ -3,28 +3,42 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { updateRefusal } from '../trust.mjs';
 
-const s = { name: 'Ana', cwd: '~/project', permissionMode: 'auto', model: 'claude-opus-5-5', trust: 'medium' };
+const s = { id: 'security', name: 'Ana', cwd: '~/project', permissionMode: 'auto', model: 'claude-opus-5-5', trust: 'medium' };
 
 test('a squiggle cannot make itself lead or change lead-only fields', () => {
-  assert.equal(updateRefusal({ lead: true }, s, 'security', false).status, 403);
-  assert.equal(updateRefusal({ lead: true }, s, 'lead', true).status, 403, 'lead is the user only');
+  assert.equal(updateRefusal({ lead: true }, s, { caller: 'security', callerLead: false }).status, 403);
+  assert.equal(updateRefusal({ lead: true }, s, { caller: 'lead', callerLead: true }).status, 403, 'lead is the user only');
   for (const [k, v] of [['permissionMode', 'bypassPermissions'], ['cwd', '/'], ['trust', 'veryhigh'], ['model', 'claude-sonnet-5-5']])
-    assert.match(updateRefusal({ [k]: v }, s, 'security', false)?.error || '', new RegExp(k), k);
+    assert.match(updateRefusal({ [k]: v }, s, { caller: 'security', callerLead: false })?.error || '', new RegExp(k), k);
 });
 
 test('the lead and the user may; unchanged values pass', () => {
-  assert.equal(updateRefusal({ trust: 'high', cwd: '/x' }, s, 'lead', true), null);
-  assert.equal(updateRefusal({ lead: true, trust: 'high' }, s, '', false), null);
-  assert.equal(updateRefusal({ name: 'V', cwd: '~/project', model: 'claude-opus-5-5', permissionMode: 'auto', trust: 'medium', lead: false }, s, 'security', false), null);
+  assert.equal(updateRefusal({ trust: 'high', cwd: '/x' }, s, { caller: 'lead', callerLead: true }), null);
+  assert.equal(updateRefusal({ lead: true, trust: 'high' }, s, { owner: () => true }), null);
+  assert.equal(updateRefusal({ name: 'V', cwd: '~/project', model: 'claude-opus-5-5', permissionMode: 'auto', trust: 'medium', lead: false }, s, { caller: 'security', callerLead: false }), null);
 });
 
 test('only known fields are saved', () => {
-  assert.equal(updateRefusal({ created: 1 }, s, '', false).status, 400);
-  assert.equal(updateRefusal({ resume: 'x' }, s, 'lead', true).status, 400);
+  assert.equal(updateRefusal({ created: 1 }, s, { caller: '', callerLead: false }).status, 400);
+  assert.equal(updateRefusal({ resume: 'x' }, s, { caller: 'lead', callerLead: true }).status, 400);
 });
 
 test('the update route goes through the guard, not a raw spread', () => {
   const src = fs.readFileSync(new URL('../server.mjs', import.meta.url), 'utf8');
   const route = src.slice(src.indexOf("case 'update': {"), src.indexOf('saveSquiggle({ ...s, ...meta, id })'));
-  assert.match(route, /updateRefusal\(meta, s, c,/);
+  assert.match(route, /updateRefusal\(meta, s, \{ caller: c,.*charter: charter != null, owner, user: USER \}\)/);
+});
+
+test('no caller (a double-forked child) needs the unlocked page for lead-only fields and charters', () => {
+  for (const m of [{ lead: true }, { trust: 'veryhigh' }, { cwd: '/' }]) assert.equal(updateRefusal(m, s, {})?.unlock, true, JSON.stringify(m));
+  assert.equal(updateRefusal({}, s, { charter: true })?.status, 403);
+  assert.equal(updateRefusal({ paused: true }, s, {}), null, 'plain fields stay open to the CLI');
+  assert.equal(updateRefusal({ lead: true }, s, { charter: true, owner: () => true }), null);
+});
+
+test('a non-lead squiggle changes only itself, charter included', () => {
+  assert.equal(updateRefusal({}, { ...s, id: 'lead' }, { caller: 'security', charter: true })?.status, 403);
+  assert.equal(updateRefusal({ paused: true }, { ...s, id: 'ops' }, { caller: 'security' })?.status, 403);
+  assert.equal(updateRefusal({ paused: true }, s, { caller: 'security', charter: true }), null);
+  assert.equal(updateRefusal({ paused: true }, { ...s, id: 'ops' }, { caller: 'lead', callerLead: true, charter: true }), null);
 });

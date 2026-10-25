@@ -85,7 +85,7 @@ $('#setSqs').onchange = async (e) => {
   const f = e.target.dataset.f, id = e.target.closest('[data-sq]')?.dataset.sq, s = S.sq[id]; if (!f || !s) return;
   const v = e.target.value, val = f === 'paused' ? e.target.checked : f === 'every' ? Math.max(0, Number(v) || 0)
     : f === 'look' ? (!v ? '' : s.look && parseLook(s.look).gen === v ? s.look : v) : v || null;
-  const r = await api(`/squiggles/${id}/update`, { [f]: val });
+  const r = await unlocked(() => api(`/squiggles/${id}/update`, { [f]: val }), 'Unlock settings');
   if (!r || r.error) return toast(r?.error || 'Not saved');
   Object.assign(s, r); if (f === 'look') reskin(id);
   renderSettings(); toast(`Saved ${s.name}`);

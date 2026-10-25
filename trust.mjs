@@ -20,14 +20,20 @@ const RULES = {
 export const trustRules = (s) => RULES[trustOf(s)];
 // Update route guard: only these fields reach squiggle.json. lead, permissionMode, cwd, trust and model
 // change only from the user or the lead; lead only from the user. `caller` is the squiggle whose process tree sent the
-// request ('' for none) and `callerLead` its saved lead flag, never a flag in the body.
+// request and `callerLead` its saved lead flag, never a flag in the body. No caller (the user's page or terminal, or a
+// squiggle's double-forked child) needs `owner()`, the page's unlocked session, for those fields and for a charter.
+// A non-lead squiggle changes only itself.
 export const UPDATE_FIELDS = ['name', 'role', 'cwd', 'every', 'permissionMode', 'paused', 'look', 'lookSeed', 'maxTurns', 'chrome', 'effort', 'model', 'awake', 'autocompact', 'trust', 'lead'];
 const LEAD_ONLY = ['permissionMode', 'cwd', 'trust', 'model'];
-export function updateRefusal(meta, s, caller, callerLead, user = 'the user') {
+export function updateRefusal(meta, s, { caller = '', callerLead = false, charter = false, owner = () => false, user = 'the user' } = {}) {
   const bad = Object.keys(meta).filter((k) => !UPDATE_FIELDS.includes(k));
   if (bad.length) return { status: 400, error: `can't update ${bad.join(', ')}` };
-  if (!caller) return null;
+  if (caller && caller !== s.id && !callerLead) return { status: 403, error: `${caller} can't change ${s.id}: ${user} or the lead does` };
   const changed = (k) => k in meta && (k === 'trust' ? trustOf(meta) !== trustOf(s) : k === 'lead' ? !!meta.lead !== !!s.lead : meta[k] !== s[k]);
+  if (!caller) {
+    const what = changed('lead') ? 'lead' : LEAD_ONLY.find(changed) || (charter && 'charter');
+    return what && !owner() ? { status: 403, error: `Unlock with the room passcode first: ${what} is set by ${user} or the lead`, unlock: true } : null;
+  }
   if (changed('lead')) return { status: 403, error: `lead is set by ${user}, not ${caller}` };
   const k = !callerLead && LEAD_ONLY.find(changed);
   return k ? { status: 403, error: `${k} is set by ${user} or the lead, not ${caller}` } : null;

@@ -1407,8 +1407,10 @@ const server = http.createServer(async (req, res) => {
           const { charter, ...meta } = b;
           checkModelEffort(meta); // t905: only allowed models and efforts reach squiggle.json and the launch args
           if ('trust' in meta) meta.trust = trustLevel(meta.trust) ?? undefined; // the user or the lead sets it, never the squiggle itself
-          const c = await callerSquiggle(req), no = updateRefusal(meta, s, c, !!(c && loadSquiggle(c)?.lead), USER);
-          if (no) return json(res, { error: no.error }, no.status);
+          // No passcode set: no sessions exist, so the room stays open as before; set one to close the double-fork gap.
+          const c = await callerSquiggle(req), owner = () => { if (!roomCfg().passcode?.hash) return true; try { return pass.session(req); } catch { return false; } };
+          const no = updateRefusal(meta, s, { caller: c, callerLead: !!(c && loadSquiggle(c)?.lead), charter: charter != null, owner, user: USER });
+          if (no) return json(res, { error: no.error, ...(no.unlock && { unlock: true }) }, no.status);
           saveSquiggle({ ...s, ...meta, id });
           if (charter != null) fs.writeFileSync(path.join(sqDir(id), 'charter.md'), charter.trim() + '\n');
           emit(id, { k: 'meta' });
