@@ -18,3 +18,17 @@ const RULES = {
   veryhigh: `Your trust is Very high ({{user}} sets it). Be proactive in your area: file the work you see inside your goal with \`task add\` and do it; outside your goals, \`suggest\` it. In an open goal, commit, merge and deploy your own tested work without asking, and say what went live in your status line. In a gated goal, small fixes go to review and the lead merges them once their guardian ships them. Sends, publishes and anything irreversible still wait for approval.`,
 };
 export const trustRules = (s) => RULES[trustOf(s)];
+// Update route guard: only these fields reach squiggle.json. lead, permissionMode, cwd, trust and model
+// change only from the user or the lead; lead only from the user. `caller` is the squiggle whose process tree sent the
+// request ('' for none) and `callerLead` its saved lead flag, never a flag in the body.
+export const UPDATE_FIELDS = ['name', 'role', 'cwd', 'every', 'permissionMode', 'paused', 'look', 'lookSeed', 'maxTurns', 'chrome', 'effort', 'model', 'awake', 'autocompact', 'trust', 'lead'];
+const LEAD_ONLY = ['permissionMode', 'cwd', 'trust', 'model'];
+export function updateRefusal(meta, s, caller, callerLead, user = 'the user') {
+  const bad = Object.keys(meta).filter((k) => !UPDATE_FIELDS.includes(k));
+  if (bad.length) return { status: 400, error: `can't update ${bad.join(', ')}` };
+  if (!caller) return null;
+  const changed = (k) => k in meta && (k === 'trust' ? trustOf(meta) !== trustOf(s) : k === 'lead' ? !!meta.lead !== !!s.lead : meta[k] !== s[k]);
+  if (changed('lead')) return { status: 403, error: `lead is set by ${user}, not ${caller}` };
+  const k = !callerLead && LEAD_ONLY.find(changed);
+  return k ? { status: 403, error: `${k} is set by ${user} or the lead, not ${caller}` } : null;
+}

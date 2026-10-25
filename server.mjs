@@ -15,7 +15,7 @@ import { holdGate } from './hold.mjs';
 import { createAsks, runAsk } from './asks.mjs';
 import { createPicks } from './picks.mjs';
 import { createWaits } from './waits.mjs';
-import { trustLevel, trustOf, trustRules } from './trust.mjs';
+import { trustLevel, trustOf, trustRules, updateRefusal } from './trust.mjs';
 import { dropStale } from './stale.mjs';
 import { createLedger } from './cost.mjs';
 import { load as ownerLoad } from './load.mjs';
@@ -1406,10 +1406,9 @@ const server = http.createServer(async (req, res) => {
         case 'update': {
           const { charter, ...meta } = b;
           checkModelEffort(meta); // t905: only allowed models and efforts reach squiggle.json and the launch args
-          if ('trust' in meta) { // the user or the lead sets it, never the squiggle itself
-            meta.trust = trustLevel(meta.trust) ?? undefined;
-            if (trustOf(meta) !== trustOf(s)) { const c = await callerSquiggle(req); if (c && !loadSquiggle(c)?.lead) return json(res, { error: `trust is set by ${USER} or the lead, not ${c}` }, 403); }
-          }
+          if ('trust' in meta) meta.trust = trustLevel(meta.trust) ?? undefined; // the user or the lead sets it, never the squiggle itself
+          const c = await callerSquiggle(req), no = updateRefusal(meta, s, c, !!(c && loadSquiggle(c)?.lead), USER);
+          if (no) return json(res, { error: no.error }, no.status);
           saveSquiggle({ ...s, ...meta, id });
           if (charter != null) fs.writeFileSync(path.join(sqDir(id), 'charter.md'), charter.trim() + '\n');
           emit(id, { k: 'meta' });
