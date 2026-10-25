@@ -37,6 +37,12 @@ export function createRefusal(b, { caller = '', callerLead = false, owner = () =
   if (caller) return null;
   return owner() ? null : { status: 403, error: `Unlock with the room passcode first: hiring is ${user} or the lead`, unlock: true };
 }
+// Quitting leaves the room down until the user reopens it: the lead, or the user's unlocked page. With no passcode
+// the lead is the only squiggle (hiring waits for one), so the page quits freely.
+export function quitRefusal({ caller = '', callerLead = false, owner = () => false, passcode = true, user = 'the user' } = {}) {
+  if (caller) return callerLead ? null : { status: 403, error: `${caller} can't quit the room: ${user} or the lead does` };
+  return !passcode || owner() ? null : { status: 403, error: `Unlock with the room passcode first: quitting is ${user} or the lead`, unlock: true };
+}
 export function updateRefusal(meta, s, { caller = '', callerLead = false, charter = false, owner = () => false, passcode = true, user = 'the user' } = {}) {
   const bad = Object.keys(meta).filter((k) => !UPDATE_FIELDS.includes(k));
   if (bad.length) return { status: 400, error: `can't update ${bad.join(', ')}` };

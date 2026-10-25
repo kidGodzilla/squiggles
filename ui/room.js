@@ -1213,7 +1213,7 @@ fetch('/api/restart').then((r) => r.json()).then((r) => { if (r?.phase === 'aski
 $('#restartBtn').onclick = async () => { const r = await api('/restart', { op: 'now', by: 'owner' }).catch(() => null); if (r?.error) toast(r.error); else if (typeof r === 'string') toast(r[0].toUpperCase() + r.slice(1)); };
 $('#quitAsk').onclick = async (e) => {
   const q = e.target.dataset?.q; if (!q) return; $('#quitAsk').hidden = true; if (q === 'no') return;
-  const r = await api('/quit', { now: q === 'now' }).catch(() => null); if (r?.error) return toast(r.error);
+  const r = await unlocked(() => api('/quit', { now: q === 'now' }), 'Unlock quitting').catch(() => null); if (!r) return; if (r.error) return toast(r.error);
   if (typeof r === 'string') toast(r[0].toUpperCase() + r.slice(1));
 };
 let lastActive = Date.now();

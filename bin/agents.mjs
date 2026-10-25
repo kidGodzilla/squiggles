@@ -11,8 +11,8 @@ const afterMerge = async () => {
 };
 const [cmd, ...a] = process.argv.slice(2);
 
-// Your terminal unlocks squiggle settings, charters, hiring and deleting shared files; merges stay browser-only.
-const UNLOCKS = /^\/(squiggles(\/[^/]+\/update)?|files)$/;
+// Your terminal unlocks squiggle settings, charters, hiring, quitting and deleting shared files; merges stay browser-only.
+const UNLOCKS = /^\/(squiggles(\/[^/]+\/update)?|files|quit)$/;
 const call = (path, body) => callWithUnlock(base, path, body, process.stdin.isTTY && UNLOCKS.test(path) && (() => askCode('this change')));
 
 // The room passcode, typed at a terminal and not echoed (t950). Squiggles have no terminal, so they can't answer it.

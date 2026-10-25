@@ -16,7 +16,7 @@ import { createAsks, runAsk } from './asks.mjs';
 import { createPicks } from './picks.mjs';
 import { createWaits } from './waits.mjs';
 import { mimeFor } from './mime.mjs';
-import { trustLevel, trustOf, trustRules, updateRefusal, createRefusal, fileRmRefusal, fileBy } from './trust.mjs';
+import { trustLevel, trustOf, trustRules, updateRefusal, createRefusal, quitRefusal, fileRmRefusal, fileBy } from './trust.mjs';
 import { dropStale } from './stale.mjs';
 import { createLedger } from './cost.mjs';
 import { load as ownerLoad } from './load.mjs';
@@ -1237,10 +1237,16 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/load') { const n = Math.max(1, Math.min(90, +url.searchParams.get('days') || 7)), c = loadCache[n];
       return json(res, c && Date.now() - c.at < 60e3 ? c.v : (loadCache[n] = { at: Date.now(), v: ownerLoad({ root: DATA, days: n }) }).v); }
     if (url.pathname === '/api/cost') return json(res, ledger.summary(Math.max(1, Math.min(90, +url.searchParams.get('days') || 1))));
-    if (url.pathname === '/api/quit' && req.method === 'POST') { const b = await body(req, res); return json(res, quit(!!b.now, b.by || 'owner')); }
+    if (url.pathname === '/api/quit' && req.method === 'POST') { // the lead or the unlocked page; `by` from the process tree, not the body
+      const b = await body(req, res), c = await callerSquiggle(req), passcode = !!roomCfg().passcode?.hash, owner = () => { try { return pass.session(req); } catch { return false; } };
+      const no = quitRefusal({ caller: c, callerLead: !!(c && loadSquiggle(c)?.lead), owner, passcode, user: USER });
+      if (no) return json(res, { error: no.error, ...(no.unlock && { unlock: true }) }, no.status);
+      return json(res, quit(!!b.now, c || 'owner'));
+    }
     if (url.pathname === '/api/restart' && req.method === 'GET') return json(res, restartState());
     if (url.pathname === '/api/restart' && req.method === 'POST') {
-      const b = await body(req, res);
+      const b = await body(req, res), c = await callerSquiggle(req);
+      b.by = c || (!roomCfg().passcode?.hash || (() => { try { return pass.session(req); } catch { return false; } })() ? 'owner' : 'unknown caller'); // not the body's word
       if (b.op) { try { return json(res, restartOp(b.op, b.by)); } catch (e) { return json(res, { error: e.message }, 400); } }
       if (!b.force && !codeChanged(ROOT, CODE0, CODE_EXTRA).length) return json(res, 'no server code or config changed since this server started: no restart needed. UI changes: room reload. Prompts: next wake. To restart anyway: restart force');
       if (gate?.phase === 'later') return json(res, `${User} postponed the restart; it runs once they are idle on the page (restart now skips that)`);
