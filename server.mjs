@@ -16,7 +16,7 @@ import { createAsks, runAsk } from './asks.mjs';
 import { createPicks } from './picks.mjs';
 import { createWaits } from './waits.mjs';
 import { mimeFor } from './mime.mjs';
-import { trustLevel, trustOf, trustRules, updateRefusal, createRefusal } from './trust.mjs';
+import { trustLevel, trustOf, trustRules, updateRefusal, createRefusal, fileRmRefusal, fileBy } from './trust.mjs';
 import { dropStale } from './stale.mjs';
 import { createLedger } from './cost.mjs';
 import { load as ownerLoad } from './load.mjs';
@@ -1350,13 +1350,18 @@ const server = http.createServer(async (req, res) => {
     }
     if (url.pathname === '/api/files' && req.method === 'GET') return json(res, { files: files.list(url.searchParams.get('q') || '') });
     if (url.pathname === '/api/files' && req.method === 'POST') {
-      const b = await body(req, res);
-      if (b.op === 'rm') return json(res, files.rm(b.name));
+      const b = await body(req, res), c = await callerSquiggle(req);
+      if (b.op === 'rm') {
+        const no = fileRmRefusal({ caller: c, uploader: files.uploader(b.name), owner: () => { try { return pass.session(req); } catch { return false; } }, passcode: !!roomCfg().passcode?.hash, user: USER });
+        if (no) return json(res, { error: no.error, ...(no.unlock && { unlock: true }) }, no.status);
+        return json(res, files.rm(b.name));
+      }
       if (b.op !== 'add') return json(res, { error: 'op must be add or rm' }, 400);
       if (b.for && !loadSquiggle(b.for)) return json(res, { error: `no squiggle ${b.for}` }, 400);
-      const f = files.add({ name: b.name, data: b.data, by: b.by });
+      const by = fileBy(c, b.by, ['owner', ...humans.all().map((h) => h.id)]);
+      const f = files.add({ name: b.name, data: b.data, by });
       // for <squiggle>: a note on its pile pointing at the file.
-      if (b.for) { const t = board.taskOp({ op: 'add', title: `Shared file for you: ${f.name}`, owner: b.for, by: b.by || 'owner', note: f.path }); files.setTask(f.name, t.id); f.task = t.id; }
+      if (b.for) { const t = board.taskOp({ op: 'add', title: `Shared file for you: ${f.name}`, owner: b.for, by, note: f.path }); files.setTask(f.name, t.id); f.task = t.id; }
       return json(res, f);
     }
     if (url.pathname === '/api/meetings' && req.method === 'GET') {

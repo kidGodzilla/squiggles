@@ -39,7 +39,7 @@ $('#flist').onclick = async (e) => {
   if (a && !(e.metaKey || e.ctrlKey || e.shiftKey || e.button)) { e.preventDefault(); return previewFile(B.files.find((f) => f.name === a.closest('.frow').dataset.name)); }
   if (e.target.dataset.a !== 'rm') return;
   const name = e.target.closest('.frow').dataset.name; if (!confirm(`Delete ${name} from files?`)) return;
-  const r = await api('/files', { op: 'rm', name }); if (r?.error) return toast(r.error);
+  const r = await unlocked(() => api('/files', { op: 'rm', name }), 'Unlock to delete'); if (!r) return; if (r.error) return toast(r.error);
   toast(`Deleted ${name}`); loadFiles();
 };
 const fv = $('#filesView');

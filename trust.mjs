@@ -54,3 +54,11 @@ export function updateRefusal(meta, s, { caller = '', callerLead = false, charte
   const k = !callerLead && LEAD_ONLY.find(changed);
   return k ? { status: 403, error: `${k} is set by ${user} or the lead, not ${caller}` } : null;
 }
+
+// Shared files: a squiggle deletes only what it added; the rest needs the user (an unlocked page once a passcode is set).
+export function fileRmRefusal({ caller, uploader, owner, passcode, user }) {
+  if (caller) return uploader === caller ? null : { status: 403, error: `${caller} can delete only files it added: ${user} deletes the rest` };
+  return !passcode || owner() ? null : { status: 403, error: `Unlock with the room passcode first: deleting files is ${user}'s`, unlock: true };
+}
+// Who added a file: the calling squiggle, never a name it claims; from the page, a person in the room or the owner.
+export const fileBy = (caller, by, people) => caller || (people.includes(by) ? by : 'owner');

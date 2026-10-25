@@ -71,5 +71,6 @@ export function createFiles({ root, extra = {}, tasks = () => [] }) {
     const m = meta(); delete m[base]; fs.writeFileSync(META, JSON.stringify(m, null, 1));
     return { removed: base };
   }
-  return { list, resolve, add, rm, setTask, dir: own, SOURCES };
+  const uploader = (name) => meta()[path.basename(String(name || ''))]?.by || '';
+  return { list, resolve, add, rm, setTask, uploader, dir: own, SOURCES };
 }
