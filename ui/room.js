@@ -952,8 +952,8 @@ function openNew() {
   $('#nCancel').onclick = () => $('#newSq').classList.remove('on');
   $('#newForm').onsubmit = async (e) => {
     e.preventDefault();
-    const r = await api('/squiggles', { name: $('#nName').value, role: $('#nRole').value, charter: $('#nCharter').value, cwd: $('#nCwd').value, every: $('#nEvery').value });
-    if (r.error) return toast(r.error);
+    const r = await unlocked(() => api('/squiggles', { name: $('#nName').value, role: $('#nRole').value, charter: $('#nCharter').value, cwd: $('#nCwd').value, every: $('#nEvery').value }), 'Unlock hiring');
+    if (!r) return; if (r.error) return toast(r.error);
     $('#newSq').classList.remove('on'); await load(); AUD.join(); toast(`${r.name} joined the room`);
   };
   $('#newSq').classList.add('on'); $('#nName').focus();

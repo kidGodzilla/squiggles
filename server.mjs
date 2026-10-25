@@ -15,7 +15,7 @@ import { holdGate } from './hold.mjs';
 import { createAsks, runAsk } from './asks.mjs';
 import { createPicks } from './picks.mjs';
 import { createWaits } from './waits.mjs';
-import { trustLevel, trustOf, trustRules, updateRefusal } from './trust.mjs';
+import { trustLevel, trustOf, trustRules, updateRefusal, createRefusal } from './trust.mjs';
 import { dropStale } from './stale.mjs';
 import { createLedger } from './cost.mjs';
 import { load as ownerLoad } from './load.mjs';
@@ -1206,7 +1206,12 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     if (url.pathname === '/api/squiggles' && req.method === 'GET') return json(res, listSquiggles().map(view));
-    if (url.pathname === '/api/squiggles' && req.method === 'POST') return json(res, view(createSquiggle(await body(req, res))));
+    if (url.pathname === '/api/squiggles' && req.method === 'POST') {
+      const b = await body(req, res), c = await callerSquiggle(req), owner = () => { try { return pass.session(req); } catch { return false; } };
+      const no = createRefusal(b, { caller: c, callerLead: !!(c && loadSquiggle(c)?.lead), owner, passcode: !!roomCfg().passcode?.hash, user: USER });
+      if (no) return json(res, { error: no.error, ...(no.unlock && { unlock: true }) }, no.status);
+      return json(res, view(createSquiggle(b)));
+    }
     if (url.pathname === '/api/tts') {
       const file = await tts(url.searchParams.get('text') || '', voiceFor(url.searchParams.get('id') || ''));
       return serveFile(res, file);

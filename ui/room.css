@@ -202,6 +202,7 @@ main { flex: 1; display: flex; min-height: 0 }
 /* ---------- overlays ---------- */
 .overlay { position: fixed; inset: 0; z-index: 20; display: none; align-items: center; justify-content: center; background: rgba(6,7,12,.66); backdrop-filter: blur(4px) }
 .overlay.on { display: flex; animation: fadein .2s }
+#dask { z-index: 30 } /* confirms and unlock prompts open over the sheet and the hire form */
 .panel { width: min(640px, 92vw); max-height: 86vh; overflow: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 18px; box-shadow: 0 24px 70px rgba(0,0,0,.6); padding: 20px 22px }
 .panel h2 { margin: 0; font-size: 18px } .panel h3 { margin: 18px 0 6px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--dim) }
 .panel label { display: block; margin: 12px 0 4px; font-size: 12px; color: var(--dim) }
