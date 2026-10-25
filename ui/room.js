@@ -350,8 +350,9 @@ function renderPresent() {
   else if (m.view === 'video') { if (pb.firstChild?.dataset?.u !== m.url) pb.innerHTML = `<video data-u="${esc(m.url)}" src="${esc(m.url)}" controls autoplay muted loop playsinline></video>`; } // t1503: fills the share area
   else pb.innerHTML = (m.view === 'editor' ? `<div class="ptab"><span>${esc(m.tab.file)}</span><em>${esc(m.tab.path)}</em></div>` : '') + m.lines.map((l) => lineHtml(l, m.view)).join('') + (m.view === 'term' ? '<div class="tl"><span class="ps">❯</span> <span class="cursor"></span></div>' : '');
   pb.scrollTop = m.view === 'term' ? pb.scrollHeight : 0; $('#pstat').textContent = m.stat;
+  const TODO_S = ['pending', 'in_progress', 'completed']; // the agent writes status: never raw into class
   const td = S.todos[id]; $('#present').classList.toggle('has-todo', !!td?.length);
-  if (td?.length) $('#ptodo').innerHTML = `<h5>Tasks · ${td.filter((x) => x.s === 'completed').length}/${td.length}</h5>` + td.map((x) => `<div class="td ${x.s}">${esc(x.c)}</div>`).join('');
+  if (td?.length) $('#ptodo').innerHTML = `<h5>Tasks · ${td.filter((x) => x.s === 'completed').length}/${td.length}</h5>` + td.map((x) => `<div class="td ${TODO_S.includes(x.s) ? x.s : ''}">${esc(x.c)}</div>`).join('');
   $('#pbadge').textContent = pinned ? `${s.name} is sharing` : `${s.name} is sharing their screen`;
   if ($('#pcam').dataset.id !== id) { $('#pcam').innerHTML = avatarSVG(p, undefined, 'pc_') + `<div class="tag"><b>${esc(s.name)}</b></div>`; $('#pcam').dataset.id = id; }
 }

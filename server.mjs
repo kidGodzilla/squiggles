@@ -15,6 +15,7 @@ import { holdGate } from './hold.mjs';
 import { createAsks, runAsk } from './asks.mjs';
 import { createPicks } from './picks.mjs';
 import { createWaits } from './waits.mjs';
+import { mimeFor } from './mime.mjs';
 import { trustLevel, trustOf, trustRules, updateRefusal, createRefusal } from './trust.mjs';
 import { dropStale } from './stale.mjs';
 import { createLedger } from './cost.mjs';
@@ -1073,7 +1074,6 @@ function body(req, res, max = BODY_MAX) {
   });
 }
 const json = (res, v, code = 200) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(v)); };
-const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.pdf': 'application/pdf', '.txt': 'text/plain; charset=utf-8', '.md': 'text/plain; charset=utf-8', '.log': 'text/plain; charset=utf-8', '.csv': 'text/plain; charset=utf-8', '.json': 'application/json', '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.wav': 'audio/wav', '.webmanifest': 'application/manifest+json' };
 // CSP (t912): the UI runs only its own scripts and can't be framed; dropped files and media are sandboxed so an HTML or SVG never runs as this origin.
 const UI_CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: https://icecast.radiofrance.fr; connect-src 'self'; frame-src http: https:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
 const FILE_CSP = 'sandbox allow-scripts allow-forms allow-popups';
@@ -1083,7 +1083,7 @@ function serveFile(res, file, csp = FILE_CSP) {
   if (!st?.isFile()) return json(res, { error: 'not found' }, 404);
   const etag = `W/"${st.size.toString(36)}-${Math.floor(st.mtimeMs).toString(36)}"`, head = { 'cache-control': 'no-cache', etag, 'content-security-policy': csp, 'x-content-type-options': 'nosniff' };
   if (res.req?.headers['if-none-match'] === etag) { res.writeHead(304, head); return res.end(); }
-  res.writeHead(200, { 'content-type': MIME[path.extname(file)] || 'application/octet-stream', ...head });
+  res.writeHead(200, { 'content-type': mimeFor(file, csp === UI_CSP), ...head });
   fs.createReadStream(file).on('error', () => res.destroy()).pipe(res);
 }
 const view = (s) => {
