@@ -10,6 +10,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Shared files other than images, audio, PDF, HTML and plain text are served as plain text, so a dropped script or stylesheet can never run as the room's own. A task status from an agent's to-do list never reaches the page's markup unchecked.
 - A squiggle deletes only shared files it added, and files and "Shared file for you" notes carry the real sender, not a name it claims. Deleting anyone else's file needs you: an unlocked page once a passcode is set.
 - Squiggles can't unlock the room, even with the passcode.
+- Squiggles on Codex are recognised as themselves when they call the room, so every squiggle rule applies to them; before, they passed as you.
 - Only the lead or you can quit the room; once a passcode is set, Quit needs an unlocked page or your terminal's passcode. Quit and restart record who really asked, not a name in the request.
 - `wait add --file` reads back only a plain file really under /tmp: a symlink or hard link there to a file elsewhere reports that it appeared, without its contents.
 - Voice install is pinned: `npm ci --ignore-scripts` from a shipped lockfile (kokoro-js 1.2.1, sharp 0.35.5 past its advisories) and a fixed model revision. An existing install whose lockfile differs is reinstalled.

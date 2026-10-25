@@ -399,7 +399,7 @@ async function codexTurn(s, prompt, images = []) {
   // r.proc stands for the running turn: stop interrupts it, remove and shutdown end the server too.
   const interrupt = () => { if (r.codexThread && turnId) cx.req('turn/interrupt', { threadId: r.codexThread, turnId }).catch(() => {}); };
   // A stop before turn/start returns is held in stopAsked and sent once the turn id exists.
-  r.proc = { kill: () => { stopAsked = true; interrupt(); }, removeAllListeners() {}, steer: (text) => (turnId ? cx.req('turn/steer', { threadId: r.codexThread, expectedTurnId: turnId, input: [{ type: 'text', text }] }) : Promise.reject(new Error('no turn yet'))) };
+  r.proc = { pid: cx.proc.pid, kill: () => { stopAsked = true; interrupt(); }, removeAllListeners() {}, steer: (text) => (turnId ? cx.req('turn/steer', { threadId: r.codexThread, expectedTurnId: turnId, input: [{ type: 'text', text }] }) : Promise.reject(new Error('no turn yet'))) };
   cx.on = (method, p) => {
     const it = p.item || {};
     if (method === 'exit') return end(lastText || 'codex stopped', true);
