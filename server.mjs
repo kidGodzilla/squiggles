@@ -1187,6 +1187,7 @@ const server = http.createServer(async (req, res) => {
       if (req.method === 'GET') return json(res, pass.status(req));
       const b = req.method === 'POST' ? await body(req, res) : {}, c = ['set', 'clear', 'local'].includes(b.op) && await callerSquiggle(req);
       if (c) return json(res, { error: `${c} can't change the room passcode: ${USER} does, in Settings > Security` }, 403);
+      if (b.op === 'unlock' && (await callerSquiggle(req))) return json(res, { error: `Squiggles can't unlock: the passcode is ${USER}'s` }, 403);
       try { const r = pass.op(req, b); if (r.cookie) res.setHeader('set-cookie', r.cookie); return json(res, r.body); } catch (e) { return json(res, { error: e.message }, e.code || 400); }
     }
     if (!(url.pathname === '/' || p[0] === 'ui') && !pass.ok(req)) return json(res, { error: 'locked' }, 401);

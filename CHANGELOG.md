@@ -9,6 +9,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Hiring is the lead's or yours, and waits for a room passcode: until one is set any program on your Mac could claim the room. The page asks you to set one each visit, the lead's onboarding asks too, and squiggles can't set, clear or loosen it. Other squiggles can't create squiggles; New squiggle needs an unlocked page. Permission mode must be auto, acceptEdits, plan or bypassPermissions.
 - Shared files other than images, audio, PDF, HTML and plain text are served as plain text, so a dropped script or stylesheet can never run as the room's own. A task status from an agent's to-do list never reaches the page's markup unchecked.
 - A squiggle deletes only shared files it added, and files and "Shared file for you" notes carry the real sender, not a name it claims. Deleting anyone else's file needs you: an unlocked page once a passcode is set.
+- Squiggles can't unlock the room, even with the passcode.
 - `wait add --file` reads back only a plain file really under /tmp: a symlink or hard link there to a file elsewhere reports that it appeared, without its contents.
 - Voice install is pinned: `npm ci --ignore-scripts` from a shipped lockfile (kokoro-js 1.2.1, sharp 0.35.5 past its advisories) and a fixed model revision. An existing install whose lockfile differs is reinstalled.
 - Image paths in agent messages can no longer use %2e or backslashes to make the page fetch a path outside /files/.
@@ -28,6 +29,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - An ask cut off by a server restart is marked interrupted at boot and its filer is told; its output is lost.
 
 ### Added
+- From your terminal, a change that needs an unlocked room (squiggle settings, charters, hiring, deleting shared files) asks for the passcode, makes the change, then locks again.
 - Proactive: a squiggle that finishes a note it filed itself in a turn nobody asked for (stamped by the server) shows "Proactive" instead of Done (tile, Team, 1:1, header count, toast, `list`), and the lead's team report says which notes were its own idea.
 - Waits: a squiggle running a long job files `wait add "<what>" --file <path>|--pid <pid> [--host user@host] [--for 4h]` and ends with WAITING; the harness checks it every 2 minutes (fixed probes, never the squiggle's own command) and wakes it with the result. WAITING without an open wait counts as BLOCKED. `waits`, `wait drop <id>`; the squiggle sheet lists them under Waiting on with Drop.
 - Trust per squiggle (Low, Medium, High, Very high) in Settings, the squiggle sheet and `set <id> trust <level>`: sets how far it acts on its own ideas. Low only suggests (the server refuses its own `task add`); only the user or the lead can change it.

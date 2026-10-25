@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Harness CLI, used by the lead (and by you from a terminal).
 import { loadConfig } from '../config.mjs';
+import { callWithUnlock } from './unlock.mjs';
 const base = `http://127.0.0.1:${loadConfig().port}/api`;
 const steps = (l, w) => (l || []).map((x, i) => `\n    ${w} ${i + 1} (${x.who || 'untagged'}${x.done ? ', done' : x.who && x.who !== 'owner' ? ', waiting' : ''}): ${x.t}`).join('');
 // Merged tasks whose after-merge steps aren't all ticked, each with its owner.
@@ -10,14 +11,9 @@ const afterMerge = async () => {
 };
 const [cmd, ...a] = process.argv.slice(2);
 
-async function call(path, body) {
-  const res = await fetch(base + path, body === undefined ? {} : {
-    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
-  });
-  const v = await res.json();
-  if (v && v.error) throw new Error(v.error);
-  return v;
-}
+// Your terminal unlocks squiggle settings, charters, hiring and deleting shared files; merges stay browser-only.
+const UNLOCKS = /^\/(squiggles(\/[^/]+\/update)?|files)$/;
+const call = (path, body) => callWithUnlock(base, path, body, process.stdin.isTTY && UNLOCKS.test(path) && (() => askCode('this change')));
 
 // The room passcode, typed at a terminal and not echoed (t950). Squiggles have no terminal, so they can't answer it.
 async function askCode(what) {
