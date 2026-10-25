@@ -132,6 +132,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 
 ### Fixed
 - Confirm and unlock prompts open above the New squiggle form instead of behind it.
+- Messages such as a failed Save show above an open sheet instead of behind it.
 - Images in picks and chat show when the data dir sits behind a symlink (such as /tmp on macOS); the CLI's realpaths now match.
 - Chat composers no longer open at 0px high, clipping the placeholder, when wired while hidden; they size when shown or resized.
 - `load` and Goals count a shipped task on the local day it finished; east of UTC it showed as yesterday until UTC midnight. Tasks now record `finishedAt`.

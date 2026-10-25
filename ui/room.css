@@ -224,6 +224,7 @@ main { flex: 1; display: flex; min-height: 0 }
 #joinCast { display: flex; gap: 10px; justify-content: center } #joinCast .tile { flex: 0 1 120px; min-width: 0; height: auto; aspect-ratio: 4/3; cursor: default }
 .cta { background: var(--accent); color: #0d1020; font-weight: 700; padding: 12px 26px; border-radius: 99px; font-size: 15px } .cta:hover { filter: brightness(1.08) }
 #toasts { position: absolute; left: 14px; bottom: 14px; z-index: 6; display: flex; flex-direction: column; gap: 6px; pointer-events: none }
+#otoasts { position: fixed; left: 50%; bottom: calc(var(--tabh, 0px) + 14px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 70; display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: none; max-width: calc(100vw - 24px) }
 .toast { background: rgba(27,29,39,.94); border: 1px solid var(--line); border-radius: 99px; padding: 5px 13px; font-size: 12.5px; animation: toast 3.4s ease forwards }
 @keyframes toast { 0% { opacity: 0; transform: translateY(6px) } 10%, 80% { opacity: 1; transform: none } 100% { opacity: 0 } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important } }
