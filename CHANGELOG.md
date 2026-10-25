@@ -5,7 +5,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 ## 0.1.2 (unreleased)
 
 ### Security
-- A squiggle can no longer make itself lead or change its own permission mode, working directory, trust or model: only you or the lead can (lead only you). Updates accept known fields only; others are refused. A squiggle other than the lead changes only itself, charter included. With a room passcode set, those fields and charters need an unlocked page; Save prompts for it.
+- A squiggle can no longer make itself lead or change its own permission mode, working directory, trust or model: only you or the lead can (lead only you). Updates accept known fields only; others are refused. A squiggle other than the lead changes only itself, charter included. Changing lead or those fields from the page or terminal needs a room passcode, and an unlocked page; so does a charter once a passcode is set. Save prompts to unlock and sends the charter only when you changed it.
 - `wait add --file` reads back only a plain file really under /tmp: a symlink or hard link there to a file elsewhere reports that it appeared, without its contents.
 - Voice install is pinned: `npm ci --ignore-scripts` from a shipped lockfile (kokoro-js 1.2.1, sharp 0.35.5 past its advisories) and a fixed model revision. An existing install whose lockfile differs is reinstalled.
 - Image paths in agent messages can no longer use %2e or backslashes to make the page fetch a path outside /files/.

@@ -26,7 +26,7 @@ test('only known fields are saved', () => {
 test('the update route goes through the guard, not a raw spread', () => {
   const src = fs.readFileSync(new URL('../server.mjs', import.meta.url), 'utf8');
   const route = src.slice(src.indexOf("case 'update': {"), src.indexOf('saveSquiggle({ ...s, ...meta, id })'));
-  assert.match(route, /updateRefusal\(meta, s, \{ caller: c,.*charter: charter != null, owner, user: USER \}\)/);
+  assert.match(route, /updateRefusal\(meta, s, \{ caller: c,.*charter: charter != null, owner, passcode: .*, user: USER \}\)/);
 });
 
 test('no caller (a double-forked child) needs the unlocked page for lead-only fields and charters', () => {
@@ -47,4 +47,13 @@ test('every field the sheet, Settings and `set` change is accepted', () => {
   const me = { caller: 'security' };
   for (const f of ['name', 'role', 'every', 'paused', 'look', 'lookSeed', 'maxTurns', 'chrome', 'effort', 'awake', 'autocompact', 'voice'])
     assert.equal(updateRefusal({ [f]: 'x' }, s, me), null, f);
+});
+
+test('no caller and no passcode: lead and lead-only fields need one set; a charter stays open', () => {
+  const none = { passcode: false, owner: () => true };
+  assert.equal(updateRefusal({ lead: true }, s, none)?.status, 403);
+  for (const [k, v] of [['permissionMode', 'bypassPermissions'], ['cwd', '/'], ['trust', 'veryhigh'], ['model', 'claude-sonnet-5-5']])
+    assert.match(updateRefusal({ [k]: v }, s, none)?.error || '', /Set a room passcode first/, k);
+  assert.equal(updateRefusal({}, s, { ...none, charter: true }), null);
+  assert.equal(updateRefusal({ paused: true, cwd: '~/project' }, s, none), null, 'unchanged lead-only values pass');
 });

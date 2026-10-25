@@ -22,17 +22,21 @@ export const trustRules = (s) => RULES[trustOf(s)];
 // change only from the user or the lead; lead only from the user. `caller` is the squiggle whose process tree sent the
 // request and `callerLead` its saved lead flag, never a flag in the body. No caller (the user's page or terminal, or a
 // squiggle's double-forked child) needs `owner()`, the page's unlocked session, for those fields and for a charter.
-// A non-lead squiggle changes only itself.
+// With no room passcode (`passcode` false) no session can exist: lead and lead-only fields are refused until one is set;
+// a charter stays open. A non-lead squiggle changes only itself.
 export const UPDATE_FIELDS = ['name', 'role', 'cwd', 'every', 'permissionMode', 'paused', 'look', 'lookSeed', 'maxTurns', 'chrome', 'effort', 'model', 'awake', 'autocompact', 'voice', 'trust', 'lead'];
 const LEAD_ONLY = ['permissionMode', 'cwd', 'trust', 'model'];
-export function updateRefusal(meta, s, { caller = '', callerLead = false, charter = false, owner = () => false, user = 'the user' } = {}) {
+export function updateRefusal(meta, s, { caller = '', callerLead = false, charter = false, owner = () => false, passcode = true, user = 'the user' } = {}) {
   const bad = Object.keys(meta).filter((k) => !UPDATE_FIELDS.includes(k));
   if (bad.length) return { status: 400, error: `can't update ${bad.join(', ')}` };
   if (caller && caller !== s.id && !callerLead) return { status: 403, error: `${caller} can't change ${s.id}: ${user} or the lead does` };
   const changed = (k) => k in meta && (k === 'trust' ? trustOf(meta) !== trustOf(s) : k === 'lead' ? !!meta.lead !== !!s.lead : meta[k] !== s[k]);
   if (!caller) {
     const what = changed('lead') ? 'lead' : LEAD_ONLY.find(changed) || (charter && 'charter');
-    return what && !owner() ? { status: 403, error: `Unlock with the room passcode first: ${what} is set by ${user} or the lead`, unlock: true } : null;
+    if (!what) return null;
+    const by = what === 'lead' ? user : `${user} or the lead`;
+    if (!passcode) return what === 'charter' ? null : { status: 403, error: `Set a room passcode first (Settings > Security): ${what} is set by ${by}` };
+    return !owner() ? { status: 403, error: `Unlock with the room passcode first: ${what} is set by ${by}`, unlock: true } : null;
   }
   if (changed('lead')) return { status: 403, error: `lead is set by ${user}, not ${caller}` };
   const k = !callerLead && LEAD_ONLY.find(changed);
