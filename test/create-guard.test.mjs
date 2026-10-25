@@ -21,7 +21,14 @@ test('the create route goes through the guard', () => {
   assert.match(route, /createRefusal\(b, \{ caller: c,/);
 });
 
-test('no passcode: the page and terminal cannot hire until one is set', () => {
+test('no passcode: nobody hires, the lead included, until one is set', () => {
   assert.match(createRefusal({ name: 'x' }, { passcode: false, owner: () => true })?.error || '', /Set a room passcode first/);
-  assert.equal(createRefusal({ name: 'x' }, { caller: 'lead', callerLead: true, passcode: false }), null, 'the lead still hires');
+  assert.match(createRefusal({ name: 'x' }, { caller: 'lead', callerLead: true, passcode: false })?.error || '', /Set a room passcode first/, 'the lead waits for it too');
+  assert.match(createRefusal({ name: 'x' }, { caller: 'ann', passcode: false })?.error || '', /can't hire/);
+});
+
+test('a squiggle cannot set, clear or loosen the room passcode', () => {
+  const src = fs.readFileSync(new URL('../server.mjs', import.meta.url), 'utf8');
+  const route = src.slice(src.indexOf("url.pathname === '/api/passcode'"), src.indexOf('pass.op(req, b)'));
+  assert.match(route, /\['set', 'clear', 'local'\]\.includes\(b\.op\) && await callerSquiggle\(req\)/);
 });

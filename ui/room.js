@@ -1223,6 +1223,7 @@ $('#joinBtn').onclick = () => {
   const rejoin = !!AUD.ctx; lastActive = Date.now();
   AUD.init(); S.joined = true; $('#join').classList.remove('on'); document.body.classList.remove('locked'); AUD.join();
   if (rejoin) { S.spokeAt = performance.now(); AUD.apply(); return focusOffice(true); }
+  if (!PASS.set) askPasscode();
   const lead = leadId(), chat = new URLSearchParams(URL0).get('chat');
   // On phone the lead's chat would cover the room; its unread count sits on the Lead tab instead (t352).
   if (lead) { if (!PHONE.matches) openChat(lead); say(lead, pick(['Hey. Everyone’s here.', `${(h => h < 5 ? 'Late one' : h < 12 ? 'Morning' : h < 18 ? 'Afternoon' : 'Evening')(new Date().getHours())}. The team is in.`, 'Hi. We’re all set up.']), { priority: true }); }
@@ -1231,6 +1232,12 @@ $('#joinBtn').onclick = () => {
 };
 document.addEventListener('keydown', (e) => { if (e.key === '/' && S.joined && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) { e.preventDefault(); const l = leadId(); if (l) openChat(l); } });
 
+// No passcode: any program on this Mac could set one and lock the user out, so every visit asks until one is set.
+async function askPasscode() {
+  const code = await askCode('Set a room passcode', '<p>Until you do, any program on this Mac, a squiggle included, could set one and lock you out. Your lead hires only after it is set.</p>', 'Set passcode', 'New passcode'); if (code == null) return;
+  const r = await api('/passcode', { op: 'set', code }); if (!r || r.error) { toast(r?.error || 'Not set'); return askPasscode(); }
+  Object.assign(PASS, r); toast('Passcode set');
+}
 // With a passcode set and no session, the splash asks for it; unlocking reloads into the room.
 async function passGate() {
   Object.assign(PASS, await fetch('/api/passcode').then((r) => r.json()).catch(() => ({})));

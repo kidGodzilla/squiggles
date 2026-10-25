@@ -29,11 +29,12 @@ const LEAD_ONLY = ['permissionMode', 'cwd', 'trust', 'model'];
 export const PERMISSION_MODES = ['auto', 'acceptEdits', 'plan', 'bypassPermissions'];
 const badMode = (b) => 'permissionMode' in b && !PERMISSION_MODES.includes(b.permissionMode) && { status: 400, error: `permissionMode: ${PERMISSION_MODES.join(', ')}` };
 // Hiring: a new squiggle is all lead-only fields, so only the lead or the user's unlocked page creates one.
-// With no room passcode no session can exist, so the page needs one set first, as for lead-only fields.
+// With no room passcode any local program could claim the room, so nobody hires, the lead included, until one is set.
 export function createRefusal(b, { caller = '', callerLead = false, owner = () => false, passcode = true, user = 'the user' } = {}) {
   const bad = badMode(b); if (bad) return bad;
-  if (caller) return callerLead ? null : { status: 403, error: `${caller} can't hire: ${user} or the lead does` };
-  if (!passcode) return { status: 403, error: `Set a room passcode first (Settings > Security): hiring is ${user} or the lead` };
+  if (caller && !callerLead) return { status: 403, error: `${caller} can't hire: ${user} or the lead does` };
+  if (!passcode) return { status: 403, error: `Set a room passcode first (Settings > Security): ${user} sets it before the first hire` };
+  if (caller) return null;
   return owner() ? null : { status: 403, error: `Unlock with the room passcode first: hiring is ${user} or the lead`, unlock: true };
 }
 export function updateRefusal(meta, s, { caller = '', callerLead = false, charter = false, owner = () => false, passcode = true, user = 'the user' } = {}) {

@@ -1185,7 +1185,9 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/peer/join' && req.method === 'POST') return await peerJoin(req, res);
     if (url.pathname === '/api/passcode') {
       if (req.method === 'GET') return json(res, pass.status(req));
-      try { const r = pass.op(req, await body(req, res)); if (r.cookie) res.setHeader('set-cookie', r.cookie); return json(res, r.body); } catch (e) { return json(res, { error: e.message }, e.code || 400); }
+      const b = req.method === 'POST' ? await body(req, res) : {}, c = ['set', 'clear', 'local'].includes(b.op) && await callerSquiggle(req);
+      if (c) return json(res, { error: `${c} can't change the room passcode: ${USER} does, in Settings > Security` }, 403);
+      try { const r = pass.op(req, b); if (r.cookie) res.setHeader('set-cookie', r.cookie); return json(res, r.body); } catch (e) { return json(res, { error: e.message }, e.code || 400); }
     }
     if (!(url.pathname === '/' || p[0] === 'ui') && !pass.ok(req)) return json(res, { error: 'locked' }, 401);
     if (url.pathname === '/') return serveFile(res, path.join(ROOT, 'ui', 'index.html'), UI_CSP);
