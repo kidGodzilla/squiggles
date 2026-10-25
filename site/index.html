@@ -1,0 +1,439 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#111218">
+<title>Squiggles: a team of coding agents on your Mac</title>
+<meta name="description" content="Open-source Mac app that runs a small team of Claude Code and Codex agents on a schedule, with a task board, journals and a merge button only you can press.">
+<link rel="icon" href="icon-192.png">
+<style>
+:root {
+  --bg: #111218; --panel: #181a22; --panel2: #1f222c; --line: #2a2d3a; --text: #ecedf2; --dim: #9a9fb3;
+  --accent: #8aa4ff; --gold: #f5c04a; --ok: #5ad69a; --warn: #ffb347;
+  --r: 14px; --ease: cubic-bezier(.2, .8, .2, 1);
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, monospace;
+}
+* { box-sizing: border-box }
+html { -webkit-text-size-adjust: 100% }
+body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.55 var(--sans); -webkit-font-smoothing: antialiased }
+a { color: var(--accent); text-decoration: none } a:hover { text-decoration: underline }
+code { font: .9em var(--mono); background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px }
+.wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px }
+@media (max-width: 600px) { .wrap { padding: 0 16px } }
+
+/* header */
+header { position: sticky; top: 0; z-index: 10; background: rgba(17,18,24,.82); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line) }
+header .wrap { display: flex; align-items: center; gap: 12px; height: 60px }
+.brand { display: flex; align-items: center; gap: 10px; color: var(--text); font-weight: 700; font-size: 18px }
+.brand:hover { text-decoration: none }
+.brand img { width: 30px; height: 30px; border-radius: 8px }
+header nav { margin-left: auto; display: flex; gap: 4px; align-items: center }
+header nav a { color: var(--dim); padding: 7px 12px; border-radius: 9px; font-size: 14.5px }
+header nav a:hover { color: var(--text); background: var(--panel2); text-decoration: none }
+header nav a.gh { color: var(--text); border: 1px solid var(--line) }
+@media (max-width: 600px) { header nav a:not(.gh) { display: none } }
+
+/* buttons */
+.btn { display: inline-flex; align-items: center; gap: 8px; padding: 12px 20px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel2); color: var(--text); font: 600 15px var(--sans); cursor: pointer; transition: transform .15s var(--ease), background .15s }
+.btn:hover { text-decoration: none; background: #262a36 }
+.btn:active { transform: scale(.97) }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #0e1120 }
+.btn.primary:hover { background: #9db3ff }
+
+/* hero */
+.hero { padding-top: 72px; padding-bottom: 40px; text-align: center }
+.hero h1 { margin: 0 auto; font-size: clamp(32px, 6.4vw, 68px); line-height: 1.04; letter-spacing: -.03em; font-weight: 800; text-wrap: balance }
+.hero h1 em { font-style: normal; color: var(--gold) }
+.nowrap { white-space: nowrap }
+.flip { display: inline-block; position: relative; vertical-align: bottom; overflow: hidden; padding-bottom: .08em; margin-bottom: -.08em; white-space: nowrap; transition: width .45s var(--ease) }
+.flip > span { display: inline-block; transition: transform .4s var(--ease), opacity .3s }
+.flip > span.out { transform: translateY(-70%); opacity: 0 }
+.flip > span.pre { transform: translateY(70%); opacity: 0; transition: none }
+.hero p.lede { margin: 22px auto 0; max-width: 34em; color: var(--dim); font-size: clamp(17px, 2vw, 19px); text-wrap: pretty }
+.cta { margin-top: 30px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap }
+.note { margin-top: 14px; color: var(--dim); font-size: 13.5px }
+
+/* room demo */
+.room { margin: 48px auto 0; display: grid; grid-template-columns: 2fr 1fr 1fr; grid-template-rows: auto auto; gap: 14px; max-width: 1040px; text-align: left }
+.tile { position: relative; aspect-ratio: 4 / 3; border-radius: var(--r); overflow: hidden; border: 2px solid transparent; background: var(--panel); transition: border-color .3s, box-shadow .3s }
+.tile > svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block }
+.tile.lead { grid-row: span 2; aspect-ratio: auto }
+.tile.lead > svg { object-fit: cover }
+.tile .tag { position: absolute; left: 10px; bottom: 10px; display: flex; gap: 6px }
+.tile .tag b, .tile .tag span { background: rgba(17,18,24,.82); padding: 3px 10px; border-radius: 99px; font-size: 13px }
+.tile .tag span { color: #c9ccda; font-weight: 400 }
+.tile .status { position: absolute; right: 10px; top: 10px; background: rgba(17,18,24,.82); padding: 3px 10px; border-radius: 99px; font-size: 12.5px; font-weight: 600; color: var(--ok) }
+.tile.working .status { color: var(--gold) }
+.tile .bubble { position: absolute; left: 12px; top: 12px; max-width: 78%; background: #fff; color: #1b1d26; padding: 8px 14px; border-radius: 12px; font-size: 15px; line-height: 1.35; opacity: 0; transform: translateY(4px); transition: opacity .25s, transform .25s var(--ease) }
+.tile.speaking .bubble { opacity: 1; transform: none }
+.tile.lead.speaking { border-color: var(--gold); box-shadow: 0 0 0 3px rgba(245,192,74,.35), 0 12px 32px rgba(0,0,0,.5) }
+@media (max-width: 760px) {
+  .room { grid-template-columns: 1fr 1fr }
+  .tile.lead { grid-column: span 2; grid-row: auto; aspect-ratio: 4 / 3 }
+  .tile .tag b, .tile .tag span { font-size: 12px; padding: 2px 8px }
+  .tile .status { font-size: 11.5px }
+}
+
+/* character animation, from ui/room.css */
+.fig { transform-origin: 50px 76px; animation: bob 4.4s ease-in-out infinite; animation-delay: var(--d, 0s) } @keyframes bob { 50% { transform: translateY(-.9px) } }
+.tile.speaking .fig { animation: talk .46s ease-in-out infinite } @keyframes talk { 50% { transform: scale(1.025, .985) translateY(-.5px) } }
+.eye { transform-box: fill-box; transform-origin: center; animation: blink 4.6s infinite; animation-delay: var(--d, 0s) } @keyframes blink { 0%, 94%, 100% { transform: scaleY(1) } 97% { transform: scaleY(.08) } }
+.brow { transform-box: fill-box; transform-origin: center } .tile.speaking .brow { animation: brow .7s ease-in-out infinite } @keyframes brow { 50% { transform: translateY(-1.1px) } }
+.tile.working .brow.l { transform: rotate(13deg) translateY(.5px) } .tile.working .brow.r { transform: rotate(-13deg) translateY(.5px) } .tile.working .pupil { transform: translateY(1.2px) }
+.arm.l { transform-origin: 27px 48px } .arm.r { transform-origin: 73px 48px } .tile.speaking .arm.r { animation: wave .7s ease-in-out infinite } @keyframes wave { 50% { transform: rotate(-34deg) } }
+.tile.working .arm { display: none } .tile .laptop, .tile .hands, .tile .sparks, .tile .grin, .tile .eyes-happy, .tile .mouth { display: none }
+.tile.working .laptop, .tile.working .hands, .tile.done .sparks, .tile.done .eyes-happy { display: inline } .tile.done .eyes-open { display: none }
+.tile.speaking .mouth { display: inline } .tile.speaking .smile, .tile.speaking .grin { display: none } .tile.done:not(.speaking) .smile { display: none } .tile.done:not(.speaking) .grin { display: inline }
+.fig.float { animation: floaty 3.2s ease-in-out infinite; animation-delay: var(--d, 0s) } @keyframes floaty { 50% { transform: translateY(-2.4px) } }
+.flick { transform-box: fill-box; transform-origin: 50% 100%; animation: flick 1.1s ease-in-out infinite alternate } @keyframes flick { to { transform: scale(.92, 1.06) skewX(-3deg) } }
+.sway { animation: sway 2.6s ease-in-out infinite alternate } @keyframes sway { to { transform: translateX(1.2px) } }
+.bloom { display: none } .speaking .bloom { display: inline } .speaking .bud { display: none }
+.hand { animation: type .34s ease-in-out infinite } .hand.r { animation-delay: -.17s } @keyframes type { 50% { transform: translateY(-1.3px) } }
+.tw { animation: tw 3.2s ease-in-out infinite } .pulse { animation: tw 1.7s ease-in-out infinite } @keyframes tw { 50% { opacity: .25 } }
+.drift { animation: drift 24s ease-in-out infinite alternate } @keyframes drift { to { transform: translateX(9px) } }
+.steam { animation: steam 2.6s ease-in-out infinite } @keyframes steam { 50% { transform: translateY(-1.4px); opacity: .25 } }
+.tile.done .sparks path { animation: tw 1.6s ease-in-out infinite }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important } }
+
+/* sections */
+section { padding: 72px 0; border-top: 1px solid var(--line) }
+section h2 { margin: 0 0 8px; font-size: clamp(28px, 3.6vw, 38px); letter-spacing: -.02em; line-height: 1.15 }
+section .sub { margin: 0 0 36px; color: var(--dim); font-size: 17px; max-width: 40em }
+
+.steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; counter-reset: s }
+.step { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 22px }
+.step::before { counter-increment: s; content: counter(s); display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; background: var(--panel2); border: 1px solid var(--line); color: var(--gold); font-weight: 700; font-size: 14px; margin-bottom: 14px }
+.step h3 { margin: 0 0 6px; font-size: 18px }
+.step p { margin: 0; color: var(--dim) }
+
+.keeps { display: grid; grid-template-columns: 1fr 1fr; gap: 16px }
+.keep { display: flex; gap: 18px; align-items: center; padding: 18px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r) }
+.keep h3 { margin: 0 0 4px; font-size: 17px }
+.keep p { margin: 0; color: var(--dim); font-size: 15px }
+.kav .tile.mini { width: 112px; height: 84px; border-radius: 12px; flex: none }
+@media (max-width: 760px) { .keeps { grid-template-columns: 1fr } .kav .tile.mini { width: 88px; height: 66px } }
+@media (max-width: 860px) { .steps { grid-template-columns: 1fr 1fr } }
+@media (max-width: 560px) { .steps { grid-template-columns: 1fr } }
+
+/* tour: a mock of the app window */
+.tabsw { display: inline-flex; gap: 4px; padding: 4px; margin-bottom: 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px }
+.tabsw button { border: 0; background: none; color: var(--dim); font: 600 14.5px var(--sans); padding: 8px 16px; border-radius: 9px; cursor: pointer }
+.tabsw button[aria-selected="true"] { background: var(--panel2); color: var(--text) }
+.cap { margin: 0 0 18px; color: var(--dim); max-width: 40em; min-height: 3.1em }
+.app { border: 1px solid var(--line); border-radius: 16px; overflow: hidden; background: #0f1016; box-shadow: 0 30px 80px rgba(0,0,0,.45) }
+.abar { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line) }
+.abar img { width: 24px; height: 24px; border-radius: 7px }
+.abar b { font-size: 15px }
+.atabs { display: flex; gap: 2px; padding: 3px; margin-left: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; font-size: 12.5px; color: var(--dim) }
+.atabs span { padding: 4px 10px; border-radius: 7px } .atabs .on { background: var(--bg); color: var(--text); font-weight: 600 }
+.chipx { padding: 3px 10px; border-radius: 99px; background: var(--panel); font-size: 12px; color: var(--dim) } .chipx.w { color: var(--gold) }
+.abody { display: grid; grid-template-columns: 1.35fr 1fr; gap: 14px; padding: 14px; height: 500px }
+.abody[hidden] { display: none }
+.agrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-content: start; min-height: 0 }
+.agrid .tile { aspect-ratio: 4 / 3 }
+.solo .tile { aspect-ratio: 4 / 3; align-self: start }
+.cw { display: flex; flex-direction: column; min-height: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; font-size: 14px }
+.chead { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-bottom: 1px solid var(--line) }
+.tile.mini { width: 52px; height: 39px; aspect-ratio: auto; border-radius: 9px; flex: none; border-width: 1px }
+.chead b { display: block; font-size: 13.5px } .chead small { display: block; color: var(--dim); font-size: 11.5px }
+.msgs { flex: 1; overflow: hidden; padding: 14px; display: flex; flex-direction: column; justify-content: flex-end; gap: 10px }
+.m { max-width: 92%; line-height: 1.45 }
+.m.you { align-self: flex-end; background: linear-gradient(180deg, #33406b, #2b365c); padding: 8px 13px; border-radius: 16px 16px 4px 16px }
+.m.sq { align-self: flex-start; color: #e6e8ef }
+.m .spk { display: block; font-size: 12px; font-weight: 600; color: var(--dim); margin-bottom: 2px }
+.m.pres { border-left: 3px solid var(--accent); padding: 5px 10px; background: rgba(138,164,255,.08); border-radius: 4px 10px 10px 4px } .m.pres .spk { color: var(--accent) }
+.mention { color: var(--accent); font-weight: 600 }
+.cform { display: flex; align-items: center; gap: 6px; margin: 6px 10px 10px; padding: 6px 6px 6px 12px; background: var(--panel2); border: 1px solid var(--line); border-radius: 14px; color: #6c7189; font-size: 13.5px }
+.cform span { flex: 1 } .cform i { font-style: normal; font-size: 12px; padding: 5px 8px } .cform em { font-style: normal; font-size: 12px; font-weight: 600; padding: 6px 12px; border-radius: 9px; background: var(--accent); color: #0d1020 }
+.mright { display: flex; flex-direction: column; gap: 10px; min-height: 0 }
+.mbar { padding: 10px 14px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line); font-size: 13.5px }
+.mbar .when { color: var(--dim); margin-left: 6px } .mbar p { margin: 4px 0 8px; color: var(--dim); white-space: pre-line; line-height: 1.5 }
+.mbar .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center }
+.mbar .row span { font-weight: 600; color: var(--gold); margin-right: 4px }
+.mbar .row i { font-style: normal; font-size: 12px; padding: 4px 10px; border-radius: 99px; border: 1px solid var(--line); color: var(--dim) } .mbar .row i.go { background: var(--accent); border-color: var(--accent); color: #0d1020; font-weight: 600 }
+.mright .cw { flex: 1 }
+@media (max-width: 860px) {
+  .atabs span:nth-child(n+4) { display: none }
+  .abody { grid-template-columns: 1fr; height: auto }
+  .msgs { overflow: visible }
+}
+@media (max-width: 560px) { .atabs, .chipx, .agrid .tile .tag span { display: none } .tabsw { display: flex } .tabsw button { flex: 1; padding: 8px 6px } }
+
+/* setup */
+.setup { display: grid; grid-template-columns: 1.2fr 1fr; gap: 20px; align-items: start }
+@media (max-width: 860px) { .setup { grid-template-columns: 1fr } }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 22px; min-width: 0 }
+.card h3 { margin: 0 0 4px; font-size: 18px }
+.card > p { margin: 0 0 14px; color: var(--dim); font-size: 15px }
+.prompt { position: relative; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 16px 16px 56px; font-size: 15px; line-height: 1.6; color: #d6d8e3 }
+.prompt .copy { position: absolute; right: 10px; bottom: 10px; padding: 8px 14px; font-size: 14px }
+pre { margin: 0; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 16px; overflow-x: auto; font: 13.5px/1.7 var(--mono); color: #d6d8e3 }
+pre .c { color: #6c7189 }
+.reqs { margin: 16px 0 0; width: 100%; border-collapse: collapse; font-size: 15px }
+.reqs th, .reqs td { padding: 8px 0; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top }
+.reqs th { font-weight: 600; width: 110px; padding-right: 12px }
+.reqs td { color: var(--dim) }
+.warn { margin-top: 16px; padding: 12px 14px; border-radius: 12px; background: rgba(255,179,71,.08); border: 1px solid rgba(255,179,71,.3); color: #f3d3a6; font-size: 14.5px }
+
+footer { border-top: 1px solid var(--line); padding: 28px 0 40px; color: var(--dim); font-size: 14px }
+footer .wrap { display: flex; gap: 16px; flex-wrap: wrap; justify-content: space-between }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <a class="brand" href="#"><img src="icon-192.png" alt="">Squiggles</a>
+    <nav>
+      <a href="#how">How it works</a>
+      <a href="#tour">The room</a>
+      <a href="#features">On track</a>
+      <a href="#setup">Install</a>
+      <a class="gh" href="https://github.com/kidGodzilla/squiggles">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="hero wrap">
+    <h1>A room for your team of<br><span class="nowrap"><em class="flip" id="flip"><span>Claude Code</span></em> agents</span></h1>
+    <p class="lede">Each squiggle owns one part of your work, like the website, the docs or the tests. It shows up without being asked and remembers where it left off. You talk to one of them. The lead hires everyone else.</p>
+    <div class="cta">
+      <a class="btn primary" href="#setup">Copy the setup prompt</a>
+      <a class="btn" href="https://github.com/kidGodzilla/squiggles">Read the code on GitHub</a>
+    </div>
+    <div class="note">Apache-2.0. Runs on macOS with Node 20 or newer.</div>
+
+    <div class="room" id="room" aria-label="The lead and 4 squiggles at their desks"></div>
+  </div>
+
+  <section id="how">
+    <div class="wrap">
+      <h2>What happens after you install it?</h2>
+      <p class="sub">A new room has 1 squiggle in it, the lead.</p>
+      <div class="steps">
+        <div class="step"><h3>You say hello</h3><p>The lead asks your name and what you work on, then turns that into goals.</p></div>
+        <div class="step"><h3>The lead proposes hires</h3><p>It suggests one squiggle per area, each with a written charter. You approve or change them.</p></div>
+        <div class="step"><h3>You merge</h3><p>The lead reviews each finished branch first. Nothing reaches main until you press Merge.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="tour">
+    <div class="wrap">
+      <h2>What does the room look like?</h2>
+      <p class="sub">Three views do most of the work. Same squiggles in each.</p>
+      <div class="tabsw" role="tablist" aria-label="Views">
+        <button role="tab" aria-selected="true" data-t="room">Room</button>
+        <button role="tab" aria-selected="false" data-t="one">1:1</button>
+        <button role="tab" aria-selected="false" data-t="meet">Meeting</button>
+      </div>
+      <p class="cap" id="cap"></p>
+      <div class="app">
+        <div class="abar"><img src="icon-192.png" alt=""><b>Squiggles</b><div class="atabs" id="atabs"><span data-v="room">Room</span><span>Lead</span><span>Team</span><span data-v="cal">Calendar</span><span>Goals</span><span>Tasks</span><span>Merge</span></div><span class="sp" style="flex:1"></span><span class="chipx w">1 working</span><span class="chipx">3 done</span></div>
+
+        <div class="abody" data-p="room">
+          <div class="agrid" id="tRoom"></div>
+          <div class="cw">
+            <div class="chead" data-who="lead"><div><b>Lead</b><small>Done · morning digest sent</small></div></div>
+            <div class="msgs">
+              <div class="m you">How is the launch going?</div>
+              <div class="m sq">Launch v2 is on track. Pia shipped the pricing page and Theo finished the setup guide. Kai is speeding up search; Rosa fixed the flaky upload test. Nothing needs you today.</div>
+            </div>
+            <div class="cform"><span>Message Lead</span><i>Dictate</i><em>Send</em></div>
+          </div>
+        </div>
+
+        <div class="abody solo" data-p="one" hidden>
+          <div id="tOne"></div>
+          <div class="cw">
+            <div class="chead" data-who="pia"><div><b>Pia</b><small>Working · yearly prices</small></div></div>
+            <div class="msgs">
+              <div class="m you">Can the pricing page show yearly prices too?</div>
+              <div class="m sq">Yes. I'll add a Monthly/Yearly switch on a branch and send it to the lead for review. The prices come from the config file, so nothing gets typed into the page twice.</div>
+              <div class="m you">Ship it when the lead's happy.</div>
+              <div class="m sq">Will do.</div>
+            </div>
+            <div class="cform"><span>Message Pia</span><i>Dictate</i><em>Send</em></div>
+          </div>
+        </div>
+
+        <div class="abody" data-p="meet" hidden>
+          <div class="agrid" id="tMeet"></div>
+          <div class="mright">
+            <div class="mbar">
+              <div><b>Monday planning</b><span class="when">10:00 to 10:20</span></div>
+              <p>1. What shipped last week
+2. Search speed
+Deferred here: flaky upload test</p>
+              <div class="row"><span>Kai's turn</span><i class="go">Next: Rosa</i><i>Back to the Room</i><i>End meeting</i></div>
+            </div>
+            <div class="cw">
+              <div class="msgs">
+                <div class="m sq pres"><span class="spk">Lead</span>Last week: the pricing page, the setup guide and the upload test fix.</div>
+                <div class="m sq"><span class="spk">Kai</span>Search on the big index went from 900 ms to 240 ms. The branch is in review.</div>
+                <div class="m you"><span class="mention">@Rosa</span> is the upload test still flaky?</div>
+                <div class="m sq"><span class="spk">Rosa</span>Not since Thursday. 50 runs, 0 failures.</div>
+              </div>
+              <div class="cform"><span>Message everyone, or @name</span><em>Send</em></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="features">
+    <div class="wrap">
+      <h2>What keeps them on track?</h2>
+      <p class="sub">An agent forgets everything between sessions. Squiggles don't.</p>
+      <div class="keeps">
+        <div class="keep"><div class="kav" data-who="theo" data-st="done"></div><div><h3>They keep a journal</h3><p>Each one writes down what it did, so tomorrow starts where today stopped.</p></div></div>
+        <div class="keep"><div class="kav" data-who="pia" data-st="working"></div><div><h3>They share a board</h3><p>Everyone can see who's doing what, so nothing gets done twice.</p></div></div>
+        <div class="keep"><div class="kav" data-who="kai" data-st="done"></div><div><h3>They wait instead of watching</h3><p>A long build doesn't tie anyone up. They get woken when it's done.</p></div></div>
+        <div class="keep"><div class="kav" data-who="lead" data-st="done"></div><div><h3>You hold the keys</h3><p>Merging, hiring and anything risky waits for your say-so.</p></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="setup">
+    <div class="wrap">
+      <h2>How do I install it?</h2>
+      <p class="sub">Paste the prompt into Claude Code, Codex or whatever agent you already use. It clones the repo, checks your Node version, installs the app and opens the room.</p>
+      <div class="setup">
+        <div class="card">
+          <h3>Setup prompt</h3>
+          <p>Works in any agent that can run terminal commands.</p>
+          <div class="prompt" id="prompt">Set up Squiggles for me. Clone https://github.com/kidGodzilla/squiggles.git to ~/squiggles (pull if it already exists). Check that <code>node --version</code> is 20 or newer; stop and tell me if not. Run <code>bash ~/squiggles/bin/install-app.sh</code>, which adds Squiggles.app and a login item that keeps the server running. Wait until http://127.0.0.1:4327 answers (port is in ~/.squiggles/config.json), then open it. Tell me to say hello to the lead.<button class="btn primary copy" id="copy" type="button">Copy</button></div>
+        </div>
+        <div class="card">
+          <h3>By hand</h3>
+          <p>Afterwards, you can open the room from Spotlight.</p>
+<pre>git clone https://github.com/kidGodzilla/squiggles.git ~/squiggles
+cd ~/squiggles
+bash bin/install-app.sh
+open http://127.0.0.1:4327</pre>
+          <table class="reqs">
+            <tr><th>macOS</th><td>Required</td></tr>
+            <tr><th>Node 20+</th><td>Required</td></tr>
+            <tr><th>Agent CLI</th><td>Logged in. Every wake uses your plan.</td></tr>
+            <tr><th>Tailscale</th><td>Optional, to share the room on your tailnet</td></tr>
+          </table>
+          <div class="warn">Before 0.1.1, any web page open in your browser could send the room commands. To upgrade, run <code>node ~/squiggles/bin/agents.mjs upgrade</code>.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Squiggles · Apache-2.0</span>
+    <a href="https://github.com/kidGodzilla/squiggles">github.com/kidGodzilla/squiggles</a>
+  </div>
+</footer>
+
+<script src="cast.js"></script>
+<script src="gen/avataaars-parts.js"></script>
+<script src="gen/avataaars.js"></script>
+<script>
+const TEAM = [
+  { id: 'lead', name: 'Lead', role: 'Runs the team', lead: true, state: 'done' },
+  { id: 'pia', name: 'Pia', role: 'Website', state: 'done', look: 'avataaars' },
+  { id: 'theo', name: 'Theo', role: 'Docs', state: 'done' },
+  { id: 'kai', name: 'Kai', role: 'Backend', state: 'working', look: 'avataaars' },
+  { id: 'rosa', name: 'Rosa', role: 'Tests', state: 'done' },
+];
+const LINES = ['Hey. Everyone’s here.', 'Pia shipped the pricing page.', 'Kai is speeding up search.', 'Nothing needs you today.'];
+const room = document.getElementById('room');
+const tiles = TEAM.map((s, i) => {
+  const t = document.createElement('div');
+  t.className = `tile ${s.state}${s.lead ? ' lead' : ''}`;
+  t.style.setProperty('--d', `-${i * 0.9}s`);
+  t.innerHTML = avatarSVG(persona(s), undefined, `h${i}_`)
+    + (s.lead ? '<div class="bubble"></div>' : '')
+    + `<div class="status">${s.state === 'working' ? 'Working' : 'Done'}</div>`
+    + `<div class="tag"><b>${s.name}</b><span>${s.role}</span></div>`;
+  t.querySelector('svg').setAttribute('preserveAspectRatio', 'xMidYMid slice');
+  room.append(t);
+  return t;
+});
+
+// The lead speaks a line, pauses, then the next.
+const lead = tiles[0], bubble = lead.querySelector('.bubble');
+let n = 0;
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+function say() {
+  bubble.textContent = LINES[n++ % LINES.length];
+  lead.classList.add('speaking');
+  if (reduced) return;
+  setTimeout(() => lead.classList.remove('speaking'), 2600);
+  setTimeout(say, 4200);
+}
+setTimeout(say, 700);
+
+// Tour: the same squiggles drawn into the Room, 1:1 and Meeting mocks.
+const BY = Object.fromEntries(TEAM.map((s) => [s.id, s]));
+let uid = 0;
+function tile(id, state, extra = '') {
+  const s = BY[id], t = document.createElement('div');
+  t.className = `tile ${state} ${extra}`;
+  t.style.setProperty('--d', `-${(uid % 5) * 0.9}s`);
+  t.innerHTML = avatarSVG(persona(s), undefined, `t${uid++}_`) + (extra.includes('mini') ? '' : `<div class="tag"><b>${s.name}</b><span>${s.role}</span></div>`);
+  t.querySelector('svg').setAttribute('preserveAspectRatio', 'xMidYMid slice');
+  return t;
+}
+document.getElementById('tRoom').append(tile('lead', 'done'), tile('pia', 'done'), tile('kai', 'working'), tile('rosa', 'done'));
+const piaBig = tile('pia', 'working');
+document.getElementById('tOne').append(piaBig);
+document.getElementById('tMeet').append(tile('lead', 'done'), tile('kai', 'speaking'), tile('rosa', 'done'), tile('theo', 'done'));
+document.querySelectorAll('.kav').forEach((k) => k.append(tile(k.dataset.who, k.dataset.st, 'mini')));
+document.querySelectorAll('.chead[data-who]').forEach((h) => h.prepend(tile(h.dataset.who, 'done', 'mini')));
+
+const CAPS = {
+  room: 'Everyone at a desk. Each tile shows whether that squiggle is working or done, and the lead pipes up when something needs you.',
+  one: 'Click a squiggle to talk to it alone. Everyone else goes quiet until you come back.',
+  meet: 'Meetings have an agenda and take turns. Each attendee gets the floor in order, and everyone writes in one thread. Notes a squiggle saved for review land on the agenda.',
+};
+const ATAB = { room: 'room', one: 'room', meet: 'cal' }; // a 1:1 opens from the Room; meetings from the Calendar
+function show(t) {
+  document.querySelectorAll('.tabsw button').forEach((b) => b.setAttribute('aria-selected', b.dataset.t === t));
+  document.querySelectorAll('.abody').forEach((p) => (p.hidden = p.dataset.p !== t));
+  document.querySelectorAll('#atabs span').forEach((s) => s.classList.toggle('on', s.dataset.v === ATAB[t]));
+  document.getElementById('cap').textContent = CAPS[t];
+}
+document.querySelectorAll('.tabsw button').forEach((b) => b.addEventListener('click', () => show(b.dataset.t)));
+show('room');
+
+const PROVIDERS =['Claude Code', 'Codex', 'Muse', 'Cursor', 'Pi'];
+const flip = document.getElementById('flip');
+let p = 0;
+function flipTo(name) {
+  const old = flip.firstElementChild, next = document.createElement('span');
+  next.textContent = name; next.className = 'pre';
+  const from = flip.offsetWidth + 'px';
+  flip.style.width = from;
+  old.classList.add('out');
+  setTimeout(() => {
+    old.replaceWith(next);
+    flip.style.width = 'auto';
+    const to = flip.offsetWidth + 'px';
+    flip.style.width = from;
+    flip.offsetWidth; // commit the start width so the change animates
+    flip.style.width = to;
+    next.classList.remove('pre');
+  }, 300);
+}
+if (!reduced && PROVIDERS.length > 1) setInterval(() => flipTo(PROVIDERS[++p % PROVIDERS.length]), 2600);
+
+document.getElementById('copy').addEventListener('click', async (e) => {
+  const text = document.getElementById('prompt').innerText.replace(/Copy$/, '').trim();
+  try { await navigator.clipboard.writeText(text); e.target.textContent = 'Copied'; }
+  catch { e.target.textContent = 'Select and copy'; }
+  setTimeout(() => (e.target.textContent = 'Copy'), 1800);
+});
+</script>
+</body>
+</html>
