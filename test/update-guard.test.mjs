@@ -42,3 +42,9 @@ test('a non-lead squiggle changes only itself, charter included', () => {
   assert.equal(updateRefusal({ paused: true }, s, { caller: 'security', charter: true }), null);
   assert.equal(updateRefusal({ paused: true }, { ...s, id: 'ops' }, { caller: 'lead', callerLead: true, charter: true }), null);
 });
+
+test('every field the sheet, Settings and `set` change is accepted', () => {
+  const me = { caller: 'security' };
+  for (const f of ['name', 'role', 'every', 'paused', 'look', 'lookSeed', 'maxTurns', 'chrome', 'effort', 'awake', 'autocompact', 'voice'])
+    assert.equal(updateRefusal({ [f]: 'x' }, s, me), null, f);
+});

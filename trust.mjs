@@ -23,7 +23,7 @@ export const trustRules = (s) => RULES[trustOf(s)];
 // request and `callerLead` its saved lead flag, never a flag in the body. No caller (the user's page or terminal, or a
 // squiggle's double-forked child) needs `owner()`, the page's unlocked session, for those fields and for a charter.
 // A non-lead squiggle changes only itself.
-export const UPDATE_FIELDS = ['name', 'role', 'cwd', 'every', 'permissionMode', 'paused', 'look', 'lookSeed', 'maxTurns', 'chrome', 'effort', 'model', 'awake', 'autocompact', 'trust', 'lead'];
+export const UPDATE_FIELDS = ['name', 'role', 'cwd', 'every', 'permissionMode', 'paused', 'look', 'lookSeed', 'maxTurns', 'chrome', 'effort', 'model', 'awake', 'autocompact', 'voice', 'trust', 'lead'];
 const LEAD_ONLY = ['permissionMode', 'cwd', 'trust', 'model'];
 export function updateRefusal(meta, s, { caller = '', callerLead = false, charter = false, owner = () => false, user = 'the user' } = {}) {
   const bad = Object.keys(meta).filter((k) => !UPDATE_FIELDS.includes(k));
