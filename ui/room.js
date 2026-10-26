@@ -13,8 +13,11 @@ const api = async (p, body) => (p === '/passcode' || await GATE, fetch('/api' + 
 // Every api() call waits here until the passcode gate opens (at once when there is none).
 const GATE = passGate();
 
-const prefs = Object.assign({ voice: true, music: true, station: 'fip', musicVol: 0.3, chatter: 'normal' }, (() => { try { return JSON.parse(localStorage.agentsPrefs || '{}'); } catch { return {}; } })());
+const prefs = Object.assign({ voice: true, music: true, station: 'fip', musicVol: 0.3, chatter: 'normal', theme: 'flat' }, (() => { try { return JSON.parse(localStorage.agentsPrefs || '{}'); } catch { return {}; } })());
 const savePrefs = () => { try { localStorage.agentsPrefs = JSON.stringify(prefs); } catch {} };
+// Theme: flat (the original look) or clean. theme.js applies it before first paint; this keeps it in step.
+const applyTheme = () => { const m = prefs.theme === 'clean'; if (m) document.documentElement.dataset.theme = 'clean'; else delete document.documentElement.dataset.theme; themeColor(); };
+applyTheme();
 
 const S = {
   sq: {}, order: [], term: {}, todos: {}, run: {}, speakers: new Set(), present: null, pin: {}, vis: {}, focus: null, office: '', officeIds: [], meeting: null,
@@ -766,6 +769,7 @@ async function roomCommand(ev) {
     case 'volume': prefs.musicVol = Math.max(0, Math.min(1, +v || 0)); paintSound(); break;
     case 'voices': prefs.voice = v !== 'off'; paintSound(); break;
     case 'chatter': if (['quiet', 'normal', 'lively'].includes(v)) { prefs.chatter = v; paintSound(); } break;
+    case 'theme': if (['flat', 'clean'].includes(v)) { prefs.theme = v; savePrefs(); applyTheme(); paintSound(); } break;
     case 'view': if (v === 'settings' && ev.id) B.stab = setTab(String(ev.id).toLowerCase()); if (v === 'calendar' && ev.id) setCalMode(String(ev.id).toLowerCase()); if (['room', 'lead', 'meeting', 'team', 'calendar', 'goals', 'tasks', 'merge', 'files', 'settings'].includes(v)) { setView(v); if (v === 'files' && ev.id) previewByName(ev.id); } else if (v === 'blocked' || v === 'rethink') openStuck(v); else if (v === '1on1' && S.sq[ev.id]) oneOnOne(ev.id); break;
     case 'fold': case 'unfold': foldGoals(v, ev.action === 'fold'); break; // t1217
     case 'chat': if (S.sq[ev.value]) { if (S.office && !S.officeIds.includes(ev.value)) setView('room'); discuss(ev.value, ev.text, false); } break;
@@ -973,13 +977,14 @@ const leadId = () => S.order.find((id) => S.sq[id].lead);
 const snd = (k, f) => document.querySelectorAll(`[data-snd="${k}"]`).forEach(f);
 const paintSound = () => {
   snd('station', (e) => { e.value = prefs.music ? prefs.station : 'off'; }); snd('musicVol', (e) => { e.value = prefs.musicVol; });
-  snd('voice', (e) => { e.checked = !!prefs.voice; }); snd('chatter', (e) => { e.value = prefs.chatter; });
+  snd('voice', (e) => { e.checked = !!prefs.voice; }); snd('chatter', (e) => { e.value = prefs.chatter; }); snd('theme', (e) => { e.value = prefs.theme; });
 };
 const sndSet = (fn) => (e) => { fn(e.target); savePrefs(); AUD.apply(); paintSound(); };
 snd('station', (e) => { e.innerHTML = `<option value="off">Off</option>` + STATIONS.map(([v, n]) => `<option value="${v}">${n}</option>`).join(''); e.onchange = sndSet((t) => { prefs.music = t.value !== 'off'; if (prefs.music) prefs.station = t.value; }); });
 snd('musicVol', (e) => { e.oninput = sndSet((t) => { prefs.musicVol = +t.value; }); });
 snd('voice', (e) => { e.onchange = sndSet((t) => { prefs.voice = t.checked; }); });
 snd('chatter', (e) => { e.onchange = sndSet((t) => { prefs.chatter = t.value; }); });
+snd('theme', (e) => { e.onchange = sndSet((t) => { prefs.theme = t.value; applyTheme(); }); });
 paintSound();
 // Share on tailnet (tailscale serve): the toggle and its link in More. CLI: share on|off|status.
 // Only Copy link shows (t837); the URL rides on the button.

@@ -833,3 +833,202 @@ body.v-one.screen:not(.v-meet) #chats .cw.office { left: auto !important; width:
 #restartAsk, #reloadAsk { position: fixed; top: 64px; left: 50%; transform: translateX(-50%); z-index: 60; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; box-shadow: 0 8px 30px rgba(0,0,0,.45); display: flex; flex-direction: column; gap: 10px; width: max-content; max-width: calc(100vw - 24px) } #restartAsk .chip, #reloadAsk .chip { white-space: nowrap }
 #restartAsk p, #reloadAsk p { margin: 0; font-size: 14px } #restartAsk div, #reloadAsk div { display: flex; gap: 8px; justify-content: flex-end }
 @media (pointer: coarse) { #restartAsk .chip, #reloadAsk .chip { min-height: 44px; padding: 0 16px } }
+
+/* ---------- Clean theme: Settings > Room > Theme, CLI room theme flat|clean. Modelled on shadcn/ui ---------- */
+/* Target: shadcn/ui (new-york, neutral base).
+   Dark = shadcn neutral dark, light = shadcn neutral light, picked by the OS (prefers-color-scheme).
+   shadcn rules: solid surfaces, 1px hairline borders, small shadows (xs/sm/md/lg), 8px controls, 14px cards,
+   500 weight on controls, 3px ring/50 focus. No glass, no sheen. Squiggle art untouched. */
+
+/* ---------- tokens: dark (shadcn neutral .dark) ---------- */
+html[data-theme=clean] {
+  --bg: #0a0a0a; --panel: #171717; --panel2: #262626;            /* background, card/popover, secondary/muted/accent */
+  --line: rgba(255,255,255,.10); --input: rgba(255,255,255,.15); /* border, input */
+  --text: #fafafa; --dim: #a1a1a1; --accent: #e5e5e5; --on-accent: #171717; --ring: #737373;
+  --gold: #e5c07b; --ok: #6fcf97; --warn: #e5a66b; --red: #ff6467;
+  --sh-xs: 0 1px 2px 0 rgba(0,0,0,.05);
+  --sh-sm: 0 1px 3px 0 rgba(0,0,0,.1), 0 1px 2px -1px rgba(0,0,0,.1);
+  --sh-md: 0 4px 6px -1px rgba(0,0,0,.1), 0 2px 4px -2px rgba(0,0,0,.1);
+  --sh-lg: 0 10px 15px -3px rgba(0,0,0,.1), 0 4px 6px -4px rgba(0,0,0,.1);
+  --muted-col: rgba(38,38,38,.4);                                 /* kanban column: bg-muted/40 */
+  --r: 14px; --rmd: 8px;
+  --marker: var(--sans); --hand: var(--sans);
+  color-scheme: dark;
+}
+/* ---------- tokens: light (shadcn neutral :root) ---------- */
+@media (prefers-color-scheme: light) {
+  html[data-theme=clean] {
+    --bg: #ffffff; --panel: #ffffff; --panel2: #f5f5f5;
+    --line: #e5e5e5; --input: #e5e5e5;
+    --text: #0a0a0a; --dim: #737373; --accent: #171717; --on-accent: #fafafa; --ring: #a1a1a1;
+    --gold: #a16207; --ok: #15803d; --warn: #c2410c; --red: #e7000b;
+    --muted-col: #fafafa;
+    color-scheme: light;
+  }
+}
+html[data-theme=clean] :focus-visible { outline: 0; box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 50%, transparent) !important }
+
+/* ---------- shell ---------- */
+html[data-theme=clean] body { background: var(--bg) }
+html[data-theme=clean] header { background: color-mix(in srgb, var(--bg) 95%, transparent); backdrop-filter: blur(8px); border-bottom-color: var(--line) }
+html[data-theme=clean] .bview { background: var(--bg) }
+html[data-theme=clean] .overlay { background: rgba(0,0,0,.5); backdrop-filter: none }
+
+/* Tabs (shadcn Tabs): muted list, active trigger lifts */
+html[data-theme=clean] :is(.tabs, .seg) { background: var(--panel2); border: 0; padding: 3px; border-radius: 10px }
+html[data-theme=clean] :is(.tabs, .seg) button { border-radius: 6px; font-size: 13px; font-weight: 500; color: var(--dim) }
+html[data-theme=clean] :is(.tabs, .seg) button.on { background: var(--bg); color: var(--text); box-shadow: var(--sh-sm) }
+@media (prefers-color-scheme: dark) { html[data-theme=clean] :is(.tabs, .seg) button.on { background: rgba(255,255,255,.08); box-shadow: inset 0 0 0 1px var(--input) } }
+html[data-theme=clean] .tabs .tcount { background: var(--accent); color: var(--on-accent) }
+
+/* Badge (secondary): header counts */
+html[data-theme=clean] :is(#summary span, #summary button) { border-radius: 6px; padding: 2px 8px; font-size: 12px; font-weight: 500; background: var(--panel2); color: var(--text) }
+html[data-theme=clean] #summary .working { color: var(--gold) }
+
+/* Button: outline (chip, btn), default (primary) */
+html[data-theme=clean] :is(.chip, .btn) { border-radius: var(--rmd); background: var(--bg); border: 1px solid var(--input); color: var(--text); font-weight: 500; box-shadow: var(--sh-xs) }
+@media (prefers-color-scheme: dark) { html[data-theme=clean] :is(.chip, .btn) { background: rgba(255,255,255,.045) } }
+html[data-theme=clean] :is(.chip, .btn):hover { background: var(--panel2); border-color: var(--input) }
+html[data-theme=clean] .chip.on { background: var(--panel2) }
+html[data-theme=clean] :is(.chip.primary, .btn.go, .cta, .cw form .send, .pop .row .go, .chatbtn:hover, .editbtn:hover) { background: var(--accent); color: var(--on-accent); border-color: transparent; box-shadow: var(--sh-xs) }
+html[data-theme=clean] .btn.danger { color: var(--red) }
+html[data-theme=clean] .btn.danger.arm { background: var(--red); color: #fff }
+
+/* Input / Select */
+html[data-theme=clean] main :is(input:not([type=checkbox]):not([type=radio]):not([type=range]), select) { border-radius: var(--rmd); border: 1px solid var(--input); background: transparent; box-shadow: var(--sh-xs); color: var(--text) }
+@media (prefers-color-scheme: dark) { html[data-theme=clean] main :is(input:not([type=checkbox]):not([type=radio]):not([type=range]), select) { background: rgba(255,255,255,.045) } }
+
+/* ---------- Card: tiles ---------- */
+html[data-theme=clean] .tile { border-color: var(--line); box-shadow: var(--sh-sm) }
+html[data-theme=clean] .tile.speaking { border-color: var(--ring); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 50%, transparent) }
+html[data-theme=clean] .tile.lead.speaking { border-color: var(--gold); box-shadow: 0 0 0 3px color-mix(in srgb, var(--gold) 35%, transparent) }
+html[data-theme=clean] .tile.working { border-color: color-mix(in srgb, var(--gold) 55%, transparent) }
+html[data-theme=clean] :is(.tag b, .tag span) { background: rgba(10,10,10,.7); backdrop-filter: blur(8px); color: #fafafa; border-radius: 6px; font-weight: 500 }
+html[data-theme=clean] .tag span { color: rgba(250,250,250,.72) }
+
+/* ---------- Popover / Sheet / Dialog / Chat: solid card ---------- */
+html[data-theme=clean] :is(.pop, .sheet, dialog) { background: var(--panel); backdrop-filter: none; border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--sh-md) }
+html[data-theme=clean] .cw { background: var(--panel); backdrop-filter: none; border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--sh-lg) }
+html[data-theme=clean] .cw form { background: transparent; border: 1px solid var(--input); border-radius: 10px; box-shadow: var(--sh-xs) }
+/* The global :focus-visible ring landed on the textarea: box in a box. */
+html[data-theme=clean] :is(.cw, #meetThread) textarea:focus-visible { box-shadow: none !important }
+html[data-theme=clean] .cw form:focus-within { border-color: var(--ring); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 50%, transparent) }
+html[data-theme=clean] .cw form button:hover { background: var(--panel2) }
+html[data-theme=clean] #pbadge { background: var(--accent); color: var(--on-accent); border-radius: 6px }
+html[data-theme=clean] mark { background: color-mix(in srgb, var(--gold) 30%, transparent); color: inherit }
+
+/* ---------- chat messages ---------- */
+html[data-theme=clean] .m.you { background: var(--panel2); border: 0; box-shadow: none; color: var(--text) }
+html[data-theme=clean] .m.you.other { background: transparent; border: 1px solid var(--line) }
+html[data-theme=clean] :is(.m.lead, .m.lead strong, .m.fold li b) { color: var(--text) }
+html[data-theme=clean] .m.lead code { background: var(--panel2) }
+html[data-theme=clean] .m.lead pre { background: var(--bg); border-color: var(--line) }
+html[data-theme=clean] .m.sys { background: var(--panel2); border-radius: 6px }
+html[data-theme=clean] .msgs .mention { color: var(--text); background: var(--panel2) }
+
+/* ---------- screen share: terminal stays dark (it is code) ---------- */
+html[data-theme=clean] #present { background: var(--bg); border-bottom-color: var(--line) }
+html[data-theme=clean] .pwin { background: #0a0a0a; box-shadow: 0 0 0 1px rgba(255,255,255,.1), var(--sh-lg) }
+html[data-theme=clean] .pbar { background: #171717; color: #a1a1a1 }
+html[data-theme=clean] #pstat { background: #121212; border-top-color: #262626; color: #a1a1a1 }
+html[data-theme=clean] #ptodo { background: var(--panel); backdrop-filter: none; border-color: var(--line); box-shadow: var(--sh-md) }
+html[data-theme=clean] .td { color: var(--text) }
+
+/* ---------- Tasks: kanban. No board frame; columns bg-muted; notes are cards one step up.
+   Owner colour = 3px top edge. Tint only in light (goes muddy on dark). ---------- */
+html[data-theme=clean] .cork { background: none; border: 0; box-shadow: none; padding: 0 } html[data-theme=clean] .corkcols.none .empty { background: none; border: 0; padding: 0 }
+html[data-theme=clean] .corkhead h2 { font: 600 14px var(--sans); color: var(--text); text-shadow: none }
+html[data-theme=clean] .ccol { background: var(--muted-col); border: 1px solid var(--line); border-radius: 14px }
+html[data-theme=clean] .ccol h3 { font: 600 13px var(--sans); color: var(--text); text-shadow: none }
+html[data-theme=clean] #filterNote button { color: var(--text); background: var(--panel2); box-shadow: none; border-radius: 6px }
+html[data-theme=clean] :is(.note, .pile) { font: 13px/1.45 var(--sans); color: var(--text); background: var(--panel); border: 1px solid var(--line); border-top: 3px solid var(--c, #fff27a); border-radius: 10px; transform: none; box-shadow: var(--sh-sm) }
+@media (prefers-color-scheme: light) { html[data-theme=clean] :is(.note, .pile) { background: color-mix(in srgb, var(--c, #fff27a) 12%, #fff) } }
+html[data-theme=clean] .note { padding-top: 11px }
+html[data-theme=clean] .pile { box-shadow: 0 3px 0 -1px var(--panel), 0 3px 0 0 var(--line), 0 6px 0 -2px var(--panel), 0 6px 0 -1px var(--line), var(--sh-sm) }
+html[data-theme=clean] :is(.note, .pile):hover { transform: none; border-color: var(--input); border-top-color: var(--c, #fff27a); box-shadow: var(--sh-md) }
+html[data-theme=clean] .note::before, html[data-theme=clean] .note::after { display: none } /* :is() drops pseudo-elements */
+html[data-theme=clean] :is(.note, .pile) :is(.nf, .nn, .np, .nsub, .ph, .nsug, .nev, .ndec, .nb) { color: var(--dim) }
+html[data-theme=clean] :is(.note .nb, .note .ndec) { background: var(--panel2); border-radius: 6px }
+html[data-theme=clean] .note .nsplit { border: 1px dashed var(--input); color: var(--dim) }
+html[data-theme=clean] .note .nsub span { background: linear-gradient(90deg, var(--text) var(--p), var(--panel2) var(--p)) }
+html[data-theme=clean] .pile .ph b { color: var(--text) }
+html[data-theme=clean] .pile .pt { font-size: 13px; border-top: 1px solid var(--line) }
+html[data-theme=clean] :is(.pile .ph > span:last-child, .pile .pt.more) { color: var(--dim) }
+
+/* ---------- Goals: no whiteboard. Areas row and each column are cards ---------- */
+html[data-theme=clean] .wbframe { background: none; border: 0; box-shadow: none; padding: 0; margin: 0; color: var(--text) }
+html[data-theme=clean] .wbframe::before { display: none }
+html[data-theme=clean] .wbtitle { font: 600 16px var(--sans); color: var(--text); transform: none }
+html[data-theme=clean] .areas { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--sh-sm); padding: 10px 12px; margin-bottom: 14px }
+html[data-theme=clean] :is(.areas h3, .wbcol h3) { font: 600 13px var(--sans) !important; color: var(--text) !important; text-decoration: none }
+html[data-theme=clean] .area .an { font: 500 13px var(--sans); color: var(--text) }
+html[data-theme=clean] .wbcol { background: var(--muted-col); border: 1px solid var(--line); border-radius: 14px; padding: 10px }
+html[data-theme=clean] .wbcol .glist { scrollbar-color: var(--panel2) transparent }
+html[data-theme=clean] .wbcol.over { background: var(--panel2) }
+html[data-theme=clean] .g { font: 500 14px/1.4 var(--sans); color: var(--text); border-radius: var(--rmd) }
+html[data-theme=clean] :is(.g:hover, .g.sel) { background: var(--panel2) }
+html[data-theme=clean] :is(.g .gmerge.gated, .g .gmerge.open) { color: var(--dim); border: 1px solid var(--input); border-radius: 6px; font-weight: 500 }
+html[data-theme=clean] .addg { font: 500 13px var(--sans); color: var(--dim) } html[data-theme=clean] .addg:hover { color: var(--text) }
+html[data-theme=clean] .inline { font: 14px var(--sans); color: var(--text); background: transparent; border: 1px solid var(--input); border-radius: var(--rmd) }
+
+/* ---------- phone ---------- */
+@media (max-width: 760px) { html[data-theme=clean] .cw { border-radius: 0; border: 0 } }
+
+
+/* ---------- Goals round 2: each goal is a card, like Tasks notes ---------- */
+html[data-theme=clean] .g { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; box-shadow: var(--sh-sm) }
+html[data-theme=clean] .g::before { display: none }
+html[data-theme=clean] :is(.g:hover, .g.sel) { background: var(--panel); border-color: var(--input); box-shadow: var(--sh-md) }
+html[data-theme=clean] .g.sel { border-color: var(--ring) }
+html[data-theme=clean] .g .gm { color: var(--dim) }
+html[data-theme=clean] .g .gn { color: var(--dim) }
+html[data-theme=clean] .g .gn.over { color: var(--red) }
+html[data-theme=clean] .wbcol.done .gt { color: var(--dim); text-decoration: none }
+html[data-theme=clean] .g.stale .gt::after { font: 500 11px var(--sans); border: 1px solid var(--red); border-radius: 6px; color: var(--red); padding: 1px 6px }
+
+/* ---------- Calendar ---------- */
+html[data-theme=clean] .caldue { background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-left: 3px solid var(--gold); box-shadow: var(--sh-xs) }
+
+/* ---------- Clean round 2 ---------- */
+/* Header without backdrop-filter: the blur made it a stacking context, so the menu (#morePanel) slid under page headers. */
+html[data-theme=clean] header { background: var(--bg); backdrop-filter: none }
+/* Composer: one box. Focus darkens the border; no outer ring (it read as an input inside an input). */
+html[data-theme=clean] .cw form:focus-within { border-color: var(--ring); box-shadow: var(--sh-xs) }
+html[data-theme=clean] .dropping form { border-color: var(--ring); box-shadow: none }
+/* No blue left: popups, toasts, rings, text on filled buttons. */
+html[data-theme=clean] :is(#speakcap, .toast, #pcap) { background: var(--panel); color: var(--text); border: 1px solid var(--line); box-shadow: var(--sh-lg); backdrop-filter: none }
+html[data-theme=clean] :is(.chatbtn:hover, .editbtn:hover, .callbtn:hover, .btn.go, .cta, .cw form .send, .pop .row .go, .macts button.go, .diffp .dh .go, .status.incall, #meetThread .send, .tabs .tcount, .dep .go) { background: var(--accent); color: var(--on-accent) }
+html[data-theme=clean] :is(.chatbtn, .editbtn, .callbtn) { background: var(--panel); color: var(--text); border: 1px solid var(--line) }
+html[data-theme=clean] :is(.tile.speaking, body.v-meet .cw.presenting) { border-color: var(--ring); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 40%, transparent) }
+html[data-theme=clean] #meetThread .m.lead.pres { border-left-color: var(--ring); background: var(--panel2) }
+html[data-theme=clean] .wknow { background: var(--red) }
+html[data-theme=clean] .dhunk { background: var(--panel2); color: var(--dim) }
+html[data-theme=clean] .overlay { background: rgba(0,0,0,.5) }
+/* Tasks: notes are their own surface, one step above the column, owner colour as a soft tint. */
+/* --note is set on the note itself: on html, --c is unset and every note took the yellow fallback. */
+html[data-theme=clean] { --colbg: rgba(255,255,255,.025); --note-sh: 0 1px 2px rgba(0,0,0,.45) }
+html[data-theme=clean] :is(.note, .pile) { --note: color-mix(in srgb, var(--c, transparent) 5%, var(--panel)) }
+@media (prefers-color-scheme: light) { html[data-theme=clean] { --colbg: #f5f5f5; --note-sh: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px -1px rgba(0,0,0,.08) } html[data-theme=clean] :is(.note, .pile) { --note: color-mix(in srgb, var(--c, transparent) 12%, #fff) } }
+html[data-theme=clean] .ccol { background: var(--colbg) }
+html[data-theme=clean] :is(.note, .pile) { background: var(--note); border-color: var(--line); border-top: 3px solid color-mix(in srgb, var(--c, #fff27a) 85%, transparent); box-shadow: var(--note-sh) }
+html[data-theme=clean] .pile { box-shadow: 0 3px 0 -1px var(--note), 0 3px 0 0 var(--line), 0 6px 0 -2px var(--note), 0 6px 0 -1px var(--line), var(--note-sh) }
+html[data-theme=clean] :is(.note, .pile):hover { border-top-color: var(--c, #fff27a) }
+/* Dark matched to light: shadcn zinc dark, zinc-950 page, zinc-900 cards, subtle borders, shadows that show on black. */
+@media (prefers-color-scheme: dark) {
+  html[data-theme=clean] {
+    --bg: #09090b; --panel: #18181b; --panel2: #27272a; --line: rgba(255,255,255,.08); --input: rgba(255,255,255,.13);
+    --text: #fafafa; --dim: #a1a1aa; --accent: #fafafa; --on-accent: #18181b; --ring: #71717a;
+    --sh-xs: 0 1px 2px rgba(0,0,0,.4); --sh-sm: 0 1px 3px rgba(0,0,0,.45), 0 1px 2px -1px rgba(0,0,0,.45);
+    --sh-md: 0 4px 6px -1px rgba(0,0,0,.45), 0 2px 4px -2px rgba(0,0,0,.45); --sh-lg: 0 10px 15px -3px rgba(0,0,0,.5), 0 4px 6px -4px rgba(0,0,0,.5);
+    --muted-col: rgba(255,255,255,.025); --colbg: rgba(255,255,255,.025);
+  }
+}
+/* the join gate on a scrim made its dark text unreadable in light; the menu's selects looked disabled. */
+html[data-theme=clean] #join { background: var(--bg); backdrop-filter: none }
+html[data-theme=clean] .msnd select { background: var(--bg); color: var(--text); border-color: var(--input) }
+/* Meet thread on the panel, grey native controls, ring the new note's card not its textarea. */
+html[data-theme=clean] body.v-meet #meetThread { background: var(--panel); box-shadow: var(--sh-md) }
+html[data-theme=clean] input[type=range], html[data-theme=clean] input[type=checkbox] { accent-color: var(--text) }
+html[data-theme=clean] input[type=search]::-webkit-search-cancel-button { filter: grayscale(1) }
+html[data-theme=clean] .note textarea:focus-visible { box-shadow: none !important }
+html[data-theme=clean] .note:focus-within { box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 50%, transparent) }

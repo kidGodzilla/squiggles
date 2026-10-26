@@ -12,6 +12,7 @@
 <title>Squiggles</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E〰️%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="/ui/room.css">
+<script src="/ui/theme.js"></script>
 <link rel="stylesheet" href="/local.css">
 </head>
 <body class="locked">
@@ -93,12 +94,13 @@
       <nav class="settabs" role="tablist" aria-label="Settings"><button type="button" role="tab" data-stab="room">Room</button><button type="button" role="tab" data-stab="characters">Characters</button><button type="button" role="tab" data-stab="squiggles">Squiggles</button><button type="button" role="tab" data-stab="people">People</button><button type="button" role="tab" data-stab="sharing">Sharing</button><button type="button" role="tab" data-stab="defaults">Defaults</button><button type="button" role="tab" data-stab="security">Security</button></nav>
       <section class="setcard" role="tabpanel" data-stab="room">
         <h2>Room</h2>
-        <p class="sethint">Sound in this browser. CLI: <code>room radio|volume|voices|chatter &lt;value&gt;</code>.</p>
+        <p class="sethint">Sound and look in this browser. CLI: <code>room radio|volume|voices|chatter|theme &lt;value&gt;</code>.</p>
         <div class="setform">
           <label for="station">Radio</label><select id="station" data-snd="station"></select>
           <label for="musicVol">Music volume</label><input id="musicVol" data-snd="musicVol" type="range" min="0" max="1" step="0.05">
           <label for="voiceOn">Voices</label><span><input type="checkbox" id="voiceOn" data-snd="voice"> <label for="voiceOn">Read messages aloud</label></span>
           <label for="chatter">Idle chatter</label><select id="chatter" data-snd="chatter"><option value="quiet">Quiet</option><option value="normal" selected>Some chatter</option><option value="lively">Lively</option></select>
+          <label for="theme">Theme</label><select id="theme" data-snd="theme"><option value="flat">Flat</option><option value="clean">Clean</option></select>
         </div>
       </section>
       <section class="setcard" role="tabpanel" data-stab="sharing">
