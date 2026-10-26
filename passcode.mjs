@@ -26,7 +26,9 @@ export function makePasscode({ read, write, now = () => Date.now() }) {
   // Node's fetch sends sec-fetch-mode too, so only these mark a browser.
   const isBrowser = (req) => ['sec-fetch-site', 'origin', 'cookie'].some((h) => req.headers?.[h] !== undefined) || /Mozilla\//.test(req.headers?.['user-agent'] || '');
   // Local non-browser callers (CLI, scripts) get their own bucket, so one can't lock out the user's browser on 127.0.0.1.
-  const client = (req) => String(req.headers?.['x-forwarded-for'] || req.socket?.remoteAddress || '').split(',')[0].trim() + (isLocal(req) && !isBrowser(req) ? ' cli' : '');
+  // Behind a proxy, the address it saw: Cloudflare's cf-connecting-ip, else the last X-Forwarded-For entry (the proxy appends;
+  // earlier entries are whatever the client sent).
+  const client = (req) => String(req.headers?.['cf-connecting-ip'] || String(req.headers?.['x-forwarded-for'] || '').split(',').pop().trim() || req.socket?.remoteAddress || '').trim() + (isLocal(req) && !isBrowser(req) ? ' cli' : '');
   const live = (p) => { const t = now(), s = {}; for (const [k, exp] of Object.entries(p.sessions || {})) if (exp > t) s[k] = exp; return s; };
   const hasSession = (req, p) => { const t = cookieTok(req); return !!t && (live(p)[sha(t)] || 0) > now(); };
 
@@ -56,10 +58,11 @@ export function makePasscode({ read, write, now = () => Date.now() }) {
     const c = client(req), f = fails.get(c) || { n: 0, until: 0 }, t = now();
     recent = recent.filter((x) => t - x < 10 * 60000);
     if (f.until > t) throw err(`too many tries, wait ${Math.ceil((f.until - t) / 1000)} s`, 429);
-    if (recent.length >= 30) throw err('too many tries, wait a few minutes', 429);
+    // The global cap is for remote guessing: remote failures fill it, and it never blocks this Mac.
+    if (!isLocal(req) && recent.length >= 30) throw err('too many tries, wait a few minutes', 429);
     const want = Buffer.from(p.hash, 'hex'), got = Buffer.from(hashCode(code ?? '', p.salt), 'hex');
     if (!crypto.timingSafeEqual(want, got)) {
-      // The global cap is for tailnet guessing; a local process could read the hash from room.json anyway.
+      // Local failures stay out of the global count; a local process could read the hash from room.json anyway.
       f.n++; if (!isLocal(req)) recent.push(t);
       if (f.n >= 5) f.until = t + Math.min(15 * 60000, 30000 * 2 ** (f.n - 5));
       fails.set(c, f); throw err('wrong passcode', bad);

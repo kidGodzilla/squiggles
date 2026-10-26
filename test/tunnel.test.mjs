@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createTunnel, urlIn, MIN_CODE } from '../tunnel.mjs';
+import { createTunnel, killStale, urlIn, MIN_CODE } from '../tunnel.mjs';
 import { makeGuard } from '../guard.mjs';
 import { makePasscode } from '../passcode.mjs';
 import { shareRefusal } from '../trust.mjs';
@@ -62,4 +62,39 @@ test('only the user turns public sharing on', () => {
   assert.match(shareRefusal({ caller: 'bo', owner: () => true }).error, /bo can't share/);
   assert.equal(shareRefusal({ owner: () => false }).unlock, true);
   assert.equal(shareRefusal({ owner: () => true }), null);
+});
+
+test('a spoofed X-Forwarded-For gets no fresh bucket, and remote guessing never locks out this Mac', () => {
+  let store = null; const pc = makePasscode({ read: () => store, write: (p) => { store = p; } });
+  const local = { socket: { remoteAddress: '127.0.0.1' }, headers: { 'user-agent': 'Mozilla/5.0', origin: 'http://127.0.0.1:4398' } };
+  pc.op({ socket: { remoteAddress: '127.0.0.1' }, headers: {} }, { op: 'set', code: 'right-code' });
+  const remote = (spoof) => ({ socket: { remoteAddress: '127.0.0.1' }, headers: { host: HOST, 'x-forwarded-for': `${spoof}, 203.0.113.9`, 'cf-connecting-ip': '203.0.113.9' } });
+  const codes = [];
+  for (let i = 0; i < 40; i++) try { pc.op(remote(`10.0.0.${i}`), { op: 'unlock', code: 'wrong' }); } catch (e) { codes.push(e.code); }
+  assert.deepEqual(codes.slice(0, 5), [401, 401, 401, 401, 401]);
+  assert.equal(codes[5], 429, 'one attacker is one bucket, whatever it puts first in X-Forwarded-For');
+  // Fill the global cap from many real addresses.
+  for (let i = 0; i < 40; i++) try { pc.op({ ...remote('x'), headers: { host: HOST, 'cf-connecting-ip': `198.51.100.${i}` } }, { op: 'unlock', code: 'wrong' }); } catch {}
+  assert.throws(() => pc.op({ ...remote('x'), headers: { host: HOST, 'cf-connecting-ip': '192.0.2.1' } }, { op: 'unlock', code: 'right-code' }), (e) => e.code === 429);
+  assert.doesNotThrow(() => pc.op(local, { op: 'unlock', code: 'right-code' }), 'the user on this Mac still unlocks');
+});
+
+test('the tunnel dies with the server, and a pid file ends one a killed server left', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cfp-')), pidFile = path.join(dir, 'cloudflared.pid');
+  const bin = stub(`echo "INF |  https://${HOST}  |" >&2\nexec sleep 30`);
+  const t = createTunnel({ port: 4398, bin, pidFile }); await t.start();
+  const pid = Number(fs.readFileSync(pidFile, 'utf8')); assert.ok(pid > 0);
+  t.stop(); await new Promise((r) => setTimeout(r, 300));
+  assert.throws(() => process.kill(pid, 0), 'stop ends the child');
+  assert.equal(fs.existsSync(pidFile), false, 'and clears its pid file');
+  // A leftover: a copy of sleep named cloudflared, so ps shows that name.
+  const { spawn } = await import('node:child_process');
+  const fake = path.join(dir, 'cloudflared'); fs.copyFileSync('/bin/sleep', fake); fs.chmodSync(fake, 0o755);
+  const orphan = spawn(fake, ['30'], { detached: true, stdio: 'ignore' }); orphan.unref();
+  await new Promise((r) => setTimeout(r, 200));
+  fs.writeFileSync(pidFile, String(orphan.pid));
+  assert.equal(killStale(pidFile), true); await new Promise((r) => setTimeout(r, 300));
+  assert.throws(() => process.kill(orphan.pid, 0), 'the leftover is ended');
+  fs.writeFileSync(pidFile, String(process.pid));
+  assert.equal(killStale(pidFile), false, 'a pid that is not cloudflared is left alone');
 });

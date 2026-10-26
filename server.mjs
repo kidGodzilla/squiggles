@@ -30,7 +30,7 @@ import { migrate } from './migrate.mjs';
 import { createSchedule } from './schedule.mjs';
 import { makeGuard, tailnetName } from './guard.mjs';
 import { makePasscode } from './passcode.mjs';
-import { createTunnel, MIN_CODE, TUNNEL_HOST } from './tunnel.mjs';
+import { createTunnel, killStale, MIN_CODE, TUNNEL_HOST } from './tunnel.mjs';
 import { createPeers, fence, checkName } from './peers.mjs';
 import { callerChain } from './caller.mjs';
 import { codeStamp, codeChanged } from './codestamp.mjs';
@@ -763,7 +763,7 @@ setTimeout(() => {
 function shutdown(code, unload, cause) {
   logExit(cause || 'shutdown, cause not recorded');
   for (const r of rt.values()) { if (r.proc) r.proc.kill('SIGTERM'); if (r.cx) r.cx.proc.kill('SIGTERM'); if (r.caff) r.caff.kill(); }
-  kokoro.shutdown(); saveState();
+  kokoro.shutdown(); saveState(); tunnel?.stop();
   // KeepAlive would start a quit server again; unloading the job (which also ends this process) keeps it off.
   setTimeout(() => { if (unload && LAUNCHD) execFile('launchctl', ['bootout', `gui/${process.getuid()}/local.squiggles.server`], () => process.exit(code)); else process.exit(code); }, 300);
 }
@@ -1014,7 +1014,10 @@ async function share(on) {
   const st = await shareStatus(); broadcast('*room', { k: 'room', action: 'share', value: st }); return st;
 }
 // Cloudflare quick tunnel: public, so a passcode of MIN_CODE+ characters first (its length is kept when set). Remembered in room.json so a restart reopens it, at a new URL.
-const tunnel = CONFIG.cloudflare ? createTunnel({ port: PORT, onChange: () => shareChanged() }) : null;
+const CF_PID = path.join(RUNS, 'cloudflared.pid');
+killStale(CF_PID);
+const tunnel = CONFIG.cloudflare ? createTunnel({ port: PORT, pidFile: CF_PID, onChange: () => shareChanged() }) : null;
+process.on('exit', () => tunnel?.stop()); // the public link goes with the server, however it exits
 const cfReady = () => pass.codeLen() >= MIN_CODE;
 async function shareCloudflare(on) {
   if (!tunnel) throw new Error('Cloudflare sharing is off: set "cloudflare": true in config.json');
