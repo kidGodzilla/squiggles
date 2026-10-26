@@ -270,6 +270,8 @@ mark { background: rgba(245,192,74,.45); color: inherit; border-radius: 3px; pad
 .g.stale .gt::after { content: 'still on?'; margin-left: 8px; padding: 0 8px; border: 2px solid #c23b2e; border-radius: 50% / 60%; font-size: 15px; color: #c23b2e; white-space: nowrap; display: inline-block; transform: rotate(-3deg) }
 .g .gn { display: block; font: 12.5px var(--sans); color: #6c7282; margin-top: 2px }
 .g .gn.over { color: #c23b2e } /* overdue goal (t83) */
+/* Goal cards clamp title and note; full text on hover. */
+.g :is(.gtt, .gnote) { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; -webkit-line-clamp: 3 } .g .gnote { -webkit-line-clamp: 2 }
 .g .gmerge { padding: 1px 7px; border-radius: 6px; font-size: 11px; font-weight: 600; border: 1.5px solid currentColor } .g .gmerge.gated { color: #1d3f8f } .g .gmerge.open { color: #22834f }
 .addg { display: block; margin: 8px 0 0 4px; font: 17px var(--marker); color: #8a909e } .addg:hover { color: #1d3f8f }
 .inline { width: 100%; font: 18px var(--marker); color: #23283a; background: rgba(29,63,143,.06); border: 0; border-bottom: 2px solid #1d3f8f; padding: 4px 6px; outline: 0; border-radius: 4px 4px 0 0 }
@@ -497,6 +499,7 @@ body.v-one.v-meet #chats .cw.office { left: var(--mx) !important; top: var(--my)
 .tm.stuck .tmnote { -webkit-line-clamp: 4 }
 .tm dl { grid-template-columns: 78px 1fr; gap: 6px 12px; font-size: 12.5px; line-height: 1.45; padding-top: 12px; border-top: 1px solid var(--line) }
 .tm dd { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden }
+.tm dd[data-k=goals] { -webkit-line-clamp: 1 } /* goal list: one line, all of them on hover */
 .tm dd:has(> code) { display: block; white-space: nowrap; text-overflow: ellipsis }
 .tm .acts { flex-wrap: wrap }
 @media (max-width: 760px) {
