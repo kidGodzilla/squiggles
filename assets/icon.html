@@ -1,10 +1,20 @@
 <!doctype html><html><head><meta charset="utf-8"><style>
 html,body{margin:0;width:1024px;height:1024px;background:transparent}
 .sq{position:absolute;left:100px;top:100px;width:824px;height:824px;border-radius:186px;overflow:hidden;box-shadow:0 22px 40px rgba(0,0,0,.28)}
+.full .sq{left:0;top:0;width:1024px;height:1024px;border-radius:0;box-shadow:none}
 .sq svg{width:100%;height:100%;display:block}
 </style></head><body><div class="sq" id="sq"></div>
 <script src="../ui/cast.js"></script>
+<script src="../ui/gen/avataaars-parts.js"></script>
+<script src="../ui/gen/avataaars.js"></script>
+<script src="../ui/gen/notionists-parts.js"></script>
+<script src="../ui/gen/notionists.js"></script>
+<script src="../ui/gen/lorelei-parts.js"></script>
+<script src="../ui/gen/lorelei.js"></script>
 <script>
-const svg = avatarSVG(persona({ id: 'lead', name: 'Lead', role: '', lead: true }), { m: 0 }, 'ic_');
-document.getElementById('sq').innerHTML = svg.replace('viewBox="0 0 100 75"', 'viewBox="12.5 0 75 75"').replace(/ width="400" height="300"/, '');
+// The lead in a rounded square, drawn from its live look: #gen=<room pack>&id=&look=&seed= (bin/render-icons.sh fills them in). #full: edge to edge, for iOS and PWA icons that the system masks. #face: head and shoulders, for the 64px logo and favicon.
+const h = new URLSearchParams(location.hash.slice(1));
+roomGen(h.get('gen') || 'cast'); if (h.has('full')) document.body.className = 'full';
+const svg = avatarSVG(persona({ id: h.get('id') || 'lead', name: 'Lead', role: '', lead: true, look: h.get('look') || '', ...(h.has('seed') && { lookSeed: Number(h.get('seed')) }) }), { m: 0 }, 'ic_');
+document.getElementById('sq').innerHTML = svg.replace('viewBox="0 0 100 75"', h.has('face') ? 'viewBox="27 8 46 46"' : 'viewBox="12.5 0 75 75"').replace(/ width="400" height="300"/, '');
 </script></body></html>

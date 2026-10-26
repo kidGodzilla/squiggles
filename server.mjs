@@ -92,6 +92,10 @@ function saveSquiggle(s) {
   fs.writeFileSync(path.join(sqDir(id), 'squiggle.json'), JSON.stringify(meta, null, 2) + '\n');
 }
 const ROOMCFG = path.join(DATA, 'room.json');
+// App icons follow the lead's look: redraw them into <data>/icons a moment after its look or the room's characters change.
+const ICONS = path.join(DATA, 'icons'), ICON_FILES = ['icon-180.png', 'icon-192.png', 'icon-512.png', 'favicon-64.png', 'logo-64.png'];
+let iconTimer; const drawIcons = () => { clearTimeout(iconTimer); iconTimer = setTimeout(() => { const c = spawn(path.join(ROOT, 'bin', 'render-icons.sh'), [], { stdio: 'ignore', detached: true, env: { ...process.env, SQUIGGLES_HOME: DATA } }); c.on('error', () => {}); c.unref(); }, 3000); };
+if (!fs.existsSync(ICONS)) drawIcons(); // a workspace older than these icons draws its own lead once
 const roomCfg = () => { try { return JSON.parse(fs.readFileSync(ROOMCFG, 'utf8')); } catch { return {}; } };
 // Team defaults (t898): model, effort and cadence a new squiggle starts with; room.json `defaults`, set from Settings or `defaults`.
 const DEFAULT_OPTS = { model: DEFAULT_MODELS, effort: EFFORTS };
@@ -248,7 +252,7 @@ const prompt = (name) => fillPrompt([readText(path.join(DATA, 'prompts', name)) 
 // First run: the room starts with only the lead, whose charter onboards the user.
 if (!listSquiggles().length) {
   createSquiggle({ id: 'lead', name: 'Lead', role: 'Runs the team', cwd: '~', every: 0, charter: prompt('lead-charter.md') });
-  saveSquiggle({ ...loadSquiggle('lead'), lead: true });
+  saveSquiggle({ ...loadSquiggle('lead'), lead: true, look: 'avataaars:eyes=default', lookSeed: 858327934 }); // the face on the shipped app icon
 }
 function systemPrompt(s) {
   const dir = sqDir(s.id);
@@ -1239,6 +1243,7 @@ const server = http.createServer(async (req, res) => {
     // UI seam: <data>/local.css loads after room.css; empty when absent.
     if (url.pathname === '/local.css') { res.writeHead(200, { 'content-type': 'text/css' }); return res.end(readText(path.join(DATA, 'local.css'))); }
     if (p[0] === 'ui' && p[1] === 'gen') return serveFile(res, path.join(ROOT, 'ui', 'gen', path.basename(p[2] || '')), UI_CSP);
+    if (p[0] === 'ui' && ICON_FILES.includes(p[1]) && fs.existsSync(path.join(ICONS, p[1]))) return serveFile(res, path.join(ICONS, p[1]), UI_CSP); // drawn from the lead's look
     if (p[0] === 'ui') return serveFile(res, path.join(ROOT, 'ui', path.basename(p[1] || '')), UI_CSP);
     if (p[0] === 'media') return serveFile(res, path.join(MEDIA, path.basename(p[1] || '')));
     if (p[0] === 'files' && (p[1] || '').startsWith('@')) { const f = files.resolve(decodeURIComponent(p[1].slice(1)), p.slice(2).map(decodeURIComponent).join('/')); return f ? serveFile(res, f) : json(res, { error: 'not found' }, 404); }
@@ -1311,7 +1316,7 @@ const server = http.createServer(async (req, res) => {
       if (b.action === 'characters') {   // the room's default character generator (t832), saved so every page agrees
         const gens = Object.keys(castCtx().GENS), g = String(b.value || '').toLowerCase();
         if (!gens.includes(g)) return json(res, { error: `generators: ${gens.join(', ')}` }, 400);
-        fs.writeFileSync(ROOMCFG, JSON.stringify({ ...roomCfg(), characters: g }, null, 2) + '\n'); b.value = g;
+        fs.writeFileSync(ROOMCFG, JSON.stringify({ ...roomCfg(), characters: g }, null, 2) + '\n'); b.value = g; drawIcons();
       }
       broadcast('*room', { k: 'room', ...b }); return json(res, 'ok');
     }
@@ -1481,6 +1486,7 @@ const server = http.createServer(async (req, res) => {
           const no = updateRefusal(meta, s, { caller: c, callerLead: !!(c && loadSquiggle(c)?.lead), charter: charter != null, owner, passcode: !!roomCfg().passcode?.hash, user: USER });
           if (no) return json(res, { error: no.error, ...(no.unlock && { unlock: true }) }, no.status);
           saveSquiggle({ ...s, ...meta, id });
+          if (s.lead && ('look' in meta || 'lookSeed' in meta)) drawIcons();
           if (charter != null) fs.writeFileSync(path.join(sqDir(id), 'charter.md'), charter.trim() + '\n');
           emit(id, { k: 'meta' });
           return json(res, view(loadSquiggle(id)));

@@ -195,8 +195,17 @@ function renderStage() {
 const STATUS_WORD = { working: 'Working', done: 'Done', idle: '', blocked: 'Blocked', rethink: 'Rethink', error: 'Error', waiting: 'Waiting' };
 // Proactive: Done, on a task the squiggle filed itself.
 const statusWord = (s, st = s.status) => (st === 'done' && s.proactive?.length ? 'Proactive' : STATUS_WORD[st]);
+// Header logo and favicon: the lead's live look, head and shoulders so it reads small (assets/icon.html #face).
+let logoKey;
+function paintLogo(id) {
+  const svg = avatarSVG(P(id), { m: 0 }, 'lg_').replace('viewBox="0 0 100 75"', 'viewBox="27 8 46 46"').replace(/ width="400" height="300"/, '');
+  if (svg === logoKey) return; logoKey = svg;
+  const u = 'data:image/svg+xml,' + encodeURIComponent(svg);
+  $('.logo').src = u; document.querySelector('link[rel=icon]').href = u;
+}
 function paintTile(id) {
   const s = S.sq[id], t = tileOf(id); if (!t) return;
+  if (s.lead) paintLogo(id);
   const st = s.paused ? 'paused' : s.status || 'idle';
   for (const k of ['working', 'done', 'blocked', 'rethink', 'error', 'paused']) t.classList.toggle(k, st === k);
   const el = t.querySelector('.status'); el.className = 'status ' + st; el.textContent = s.paused ? 'Paused' : statusWord(s, st) ?? st;

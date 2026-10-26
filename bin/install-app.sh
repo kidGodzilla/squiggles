@@ -11,23 +11,9 @@ APP="$HOME/Applications/Squiggles.app"
 PLIST="$HOME/Library/LaunchAgents/local.squiggles.server.plist"
 LOG="$HOME/Library/Logs/squiggles.log"
 
-# icon: the lead squiggle, drawn by the same code as the room
-CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-TMP="$(mktemp -d)"
-if [ -x "$CHROME" ]; then
-  "$CHROME" --headless=new --disable-gpu --hide-scrollbars --default-background-color=00000000 --window-size=1024,1024 \
-    --screenshot="$TMP/icon.png" "file://$ROOT/assets/icon.html" >/dev/null 2>&1 || true
-fi
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-if [ -f "$TMP/icon.png" ]; then
-  mkdir -p "$TMP/Squiggles.iconset"
-  for s in 16 32 128 256 512; do
-    sips -z $s $s "$TMP/icon.png" --out "$TMP/Squiggles.iconset/icon_${s}x${s}.png" >/dev/null
-    sips -z $((s*2)) $((s*2)) "$TMP/icon.png" --out "$TMP/Squiggles.iconset/icon_${s}x${s}@2x.png" >/dev/null
-  done
-  iconutil -c icns "$TMP/Squiggles.iconset" -o "$APP/Contents/Resources/Squiggles.icns"
-fi
-rm -rf "$TMP"
+echo "$DATA" > "$APP/Contents/Resources/data-dir"
+"$ROOT/bin/render-icons.sh" || true  # icon: the lead's current look in a rounded square
 
 cat > "$APP/Contents/Info.plist" <<PL
 <?xml version="1.0" encoding="UTF-8"?>

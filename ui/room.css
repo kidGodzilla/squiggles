@@ -58,7 +58,7 @@ header { min-width: 0; overflow-x: clip } /* nothing in the top bar may widen th
 #summary i { font-style: normal }
 .brand { display: flex; align-items: center; gap: 9px; cursor: pointer }
 .brand b { font-size: 15px; font-weight: 700; letter-spacing: -.01em }
-.logo { width: 28px; height: 28px; border-radius: 9px; background: linear-gradient(135deg, #e8845f, #d4566f); display: grid; place-items: center; font-size: 15px; color: #fff }
+.logo { width: 28px; height: 28px; border-radius: 8px; display: block; flex: none } /* the lead, ui/logo-64.png from assets/icon.html */
 .sp { flex: 1 }
 #summary { display: flex; gap: 6px; margin-left: 10px; font-size: 12px; color: var(--dim) }
 #summary span, #summary button { padding: 3px 10px; border-radius: 99px; background: var(--panel2); border: 0; font: inherit; color: inherit }
