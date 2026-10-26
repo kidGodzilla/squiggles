@@ -5,6 +5,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 ## 0.1.2 (unreleased)
 
 ### Security
+- The Pi and Cursor folder fence ignores case (~/downloads), follows symlinks, and catches shell forms like `cd ~ && cat Downloads/x` and `~/Down*`. Still a rough fence, not a sandbox.
 - The squiggle sheet says when Permissions doesn't apply: Pi and Cursor squiggles run every tool call without asking (git push, deploys, your keys). README says so too.
 - Cloudflare share: only the user turns it on (never a squiggle, the lead included); needs a room passcode of 8+ characters, which can't be cleared or shortened while shared; tunnel hits are never local; peers refuse them. Wrong-passcode limits count the address Cloudflare saw, not one the client claims, and guessing over the link never locks you out on your Mac. The link closes when the room stops, and a start ends one a crashed room left open.
 - A squiggle can no longer make itself lead or change its own permission mode, working directory, trust or model: only you or the lead can (lead only you). Updates accept known fields only; others are refused. A squiggle other than the lead changes only itself, charter included. Changing lead or those fields from the page or terminal needs a room passcode, and an unlocked page; so does a charter once a passcode is set. Save prompts to unlock and sends the charter only when you changed it.

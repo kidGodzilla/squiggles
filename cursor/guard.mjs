@@ -4,17 +4,15 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { fencedPath, fencedCommand, mentionsHome, REASON } from '../fence.mjs';
 
-const DIRS = ['Downloads', 'Desktop', 'Documents'];
-export const REASON = 'Downloads, Desktop and Documents are off limits';
-const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-export function check(ev, home = os.homedir()) {
-  const cwd = path.resolve(ev.cwd || ev.tool_input?.cwd || ev.workspace_roots?.[0] || home), strings = [];
+// The shell command gets the full check; every string in the call is checked as a path and for home paths (fence.mjs).
+export function check(ev) {
+  const cwd = path.resolve(ev.cwd || ev.tool_input?.cwd || ev.workspace_roots?.[0] || os.homedir()), strings = [];
   const walk = (v) => { if (typeof v === 'string') strings.push(v); else if (v && typeof v === 'object') Object.values(v).forEach(walk); };
   walk(ev.tool_input);
-  const fenced = (p) => { const abs = path.resolve(cwd, p.replace(/^~(?=\/|$)/, home)); return DIRS.some((d) => abs === path.join(home, d) || abs.startsWith(path.join(home, d) + '/')); };
-  const mention = new RegExp(`(~|\\$HOME|\\$\\{HOME\\}|${esc(home)})/(${DIRS.join('|')})\\b`);
-  return strings.some((s) => mention.test(s) || (!s.includes('\n') && s.length < 4096 && fenced(s.trim())));
+  const cmd = ev.tool_input?.command;
+  return (typeof cmd === 'string' && fencedCommand(cmd, cwd)) || strings.some((s) => mentionsHome(s) || (!s.includes('\n') && s.length < 4096 && fencedPath(s.trim(), cwd)));
 }
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   let ev; try { ev = JSON.parse(fs.readFileSync(0, 'utf8')); } catch { process.stderr.write('guard could not read the tool call'); process.exit(2); }
