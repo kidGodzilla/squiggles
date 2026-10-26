@@ -132,6 +132,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - The lead's "Handled." replies fold with the reports they answer into one line that opens to list them.
 
 ### Fixed
+- Team cards stay a sane height: bigger photo, every field clamped to a line or two (hover for the full text), cards in a row line up with their buttons on one baseline, and phones hide the charter lines.
 - Confirm and unlock prompts open above the New squiggle form instead of behind it.
 - Messages such as a failed Save show above an open sheet instead of behind it.
 - Sheet buttons such as Wake now no longer spill out of their button on a phone; the row wraps instead.

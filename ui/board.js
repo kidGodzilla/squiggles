@@ -435,6 +435,8 @@ B.cost = {}; B.costAt = 0;
 async function loadCost() { if (Date.now() - B.costAt < 6e4) return; B.costAt = Date.now(); const r = await api('/cost?days=7'); if (Array.isArray(r)) { B.cost = Object.fromEntries(r.map((x) => [x.id, x])); renderTeam(); } }
 const tokens = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : `${Math.round(n / 1e3)}k`);
 const spend = (c) => (c.cost ? `$${c.today.toFixed(2)} today, $${c.cost.toFixed(2)} in 7 days` : `${tokens(c.in + c.out)} tokens in 7 days`);
+// Team card detail row: data-k lets the phone hide charter lines; title keeps the full text of a clamped field.
+const dd = (k, label, text) => `<dt data-k="${k}">${label}</dt><dd data-k="${k}" title="${esc(text)}">${esc(text)}</dd>`;
 function renderTeam() {
   const q = ($('#teamq').value || '').trim().toLowerCase();
   const all = S.order.map((id) => S.sq[id]).filter(Boolean);
@@ -446,13 +448,13 @@ function renderTeam() {
     const care = charterLine(s.charter, 'What you care about'), guard = charterLine(s.charter, 'What you guard');
     const st = s.paused ? 'Paused' : statusWord(s) || 'Idle';
     return `<div class="tm ${s.paused ? 'paused' : rank(s) < 2 ? 'stuck' : ''}" data-sq="${esc(s.id)}" tabindex="0" title="Open a 1:1 with ${esc(s.name)}">
-      <div class="tmh">${face(s.id, 'tm' + s.id + '_')}<div><b>${esc(s.name)}${s.lead && !/lead/i.test(s.name) ? ' (lead)' : ''}</b><small>${esc(s.role)}</small></div><span class="tmst ${s.paused ? '' : esc(s.status || '')}">${esc(st)}</span></div>
+      <div class="tmh">${face(s.id, 'tm' + s.id + '_')}<div><b>${esc(s.name)}${s.lead && !/lead/i.test(s.name) ? ' (lead)' : ''}</b><small title="${esc(s.role)}">${esc(s.role)}</small></div><span class="tmst ${s.paused ? '' : esc(s.status || '')}">${esc(st)}</span></div>
       ${s.note ? `<div class="tmnote" title="${esc(s.note)}">${esc(s.note)}</div>` : ''}
-      <dl>${care ? `<dt>Cares about</dt><dd>${esc(care)}</dd>` : ''}${guard ? `<dt>Guards</dt><dd>${esc(guard)}</dd>` : ''}
-        <dt>Goals</dt><dd>${owns.length ? owns.map(esc).join(', ') : 'None'}</dd>
-        <dt>Runs</dt><dd>${esc(cadence(s.every))}, ${esc(modelName(s.model))}${s.permissionMode && s.permissionMode !== 'auto' ? `, ${esc(s.permissionMode)}` : ''}</dd>
-        ${B.cost[s.id] ? `<dt>Spend</dt><dd>${esc(spend(B.cost[s.id]))}</dd>` : ''}
-        <dt>Works in</dt><dd><code>${esc(s.cwd || '~')}</code></dd></dl>
+      <dl>${care ? dd('care', 'Cares about', care) : ''}${guard ? dd('guard', 'Guards', guard) : ''}
+        ${dd('goals', 'Goals', owns.length ? owns.join(', ') : 'None')}
+        ${dd('runs', 'Runs', `${cadence(s.every)}, ${modelName(s.model)}${s.permissionMode && s.permissionMode !== 'auto' ? `, ${s.permissionMode}` : ''}`)}
+        ${B.cost[s.id] ? dd('spend', 'Spend', spend(B.cost[s.id])) : ''}
+        <dt data-k="cwd">Works in</dt><dd data-k="cwd" title="${esc(s.cwd || '~')}"><code>${esc(s.cwd || '~')}</code></dd></dl>
       <div class="acts"><button data-a="one">1:1</button><button data-a="chat">Chat</button><button data-a="wake">Wake</button><button data-a="meet">Meet</button><button data-a="edit">Settings</button></div>
     </div>`;
   }).join('') || '<div class="empty">Nobody matches.</div>';
