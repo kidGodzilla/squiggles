@@ -900,7 +900,7 @@ async function openSheet(id) {
     </div>
     <div class="row2">
       <div><label>Model</label><select id="shModel">${['', 'opus', 'sonnet', 'gpt-6.1-sol', ...(S.piModels || []), ...(S.cursorModels || [])].map((m) => `<option value="${m}" ${(s.model || '') === m ? 'selected' : ''}>${m ? modelName(m) : 'Default (Opus 5.5)'}</option>`).join('')}</select></div>
-      <div><label>Permissions</label><select id="shPerm">${['auto', 'acceptEdits', 'plan', 'bypassPermissions'].map((m) => `<option ${s.permissionMode === m ? 'selected' : ''}>${m}</option>`).join('')}</select></div>
+      <div><label>Permissions</label><select id="shPerm">${['auto', 'acceptEdits', 'plan', 'bypassPermissions'].map((m) => `<option ${s.permissionMode === m ? 'selected' : ''}>${m}</option>`).join('')}</select><small id="shPermNote" class="permnote"></small></div>
     </div>
     <div class="row2">
       <div><label>Browser</label><select id="shBrowser"><option value="">Off</option><option value="chrome" ${s.chrome ? 'selected' : ''}>Claude in Chrome</option></select></div>
@@ -921,6 +921,10 @@ async function openSheet(id) {
     <div class="actions">${s.lead ? '' : '<button class="btn danger" data-a="remove" style="margin-right:auto">Remove from the room</button>'}<button class="btn go" data-a="save">Save</button></div>
     <h3>Journal</h3><div class="journal">${esc(journal.slice(-3000))}</div>
     <h3>Recent activity</h3><div class="feed">${feed.map((f) => `<div>${f}</div>`).join('') || '<div>Nothing yet</div>'}</div>`;
+  // Pi and Cursor have no approval step: Permissions doesn't apply, and every tool call runs as you.
+  const permNote = () => { const m = $('#shModel').value, other = (S.piModels || []).includes(m) ? 'Pi' : (S.cursorModels || []).includes(m) ? 'Cursor' : '';
+    $('#shPerm').disabled = !!other; $('#shPermNote').textContent = other ? `Not used on ${other}: nothing asks first, every tool call runs as you (git push, deploys, ~/.ssh). A hook keeps it out of Downloads, Desktop and Documents, but not reliably.` : ''; };
+  $('#shModel').onchange = permNote; permNote();
   $('#sheetBody').onclick = async (e) => {
     const a = e.target.dataset.a; if (!a) return;
     if (a === 'meet') return meetNowPop(e.target, id);

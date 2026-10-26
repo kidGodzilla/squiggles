@@ -5,6 +5,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 ## 0.1.2 (unreleased)
 
 ### Security
+- The squiggle sheet says when Permissions doesn't apply: Pi and Cursor squiggles run every tool call without asking (git push, deploys, your keys). README says so too.
 - Cloudflare share: only the user turns it on (never a squiggle, the lead included); needs a room passcode of 8+ characters, which can't be cleared or shortened while shared; tunnel hits are never local; peers refuse them. Wrong-passcode limits count the address Cloudflare saw, not one the client claims, and guessing over the link never locks you out on your Mac. The link closes when the room stops, and a start ends one a crashed room left open.
 - A squiggle can no longer make itself lead or change its own permission mode, working directory, trust or model: only you or the lead can (lead only you). Updates accept known fields only; others are refused. A squiggle other than the lead changes only itself, charter included. Changing lead or those fields from the page or terminal needs a room passcode, and an unlocked page; so does a charter once a passcode is set. Save prompts to unlock and sends the charter only when you changed it.
 - Hiring is the lead's or yours, and waits for a room passcode: until one is set any program on your Mac could claim the room. The page asks you to set one each visit, the lead's onboarding asks too, and squiggles can't set, clear or loosen it. Other squiggles can't create squiggles; New squiggle needs an unlocked page. Permission mode must be auto, acceptEdits, plan or bypassPermissions.
@@ -32,8 +33,8 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - An ask cut off by a server restart is marked interrupted at boot and its filer is told; its output is lost.
 
 ### Added
-- Squiggles can run on Cursor models (`cursor` in config.json): one `cursor-agent` run per turn, resuming its chat, with its own slot. A hook keeps it out of Downloads, Desktop and Documents; Cursor turns are refused until it's installed.
-- Squiggles can run on Pi: list the models in config `pi` and pick one per squiggle (Settings > Squiggles or `set <id> model`). Each keeps one pi process and session between turns, can be steered mid-turn, has its own Turns at once row, and can't touch Downloads, Desktop or Documents.
+- Squiggles can run on Cursor models (`cursor` in config.json): one `cursor-agent` run per turn, resuming its chat, with its own slot. Like Pi, Cursor runs every tool call without asking; a hook keeps it out of Downloads, Desktop and Documents, and Cursor turns are refused until it's installed.
+- Squiggles can run on Pi: list the models in config `pi` and pick one per squiggle (Settings > Squiggles or `set <id> model`). Each keeps one pi process and session between turns, can be steered mid-turn, and has its own Turns at once row. Pi has no approval step: every tool call runs as you, and Permissions doesn't apply. A hook keeps it out of Downloads, Desktop and Documents, but not reliably.
 - Share without Tailscale: Settings > Sharing > Cloudflare and `share cloudflare on|off|status` open a public Cloudflare quick tunnel link (`"cloudflare": true` in config.json; needs `cloudflared`). Reopens after a restart at a new link.
 - The app icon, favicon and header logo are your lead in a rounded square, and follow its look when you change it. New workspaces' lead starts with the face on the shipped icon.
 - Clean theme: a plain black and white look in the style of shadcn/ui that follows your system light or dark mode. Settings > Room > Theme, or `room theme flat|clean`. Flat stays the default; each browser keeps its own choice.

@@ -43,6 +43,8 @@ Later, open the room from Spotlight ("Squiggles"). Server log: `~/Library/Logs/s
 
 `config.json` settings: `port`, `userName`, `tailnet` (show "Share on tailnet"), `cloudflare` (show "Share on the internet": a public Cloudflare link, needs a room passcode of 8+ characters), `model` (`opus` or `sonnet`), `codex` (allow Codex models), `pi` (Pi models a squiggle may run on, as pi names them, e.g. `["provider/model"]`; needs the pi CLI with its own keys), `piExtensions` (pi extensions to load, e.g. one that adds a provider), `cursor` (Cursor models a squiggle may run on, as `cursor-agent` names them; needs the Cursor CLI signed in, and its Downloads/Desktop/Documents fence added once with `node ~/squiggles/cursor/install.mjs`, which your own Cursor ignores), `fileSources` (extra read-only folders for `files`, e.g. `{"notes": "~/notes"}`). Restart after editing: `node ~/squiggles/bin/agents.mjs restart`.
 
+Pi and Cursor squiggles have no approval step: every tool call runs as you, including git push and deploys, and the Permissions setting doesn't apply. Their Downloads/Desktop/Documents hook is a rough fence, not a sandbox. Give them only work you'd let run unattended.
+
 The lead and you share one CLI: `node ~/squiggles/bin/agents.mjs` (run it with no arguments for usage).
 
 ## Upgrade

@@ -1080,3 +1080,5 @@ html[data-theme=clean] input[type=range], html[data-theme=clean] input[type=chec
 html[data-theme=clean] input[type=search]::-webkit-search-cancel-button { filter: grayscale(1) }
 html[data-theme=clean] .note textarea:focus-visible { box-shadow: none !important }
 html[data-theme=clean] .note:focus-within { box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 50%, transparent) }
+
+.permnote { display: block; margin-top: 6px; font-size: 12px; line-height: 1.4; color: var(--dim) } .permnote:empty { display: none }
