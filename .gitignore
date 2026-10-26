@@ -11,3 +11,4 @@ meetings.json
 .DS_Store
 node_modules/
 bin/calendar-reader
+bin/CalendarReader.app/

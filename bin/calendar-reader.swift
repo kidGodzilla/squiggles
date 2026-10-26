@@ -58,7 +58,7 @@ case "status":
 case "allow":
   let sem = DispatchSemaphore(value: 0); var ok = false, err: Error?
   store.requestFullAccessToEvents { g, e in ok = g; err = e; sem.signal() }
-  if sem.wait(timeout: .now() + 120) == .timedOut { fail("No answer to the calendar prompt within 2 minutes.", 2) }
+  if sem.wait(timeout: .now() + 300) == .timedOut { fail("No answer to the calendar prompt within 5 minutes.", 2) }
   if let err = err { fail("Calendar access request failed: \(err.localizedDescription)", 2) }
   if !ok { fail("Calendar access denied. Allow it in System Settings, Privacy & Security, Calendars.", 2) }
   out(["status": status()])

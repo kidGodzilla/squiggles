@@ -362,16 +362,37 @@ const cmds = {
   // Dates YYYY-MM-DD, today or tomorrow; to is inclusive. Only `allow` shows the macOS prompt.
   // --notes adds location and notes, which the invite's sender wrote (t925): fenced and line-prefixed as untrusted data.
   calendar: async () => {
-    const { execFileSync } = await import('node:child_process'), fs = await import('node:fs'), dir = new URL('.', import.meta.url).pathname;
-    const bin = dir + 'calendar-reader', src = bin + '.swift';
-    if (!fs.existsSync(bin) || fs.statSync(bin).mtimeMs < fs.statSync(src).mtimeMs)
-      execFileSync('swiftc', ['-O', src, '-o', bin, '-Xlinker', '-sectcreate', '-Xlinker', '__TEXT', '-Xlinker', '__info_plist', '-Xlinker', bin + '.plist'], { stdio: 'inherit' });
+    const { execFileSync } = await import('node:child_process'), fs = await import('node:fs'), os = await import('node:os'), dir = new URL('.', import.meta.url).pathname;
+    // Its own .app, started by `open`: LaunchServices makes the app the responsible process, so one Allow covers
+    // your terminal and the server's squiggles alike (a bare binary's grant went to whichever app launched it).
+    const src = dir + 'calendar-reader.swift', plist = dir + 'calendar-reader.plist', app = dir + 'CalendarReader.app', exe = app + '/Contents/MacOS/calendar-reader';
+    if (!fs.existsSync(exe) || fs.statSync(exe).mtimeMs < Math.max(fs.statSync(src).mtimeMs, fs.statSync(plist).mtimeMs)) {
+      fs.mkdirSync(app + '/Contents/MacOS', { recursive: true });
+      fs.writeFileSync(app + '/Contents/Info.plist', fs.readFileSync(plist, 'utf8').replace('</dict>', '<key>CFBundleExecutable</key><string>calendar-reader</string><key>CFBundlePackageType</key><string>APPL</string><key>LSUIElement</key><true/>\n</dict>'));
+      execFileSync('swiftc', ['-O', src, '-o', exe], { stdio: 'inherit' });
+      execFileSync('codesign', ['--force', '--sign', '-', app], { stdio: 'inherit' });
+      execFileSync('/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister', ['-f', app]); // else the first open after a rebuild fails
+    }
+    const run = (argv) => {
+      const t = fs.mkdtempSync(os.tmpdir() + '/calreader-'), o = t + '/out', e = t + '/err';
+      try {
+        let failed; try { execFileSync('open', ['-W', '-n', ...(argv[0] === 'allow' ? [] : ['-g']), '-a', app, '--stdout', o, '--stderr', e, '--args', ...argv], { stdio: 'ignore', timeout: argv[0] === 'allow' ? 330000 : 60000 }); } catch (x) { failed = x; } // -W passes on the reader's exit code
+        const errText = () => (fs.existsSync(e) ? fs.readFileSync(e, 'utf8').trim() : '');
+        const answer = () => { try { const v = fs.readFileSync(o, 'utf8'); JSON.parse(v); return v; } catch { return ''; } };
+        // A reader that exits before open finds its pid makes open say "Unable to block on application", sometimes failing,
+        // though the answer is written (or about to be): wait for it rather than trusting open's exit code.
+        for (const until = Date.now() + (argv[0] === 'allow' ? 330000 : 10000); !answer() && !errText() && Date.now() < until;) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
+        const err = errText();
+        if (err) { let m = err; try { m = JSON.parse(err).error; } catch {} throw new Error(m); }
+        const v = answer(); if (v) return v;
+        throw failed || new Error('the calendar reader gave no answer');
+      } finally { fs.rmSync(t, { recursive: true, force: true }); }
+    };
     const json = a.includes('--json'), notes = a.includes('--notes'), r = a.filter((x) => x !== '--json' && x !== '--notes'), day = (x) => x === 'today' || x === 'tomorrow' || /^\d{4}-\d{2}-\d{2}$/.test(x);
     const iso = (x) => { if (x !== 'today' && x !== 'tomorrow') return x; const d = new Date(); if (x === 'tomorrow') d.setDate(d.getDate() + 1); return d.toLocaleDateString('sv'); };
     const sub = ['status', 'allow', 'list'].includes(r[0]) ? r[0] : 'events', dates = r.filter(day).map(iso), cal = sub === 'events' && r.find((x) => !day(x));
     const argv = sub === 'list' ? ['calendars'] : sub !== 'events' ? [sub] : ['events', ...(dates[0] ? ['--from', dates[0]] : []), ...(dates[1] ? ['--to', dates[1]] : []), ...(cal ? ['--calendar', cal] : []), ...(notes ? ['--notes'] : [])];
-    let v; try { v = JSON.parse(execFileSync(bin, argv, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })); }
-    catch (e) { let m = e.message; try { m = JSON.parse(e.stderr).error; } catch {} throw new Error(m); }
+    const v = JSON.parse(run(argv));
     if (json || sub === 'status' || sub === 'allow') return sub === 'status' || sub === 'allow' ? (json ? v : `calendar access: ${v.status}`) : v;
     if (sub === 'list') { const { oneLine } = await import('../calendar.mjs'); return v.map((c) => oneLine(`${c.title}  (${c.source}, ${c.type})`)).join('\n') || 'no calendars'; }
     return (await import('../calendar.mjs')).eventsText(v);
