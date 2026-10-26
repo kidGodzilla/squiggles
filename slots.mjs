@@ -1,4 +1,4 @@
-// Provider slots: at most N turns run at once on a provider, config.json `slots` ({ claude: 6, codex: 2 }).
+// Provider slots: at most N turns run at once on a provider, room.json `slots` ({ claude: 6, codex: 2 }).
 // No entry means DEFAULT_SLOTS; 0 means no cap.
 // A turn that would start on a full provider waits in line and starts when one ends,
 // so a capped provider works through its backlog in turn instead of all at once. The lead and you never wait.

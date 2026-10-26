@@ -16,7 +16,8 @@ import { createAsks, runAsk } from './asks.mjs';
 import { createPicks } from './picks.mjs';
 import { createWaits } from './waits.mjs';
 import { mimeFor } from './mime.mjs';
-import { trustLevel, trustOf, trustRules, updateRefusal, createRefusal, quitRefusal, fileRmRefusal, fileBy } from './trust.mjs';
+import { trustLevel, trustOf, trustRules, updateRefusal, createRefusal, quitRefusal, slotsRefusal, fileRmRefusal, fileBy } from './trust.mjs';
+import { KEYS, DEFAULT_SLOTS, slotKey, rankOf, limitOf, enqueue, drain, leave, checkSlots } from './slots.mjs';
 import { dropStale } from './stale.mjs';
 import { createLedger } from './cost.mjs';
 import { load as ownerLoad } from './load.mjs';
@@ -124,7 +125,7 @@ const R = (id) => {
 function saveState() {
   const out = {};
   for (const [id, { proc, caff, cx, cxThread, cxLast, sig, subs, ...r }] of rt) out[id] = r;
-  for (const k of ['*meeting', '*started', '*held', '*warned']) if (persisted[k]) out[k] = persisted[k];
+  for (const k of ['*meeting', '*started', '*held', '*warned', '*slots']) if (persisted[k]) out[k] = persisted[k];
   fs.writeFileSync(STATE, JSON.stringify(out, null, 2));
 }
 
@@ -447,7 +448,7 @@ async function codexTurn(s, prompt, images = []) {
   } catch (e) { emit(s.id, { k: 'log', text: shortEv(e.message) }); end(e.message, true); }
 }
 // from 'owner' means a person on the page; human says which one (humans.json), and the squiggle reads 'From <name>: '.
-function send(id, text, from = 'owner', { replay = false, human, images = [], asker } = {}) {
+function send(id, text, from = 'owner', { replay = false, human, images = [], asker, slot = false } = {}) {
   const s = loadSquiggle(id);
   if (!s) throw new Error(`no squiggle ${id}`);
   const r = R(id);
@@ -462,6 +463,17 @@ function send(id, text, from = 'owner', { replay = false, human, images = [], as
     if (from === 'owner') { clearTimeout(hold.t); hold.t = setTimeout(capHold, hold.held()); }
     emit(id, { k: 'user', text, from, ...(human && { human }), ...(images.length && { imgs: images.map((f) => `/files/${f}`) }) }); emit(id, { k: 'log', text: 'held until the restart' });
     setTimeout(maybeRestart, 500); return;
+  }
+  // Provider slots (slots.mjs): a turn that would start on a full provider waits in line. Mid-turn messages, the lead and you go through.
+  if (!slot && r.status !== 'working' && !s.lead && from !== 'owner') {
+    const key = slotKey(providerOf(s)), max = limitOf(roomCfg(), key), busy = slotsBusy(key);
+    if (max && busy >= max) {
+      enqueue(persisted['*slots'] ||= [], { id, key, rank: rankOf(from, listSquiggles().find((x) => x.lead)?.id), at: Date.now(), text, from, human, images, asker });
+      if (!replay) emit(id, { k: 'user', text, from, ...(human && { human }), ...(images.length && { imgs: images.map((f) => `/files/${f}`) }) });
+      emit(id, { k: 'log', text: `waiting for a ${key} slot (${busy} of ${max} busy)` });
+      setStatus(id, r.status, `waiting for a ${key} slot`); broadcast('*room', { k: 'room', action: 'slots' });
+      return;
+    }
   }
   const who = from === 'owner' && (humans.all().find((h) => h.id === (human || 'owner')) || { id: human, name: human });
   let content = (who ? `From ${who.name}: ${text}` : text) + (images.length ? `\n\n(Attached: ${images.map((f) => path.join(FILES, f)).join(', ')})` : '');
@@ -575,7 +587,7 @@ function wake(id, why = 'scheduled', asker = '') {
   const s = loadSquiggle(id);
   if (!s || R(id).status === 'working') return false;
   let news = []; try { news = board.suggestionNews(id); } catch {}
-  send(id, `Wake (${why}), ${new Date().toLocaleString()}. Read your charter and the end of your journal, decide the single most valuable thing to do now, do it, verify it, append a dated journal entry, then end with a status line. You have ${s.maxTurns ?? 40} turns this wake; journal findings as you confirm them.${news.length ? `\n\nYour suggestions, decided by the lead:\n${news.map((x) => `- ${x}`).join('\n')}` : ''}`, 'harness', { asker });
+  send(id, `Wake (${why}), ${new Date().toLocaleString()}. Read your charter and the end of your journal, decide the single most valuable thing to do now, do it, verify it, append a dated journal entry, then end with a status line. You have ${s.maxTurns ?? 40} turns this wake; journal findings as you confirm them.${limitOf(roomCfg(), slotKey(providerOf(s))) ? ' Your provider runs a few turns at a time, so your next turn may start much later: leave work resumable, and file a wait rather than checking back.' : ''}${news.length ? `\n\nYour suggestions, decided by the lead:\n${news.map((x) => `- ${x}`).join('\n')}` : ''}`, 'harness', { asker });
   return true;
 }
 
@@ -622,6 +634,7 @@ function turnEnded(s, text, isError, subtype) {
     flushInbox();
   }
   if (s.lead) flushInbox();
+  drainSlots();
   setTimeout(maybeRestart, 1000);
 }
 function flushInbox() {
@@ -753,7 +766,35 @@ function shutdown(code, unload, cause) {
 function stop(id) {
   const r = R(id);
   if (r.proc) r.proc.kill('SIGTERM');
+  if (persisted['*slots'] && leave(persisted['*slots'], id)) { saveState(); broadcast('*room', { k: 'room', action: 'slots' }); }
   setStatus(id, 'idle', 'stopped');
+}
+
+// ---------- provider slots: at most N turns at once per provider (slots.mjs) ----------
+const slotsBusy = (key) => listSquiggles().filter((x) => slotKey(providerOf(x)) === key && R(x.id).status === 'working').length;
+const slotWaiting = (id) => !!persisted['*slots']?.some((x) => x.id === id);
+function drainSlots() {
+  const line = persisted['*slots']; if (!line?.length) return;
+  const cfg = roomCfg(), n = line.length;
+  const started = drain(line, {
+    limit: (key) => limitOf(cfg, key), busy: slotsBusy,
+    keyOf: (e) => { const s = loadSquiggle(e.id); return s && slotKey(providerOf(s)); },
+    gone: (e) => { const s = loadSquiggle(e.id); return !s || (s.paused && e.from === 'harness'); },
+    start: (e) => { saveState(); try { send(e.id, e.text, e.from, { replay: true, slot: true, human: e.human, images: e.images || [], asker: e.asker }); } catch (err) { console.error('slot', e.id, err.message); } },
+  });
+  if (!line.length) delete persisted['*slots'];
+  if (started.length || line.length !== n) { saveState(); broadcast('*room', { k: 'room', action: 'slots' }); }
+}
+const slotsState = () => {
+  const cfg = roomCfg(), busy = {};
+  for (const x of listSquiggles()) { const k = slotKey(providerOf(x)); if (R(x.id).status === 'working') busy[k] = (busy[k] || 0) + 1; }
+  return { keys: KEYS, limits: cfg.slots || {}, defaults: DEFAULT_SLOTS, busy, waiting: (persisted['*slots'] || []).map(({ id, key, from, at }) => ({ id, key, from, at })) };
+};
+function setSlots(b) {
+  const slots = { ...(roomCfg().slots || {}), ...checkSlots(b) };
+  for (const k of Object.keys(slots)) if (slots[k] == null) delete slots[k]; // 0 stays: no cap, over the default
+  fs.writeFileSync(ROOMCFG, JSON.stringify({ ...roomCfg(), slots }, null, 2) + '\n');
+  drainSlots(); return slotsState();
 }
 
 // ---------- scheduler: squiggles wake themselves on their cadence ----------
@@ -763,9 +804,10 @@ setInterval(() => {
   const all = listSquiggles();
   const newest = {};
   for (const s of all) { const t = Date.parse(R(s.id).lastWake || 0) || 0; const p = providerOf(s); if (!(newest[p] > t)) newest[p] = t; }
+  drainSlots(); // a raised cap, or a turn that ended without turnEnded (its process died)
   const started = new Set();
   for (const s of all) {
-    if (s.lead || s.paused || !(s.every > 0)) continue;
+    if (s.lead || s.paused || !(s.every > 0) || slotWaiting(s.id)) continue;
     const p = providerOf(s);
     if (started.has(p) || Date.now() - (newest[p] || 0) < 2 * 60000) continue;
     const r = R(s.id);
@@ -1245,6 +1287,13 @@ const server = http.createServer(async (req, res) => {
       if (no) return json(res, { error: no.error, ...(no.unlock && { unlock: true }) }, no.status);
       return json(res, quit(!!b.now, c || 'owner'));
     }
+    if (url.pathname === '/api/slots' && req.method === 'POST') { // the lead or the unlocked page: a squiggle can't lift its own cap
+      const b = await body(req, res), c = await callerSquiggle(req), passcode = !!roomCfg().passcode?.hash, owner = () => { try { return pass.session(req); } catch { return false; } };
+      const no = slotsRefusal({ caller: c, callerLead: !!(c && loadSquiggle(c)?.lead), owner, passcode, user: USER });
+      if (no) return json(res, { error: no.error, ...(no.unlock && { unlock: true }) }, no.status);
+      return json(res, setSlots(b));
+    }
+    if (url.pathname === '/api/slots') return json(res, slotsState());
     if (url.pathname === '/api/restart' && req.method === 'GET') return json(res, restartState());
     if (url.pathname === '/api/restart' && req.method === 'POST') {
       const b = await body(req, res), c = await callerSquiggle(req);

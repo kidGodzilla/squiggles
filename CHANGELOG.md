@@ -31,6 +31,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - An ask cut off by a server restart is marked interrupted at boot and its filer is told; its output is lost.
 
 ### Added
+- Provider slots: at most a set number of turns run at once per provider (`slots` in room.json; defaults 24 Claude, 4 Codex; 0 means no cap). A turn over the cap waits in line and starts when one ends: you first, then the lead, then squiggles, then scheduled wakes. The lead and you never wait. `GET /api/slots` shows the line; the lead or the unlocked page changes caps with `POST /api/slots`.
 - Waits on a task's status: `wait add "<what>" --task <id> --until done` wakes the squiggle when the task gets there, or if it leaves the board. Up to 7 days; durations take `d`.
 - From your terminal, a change that needs an unlocked room (squiggle settings, charters, hiring, quitting, deleting shared files) asks for the passcode, makes the change, then locks again.
 - Proactive: a squiggle that finishes a note it filed itself in a turn nobody asked for (stamped by the server) shows "Proactive" instead of Done (tile, Team, 1:1, header count, toast, `list`), and the lead's team report says which notes were its own idea.

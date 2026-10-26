@@ -66,3 +66,20 @@ test('leave takes a squiggle out of line', () => {
   const line = [{ id: 'a' }, { id: 'b' }, { id: 'a' }];
   assert.equal(leave(line, 'a'), 2); assert.deepEqual(line, [{ id: 'b' }]);
 });
+
+test('send() never queues the lead, you or a mid-turn message; only the lead or you set the caps', async () => {
+  const fs = await import('node:fs');
+  const src = fs.readFileSync(new URL('../server.mjs', import.meta.url), 'utf8');
+  assert.match(src, /if \(!slot && r\.status !== 'working' && !s\.lead && from !== 'owner'\) \{/);
+  const post = src.slice(src.indexOf("url.pathname === '/api/slots' && req.method === 'POST'"), src.indexOf("url.pathname === '/api/slots')"));
+  assert.match(post, /slotsRefusal\(\{ caller: c,/);
+  assert.match(src, /drainSlots\(\);\n  setTimeout\(maybeRestart, 1000\);/, 'a turn ending frees its slot');
+  assert.match(src, /slotWaiting\(s\.id\)\) continue;/, 'the scheduler does not wake a squiggle already in line');
+  assert.match(src.slice(src.indexOf('function stop(id)'), src.indexOf('function stop(id)') + 300), /leave\(persisted\['\*slots'\], id\)/, 'stopping leaves the line');
+  const { slotsRefusal } = await import('../trust.mjs');
+  assert.equal(slotsRefusal({ caller: 'a' }).status, 403);
+  assert.equal(slotsRefusal({ caller: 'lead', callerLead: true }), null);
+  assert.equal(slotsRefusal({}).unlock, true);
+  assert.equal(slotsRefusal({ owner: () => true }), null);
+  assert.equal(slotsRefusal({ passcode: false }), null);
+});
