@@ -98,6 +98,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Shared prompt: no routine deploy or self-check chores in review notes or needs; checking your own work after a merge is the squiggle's job.
 - Merge merges every goal repo carrying the task's branch (Repo shows "api + web"; detail lists "Also merges"). `repo:branch` accepts a goal repo's bare name.
 - Picks: `pick ask "<question>" "<option>" "<option>" [--images a,b] [--task <id>]` files a choice for the user; open picks collect on one card above the lead chat composer, options as buttons (images shown when they live in files/ or research/). A tap answers and the asker is told; the lead relays a spoken answer with `pick <id> <option>`. `picks [all]`, `pick drop <id>`. Answering needs the room passcode.
+- Settings > Defaults > Turns at once, and `slots`, set how many turns each provider runs at once.
 ### Changed
 - Every editor popup is a dialog: a title, a close button, a dimmed page behind it, only the body scrolls, and the footer keeps delete on the left and save on the right. On phones it is a bottom sheet. The task peek stays beside its note.
 - README shows a screenshot of the room.

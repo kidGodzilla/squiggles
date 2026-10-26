@@ -773,6 +773,7 @@ async function roomCommand(ev) {
   if (ev.k === 'removed') { document.getElementById('cw-' + ev.id)?.remove(); await load(); return; }
   const v = String(ev.value ?? '').toLowerCase();
   switch (ev.action) {
+    case 'slots': if (B.view === 'settings' && !document.activeElement?.closest('#setSlots')) renderSlots(); return;
     case 'defaults': if (B.view === 'settings' && !document.activeElement?.closest('#setDefaults')) renderDefaults(); return; // t898
     case 'radio': prefs.music = v !== 'off'; if (prefs.music && STATIONS.some(([s]) => s === v)) prefs.station = v; paintSound(); break;
     case 'volume': prefs.musicVol = Math.max(0, Math.min(1, +v || 0)); paintSound(); break;

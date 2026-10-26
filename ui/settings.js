@@ -26,7 +26,7 @@ function renderSettings() {
       <div class="who"><div class="tile mini">${avatarSVG(p, undefined, 'sm' + p.gid + '_')}</div><div><b>${esc(s.name)}</b><small>${mine ? `Uses ${esc(GENS[SET.gen].name)}` : `Uses ${esc(GENS[P(id).gen].name)}`}</small></div></div>
       <button class="chip" data-use="${id}"${mine && own ? ' disabled' : ''}>Use for ${esc(s.name)}</button></div>`;
   }).join('');
-  setTalk(); renderSetSqs(); renderDefaults(); renderPass();
+  setTalk(); renderSetSqs(); renderDefaults(); renderSlots(); renderPass();
 }
 // Squiggles card (t897): model, effort, cadence, paused and pack per squiggle; each change posts to /update, like the CLI's set and look.
 // Option lists shared by the Squiggles and Team defaults cards. A value outside the list (set from the CLI) is kept and shown.
@@ -63,6 +63,20 @@ $('#setDefaults').onchange = async (e) => {
   const r = await api('/defaults', { [f]: f === 'every' ? Number(e.target.value) : e.target.value });
   if (!r || r.error) { renderDefaults(); return toast(r?.error || 'Not saved'); } // put the select back
   toast('Saved team defaults');
+};
+// Turns at once: room.json slots per provider. CLI: slots.
+const SLOT_NAMES = { claude: 'Claude', codex: 'Codex' };
+async function renderSlots() {
+  const d = await api('/slots'); if (!d || d.error) return;
+  $('#setSlots').innerHTML = d.keys.map((k) => { const n = esc(SLOT_NAMES[k] || k); const w = d.waiting.filter((x) => x.key === k).length;
+    return `<label for="slot_${k}">${n}</label><span><input id="slot_${k}" data-f="${k}" type="number" min="0" step="1" placeholder="${d.defaults[k] ? `${d.defaults[k]} (default)` : 'No cap'}" value="${Object.hasOwn(d.limits, k) ? d.limits[k] : ''}"> ${d.busy[k] || 0} running${w ? `, ${w} waiting` : ''}</span>`; }).join('');
+}
+$('#setSlots').onchange = async (e) => {
+  const f = e.target.dataset.f; if (!f) return;
+  const r = await unlocked(() => api('/slots', { [f]: e.target.value === '' ? 'default' : e.target.value }), 'Unlock settings');
+  if (r === null) return renderSlots();
+  if (!r || r.error) { renderSlots(); return toast(r?.error || 'Not saved'); }
+  renderSlots(); toast('Saved turns at once');
 };
 // Trust: how far a squiggle acts on its own ideas; rules in trust.mjs. CLI: set <id> trust <level>.
 const TRUST_OPTS = [['low', 'Low'], ['medium', 'Medium'], ['high', 'High'], ['veryhigh', 'Very high']];
