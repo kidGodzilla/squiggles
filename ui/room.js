@@ -254,8 +254,8 @@ function thought(id, em) { const t = tileOf(id); if (!t) return; const el = t.qu
 function pop(id) { const t = tileOf(id); if (t) { t.classList.remove('pop'); void t.offsetWidth; t.classList.add('pop'); } }
 function oops(id) { const t = tileOf(id); if (t) { t.classList.remove('oops'); void t.offsetWidth; t.classList.add('oops'); } }
 function toast(msg) { const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg;
-  // Over an open sheet or dialog the room's corner is covered (or hidden): toasts go to a layer above it.
-  const c = document.querySelector('.overlay.on') ? $('#otoasts') || document.body.appendChild(Object.assign(document.createElement('div'), { id: 'otoasts' })) : $('#toasts'); c.appendChild(t); while (c.children.length > 3) c.firstChild.remove(); setTimeout(() => t.remove(), 3500); }
+  // Over an open sheet or dialog the room's corner is covered (or hidden): toasts go to a layer above it. Off the Room view too.
+  const c = document.querySelector('.overlay.on') || !$('#toasts').offsetParent ? $('#otoasts') || document.body.appendChild(Object.assign(document.createElement('div'), { id: 'otoasts' })) : $('#toasts'); c.appendChild(t); while (c.children.length > 3) c.firstChild.remove(); setTimeout(() => t.remove(), 3500); }
 
 // =====================================================================
 //  the shared screen, rebuilt from tool calls (adapted from agent-standup's presentation mode, MIT)
