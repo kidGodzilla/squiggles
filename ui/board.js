@@ -220,9 +220,11 @@ function showPop(anchor, html, wire) {
   pop.innerHTML = html; pop.classList.add('on');
   // Auto-growing textareas show the whole text (CSS caps them), measured before the popover is placed.
   for (const ta of pop.querySelectorAll('textarea.grow')) { const fit = () => { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 2 + 'px'; }; fit(); ta.oninput = fit; }
-  let x = r.right + 12, y = r.top;
-  if (x + 312 > innerWidth) x = r.left - 312;
-  pop.style.left = Math.max(8, x) + 'px'; pop.style.top = Math.max(60, Math.min(innerHeight - pop.offsetHeight - 10, y)) + 'px';
+  // Beside the anchor, else the other side, else below it; CSS caps the height so it always fits and scrolls inside.
+  const w = pop.offsetWidth; let x = r.right + 12, y = r.top;
+  if (x + w > innerWidth - 8) x = r.left - w - 12;
+  if (x < 8) { x = Math.min(Math.max(8, r.left), innerWidth - w - 8); y = r.bottom + 8; }
+  pop.scrollTop = 0; pop.style.left = Math.max(8, x) + 'px'; pop.style.top = Math.max(60, Math.min(innerHeight - pop.offsetHeight - 10, y)) + 'px';
   wire(pop); pop.querySelector('input,textarea')?.focus();
 }
 function closePop() { $('#pop').classList.remove('on', 'tpop-on'); }
