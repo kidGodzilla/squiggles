@@ -102,6 +102,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Picks: `pick ask "<question>" "<option>" "<option>" [--images a,b] [--task <id>]` files a choice for the user; open picks collect on one card above the lead chat composer, options as buttons (images shown when they live in files/ or research/). A tap answers and the asker is told; the lead relays a spoken answer with `pick <id> <option>`. `picks [all]`, `pick drop <id>`. Answering needs the room passcode.
 - Settings > Defaults > Turns at once, and `slots`, set how many turns each provider runs at once.
 ### Changed
+- The tab icon has a deeper tile and a faint edge, so it holds at 16px on a white tab bar.
 - Every editor popup is a dialog: a title, a close button, a dimmed page behind it, only the body scrolls, and the footer keeps delete on the left and save on the right. On phones it is a bottom sheet. The task peek stays beside its note.
 - README shows a screenshot of the room.
 - `restart` is refused when no server code or `config.json` changed since the server started (UI changes need only `room reload`, prompts the next wake). `restart force` restarts anyway.
