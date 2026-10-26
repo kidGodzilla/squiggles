@@ -210,8 +210,8 @@ main { flex: 1; display: flex; min-height: 0 }
 .panel input:focus, .panel textarea:focus { border-color: var(--accent) }
 .panel textarea { min-height: 110px; resize: vertical }
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px }
-.actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px }
-.btn { height: 34px; padding: 0 14px; border-radius: 10px; background: var(--panel2); border: 1px solid var(--line) } .btn:hover { border-color: var(--accent) }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; margin-top: 18px }
+.btn { height: 34px; padding: 0 14px; white-space: nowrap; border-radius: 10px; background: var(--panel2); border: 1px solid var(--line) } .btn:hover { border-color: var(--accent) }
 .btn.go { background: var(--accent); color: #0d1020; font-weight: 600; border-color: transparent } .btn.danger { color: var(--red) }
 .shead { display: flex; gap: 14px; align-items: center } .shead .tile { width: 132px; height: 99px; flex: none; cursor: default; animation: none }
 .shead small { display: block; color: var(--dim) }
