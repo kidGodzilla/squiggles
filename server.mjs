@@ -1020,7 +1020,7 @@ async function shareCloudflare(on) {
   if (!tunnel) throw new Error('Cloudflare sharing is off: set "cloudflare": true in config.json');
   if (on && !cfReady()) throw new Error(`Set a room passcode of ${MIN_CODE}+ characters first (Settings > Security): the link is on the public internet`);
   setRoom('cloudflare', !!on);
-  if (on) await tunnel.start(); else tunnel.stop();
+  if (on) { if (!(await tunnel.start()).on) setRoom('cloudflare', false); } else tunnel.stop(); // a failed start isn't reopened on boot
   return shareStatus();
 }
 

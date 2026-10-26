@@ -32,7 +32,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - An ask cut off by a server restart is marked interrupted at boot and its filer is told; its output is lost.
 
 ### Added
-- Share over a Cloudflare quick tunnel without Tailscale: `"cloudflare": true` in config.json, then `POST /api/share {"via":"cloudflare","on":true}`. Needs `cloudflared`. Reopens after a restart at a new URL.
+- Share without Tailscale: Settings > Sharing > Cloudflare and `share cloudflare on|off|status` open a public Cloudflare quick tunnel link (`"cloudflare": true` in config.json; needs `cloudflared`). Reopens after a restart at a new link.
 - The app icon, favicon and header logo are your lead in a rounded square, and follow its look when you change it. New workspaces' lead starts with the face on the shipped icon.
 - Clean theme: a plain black and white look in the style of shadcn/ui that follows your system light or dark mode. Settings > Room > Theme, or `room theme flat|clean`. Flat stays the default; each browser keeps its own choice.
 - Provider slots: at most a set number of turns run at once per provider (`slots` in room.json; defaults 24 Claude, 4 Codex; 0 means no cap). A turn over the cap waits in line and starts when one ends: you first, then the lead, then squiggles, then scheduled wakes. The lead and you never wait. `GET /api/slots` shows the line; the lead or the unlocked page changes caps with `POST /api/slots`.

@@ -11,7 +11,7 @@ A fresh room has only the lead. It asks your name and what you work on, turns th
 - macOS
 - Node 20 or newer
 - [Claude Code](https://claude.com/claude-code), logged in (`claude` on your PATH)
-- Optional: Google Chrome (draws the app icon), Tailscale (share the room on your tailnet)
+- Optional: Google Chrome (draws the app icon), Tailscale (share the room on your tailnet), cloudflared (`brew install cloudflared`: share a public link without Tailscale)
 
 Every wake is a Claude Code session and counts against your plan's usage.
 
@@ -41,7 +41,7 @@ Later, open the room from Spotlight ("Squiggles"). Server log: `~/Library/Logs/s
 | `~/squiggles` | the code; `upgrade` updates it (below) |
 | `~/.squiggles` | your room: `config.json`, squiggles, charters, journals, board (override with `SQUIGGLES_HOME`) |
 
-`config.json` settings: `port`, `userName`, `tailnet` (show "Share on tailnet"), `model` (`opus` or `sonnet`), `codex` (allow Codex models), `fileSources` (extra read-only folders for `files`, e.g. `{"notes": "~/notes"}`). Restart after editing: `node ~/squiggles/bin/agents.mjs restart`.
+`config.json` settings: `port`, `userName`, `tailnet` (show "Share on tailnet"), `cloudflare` (show "Share on the internet": a public Cloudflare link, needs a room passcode of 8+ characters), `model` (`opus` or `sonnet`), `codex` (allow Codex models), `fileSources` (extra read-only folders for `files`, e.g. `{"notes": "~/notes"}`). Restart after editing: `node ~/squiggles/bin/agents.mjs restart`.
 
 The lead and you share one CLI: `node ~/squiggles/bin/agents.mjs` (run it with no arguments for usage).
 

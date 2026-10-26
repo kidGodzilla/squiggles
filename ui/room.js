@@ -999,10 +999,16 @@ paintSound();
 // Share on tailnet (tailscale serve): the toggle and its link in More. CLI: share on|off|status.
 // Only Copy link shows (t837); the URL rides on the button.
 // Tailnet sharing off in config: the Sharing tab (Sharing and Peers cards) is hidden.
-function paintShare(st) { B.shareOff = !!st?.off; $('.settabs [data-stab="sharing"]').hidden = B.shareOff; if (B.shareOff && B.stab === 'sharing' && typeof paintSetTab === 'function') paintSetTab(); if (typeof loadPeers === 'function' && !B.shareOff && !!st?.on !== $('#shareOn').checked) loadPeers(); $('#shareOn').checked = !!st?.on; $('#shareCopy').hidden = !st?.on; $('#shareCopy').dataset.url = st?.url || ''; }
+// Cloudflare (tunnel.mjs) gets its own row; each row hides when config.json doesn't offer it.
+function paintShare(st) { paintCf(st?.cloudflare); $('#shareTs').hidden = $('#shareTsHint').hidden = !!st?.tailnetOff; B.shareOff = !!st?.off; $('.settabs [data-stab="sharing"]').hidden = B.shareOff; if (B.shareOff && B.stab === 'sharing' && typeof paintSetTab === 'function') paintSetTab(); if (typeof loadPeers === 'function' && !B.shareOff && !!st?.on !== $('#shareOn').checked) loadPeers(); $('#shareOn').checked = !!st?.on; $('#shareCopy').hidden = !st?.on; $('#shareCopy').dataset.url = st?.url || ''; }
+function paintCf(cf) {
+  $('#shareCf').hidden = $('#shareCfHint').hidden = !cf || !!cf.off; if (!cf || cf.off) return;
+  $('#shareCfOn').checked = !!(cf.on || cf.starting); $('#shareCfCopy').hidden = !cf.on; $('#shareCfCopy').dataset.url = cf.url || '';
+  $('#shareCfSt').textContent = cf.starting ? 'Starting…' : cf.error || '';
+}
 async function loadShare() { const r = await fetch('/api/share').then((x) => x.json()).catch(() => null); if (r && !r.error) paintShare(r); }
 // Copy the tailnet link (t149). The clipboard API needs a secure page (localhost or https); otherwise copy through a selection.
-$('#shareCopy').onclick = async (e) => {
+$('#shareCopy').onclick = $('#shareCfCopy').onclick = async (e) => {
   const b = e.currentTarget, url = b.dataset.url;
   try { await navigator.clipboard.writeText(url); } catch { const t = document.createElement('textarea'); t.value = url; document.body.append(t); t.select(); document.execCommand('copy'); t.remove(); }
   b.textContent = 'Copied'; clearTimeout(b.t); b.t = setTimeout(() => (b.textContent = 'Copy link'), 1500);
@@ -1012,6 +1018,14 @@ $('#shareOn').onchange = async (e) => {
   const r = await fetch('/api/share', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ on }) }).then((x) => x.json()).catch((er) => ({ error: er.message }));
   e.target.disabled = false;
   if (r.error) { toast(r.error); loadShare(); } else { paintShare(r); toast(r.on ? 'Shared on the tailnet' : 'No longer shared'); }
+};
+// Public: the server wants this device unlocked (never a squiggle), so turning it on may ask for the passcode.
+$('#shareCfOn').onchange = async (e) => {
+  const on = e.target.checked; e.target.disabled = true; $('#shareCfSt').textContent = on ? 'Starting…' : '';
+  const r = await unlocked(() => api('/share', { via: 'cloudflare', on }), 'Unlock to share');
+  e.target.disabled = false;
+  if (!r || r.error) { if (r?.error) toast(r.error); return loadShare(); }
+  paintShare(r); toast(r.cloudflare?.on ? 'Shared on the internet' : r.cloudflare?.error || 'No longer shared on the internet');
 };
 $('#newBtn').onclick = () => { closeMore(); openNew(); };
 // More: secondary header controls behind a chevron so the tabs never overflow.

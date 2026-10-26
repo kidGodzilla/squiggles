@@ -105,9 +105,13 @@
       </section>
       <section class="setcard" role="tabpanel" data-stab="sharing">
         <h2>Sharing</h2>
-        <p class="sethint">Anyone on the tailnet can open the room. CLI: <code>share on|off|status</code>.</p>
-        <div class="setform">
+        <p class="sethint" id="shareTsHint">Anyone on the tailnet can open the room. CLI: <code>share on|off|status</code>.</p>
+        <div class="setform" id="shareTs">
           <label for="shareOn">Tailnet</label><span><input type="checkbox" id="shareOn"> <label for="shareOn">Share the room</label> <button class="chip" id="shareCopy" hidden>Copy link</button></span>
+        </div>
+        <p class="sethint" id="shareCfHint">A public link through Cloudflare: anyone with it reaches the lock screen. Needs <code>cloudflared</code> and a passcode of 8+ characters; a restart gives a new link. CLI: <code>share cloudflare on|off|status</code>.</p>
+        <div class="setform" id="shareCf">
+          <label for="shareCfOn">Cloudflare</label><span><input type="checkbox" id="shareCfOn"> <label for="shareCfOn">Share on the internet</label> <button class="chip" id="shareCfCopy" hidden>Copy link</button> <span class="sharest" id="shareCfSt"></span></span>
         </div>
       </section>
       <section class="setcard" id="setPeers" role="tabpanel" data-stab="sharing">
