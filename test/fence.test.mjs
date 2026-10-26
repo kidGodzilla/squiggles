@@ -39,3 +39,10 @@ test('fence: ~/.ssh and git push', () => {
   assert.equal(check({ tool_input: { command: 'git push' }, cwd: '/tmp/w' }), REASONS.push);
   assert.equal(check({ tool_input: { file_path: `${H}/.ssh/id_rsa` }, cwd: '/tmp/w' }), REASONS.ssh);
 });
+
+test('fence: quotes, backslashes and a bare cd', () => {
+  for (const c of ['cat ~/Down"loads"/x', "cat ~/'Desk'top/a", 'cat ~/D\\ocuments/a', 'cd; ls Docu*', 'cd ~/ && ls De*', 'cd $HOME; cat Do*/x', 'x=$(cd; ls D*)'])
+    assert.ok(fencedCommand(c, '/tmp/w'), c);
+  for (const c of ['cd; cat .ssh/id_rsa', 'cat ~/".ssh"/config', 'g"it" push', 'git pu\\sh']) assert.ok(commandReason(c, '/tmp/w'), c);
+  for (const c of ['cd src && ls *.js', 'cd; ls *.md', 'echo "push it"', 'cd ~/code; git status']) assert.equal(commandReason(c, '/tmp/w'), '', c);
+});

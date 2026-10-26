@@ -26,10 +26,16 @@ export function mentionsHome(text, home = os.homedir(), names = DIRS) {
   return false;
 }
 export const mentionsSsh = (text, home = os.homedir()) => mentionsHome(text, home, ['.ssh']);
+// Shell commands are matched after dropping quotes and backslashes (~/Down"loads", D\ocuments), and a bare cd
+// (or cd ~, cd $HOME) counts as running from home.
+const unquote = (cmd) => String(cmd).replace(/\\\n/g, '').replace(/["'\\]/g, '');
+const startsHome = (cmd, cwd, home) => path.resolve(cwd).toLowerCase() === home.toLowerCase()
+  || new RegExp(`(^|[;&|(\`]|\\$\\()\\s*(cd|pushd)(\\s+(~|\\$HOME|\\$\\{HOME\\}|${esc(home)})/?)?\\s*($|[;&|)])`, 'im').test(cmd);
 // A shell command, also: any word naming one of the folders (cd ~ && cat Downloads/x), and, run from home, a bare glob (D*).
 export function fencedCommand(cmd, cwd = process.cwd(), home = os.homedir()) {
+  cmd = unquote(cmd);
   if (mentionsHome(cmd, home) || /(^|[^a-z0-9_.-])(downloads|desktop|documents)([^a-z0-9_.-]|$)/i.test(cmd)) return true;
-  if (path.resolve(cwd).toLowerCase() === home.toLowerCase()) for (const t of cmd.split(/[\s;|&()<>"'=]+/)) if (globHits(t.split('/')[0])) return true;
+  if (startsHome(cmd, cwd, home)) for (const t of cmd.split(/[\s;|&()<>=`]+/)) if (globHits(t.split('/')[0])) return true;
   return false;
 }
 // git [-C dir] [-c k=v] [--flags] push, anywhere in a chain or subshell.
@@ -40,7 +46,7 @@ export function pathReason(p, cwd = process.cwd(), home = os.homedir()) {
 }
 export function commandReason(cmd, cwd = process.cwd(), home = os.homedir()) {
   if (fencedCommand(cmd, cwd, home)) return REASONS.dirs;
-  const atHome = path.resolve(cwd).toLowerCase() === home.toLowerCase();
-  if (mentionsSsh(cmd, home) || (atHome && /(^|[\s'"=;&|(])\.ssh\b/i.test(cmd))) return REASONS.ssh;
+  cmd = unquote(cmd);
+  if (mentionsSsh(cmd, home) || (startsHome(cmd, cwd, home) && /(^|[\s=;&|(`])\.ssh\b/i.test(cmd))) return REASONS.ssh;
   return pushes(cmd) ? REASONS.push : '';
 }
