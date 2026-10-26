@@ -87,10 +87,10 @@ test('the tunnel dies with the server, and a pid file ends one a killed server l
   t.stop(); await new Promise((r) => setTimeout(r, 300));
   assert.throws(() => process.kill(pid, 0), 'stop ends the child');
   assert.equal(fs.existsSync(pidFile), false, 'and clears its pid file');
-  // A leftover: a copy of sleep named cloudflared, so ps shows that name.
+  // A leftover: a script named cloudflared (ps shows "/bin/sh …/cloudflared"). It loops on short sleeps so killing it leaves nothing behind.
   const { spawn } = await import('node:child_process');
-  const fake = path.join(dir, 'cloudflared'); fs.copyFileSync('/bin/sleep', fake); fs.chmodSync(fake, 0o755);
-  const orphan = spawn(fake, ['30'], { detached: true, stdio: 'ignore' }); orphan.unref();
+  const fake = path.join(dir, 'cloudflared'); fs.writeFileSync(fake, '#!/bin/sh\nwhile :; do sleep 1; done\n', { mode: 0o755 });
+  const orphan = spawn(fake, [], { detached: true, stdio: 'ignore' }); orphan.unref();
   await new Promise((r) => setTimeout(r, 200));
   fs.writeFileSync(pidFile, String(orphan.pid));
   assert.equal(killStale(pidFile), true); await new Promise((r) => setTimeout(r, 300));

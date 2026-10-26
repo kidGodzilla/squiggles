@@ -1,13 +1,13 @@
-// Provider slots: at most N turns run at once on a provider, room.json `slots` ({ claude: 6, codex: 2 }).
+// Provider slots: at most N turns run at once on a provider, room.json `slots` ({ claude: 6, codex: 2, pi: 2 }).
 // No entry means DEFAULT_SLOTS; 0 means no cap.
 // A turn that would start on a full provider waits in line and starts when one ends,
 // so a capped provider works through its backlog in turn instead of all at once. The lead and you never wait.
-export const KEYS = ['claude', 'codex'];
+export const KEYS = ['claude', 'codex', 'pi'];
 export const slotKey = (provider) => provider || 'claude';
 // Who goes first when a slot frees: you, then the lead, then a squiggle, then the harness (scheduled wakes, reports).
 export const rankOf = (from, leadId) => (from === 'owner' ? 0 : from === leadId ? 1 : from === 'harness' ? 3 : 2);
 // Defaults sit well above what a busy room runs at once, so nothing queues until you lower them.
-export const DEFAULT_SLOTS = { claude: 24, codex: 4 };
+export const DEFAULT_SLOTS = { claude: 24, codex: 4, pi: 4 };
 export const limitOf = (cfg, key) => {
   const set = cfg?.slots && Object.hasOwn(cfg.slots, key), n = set ? cfg.slots[key] : DEFAULT_SLOTS[key];
   return Number.isInteger(n) && n > 0 ? n : 0;

@@ -50,7 +50,7 @@ const cmds = {
       line(s.charter, 'What you care about') && `  cares about: ${line(s.charter, 'What you care about')}`,
       line(s.charter, 'What you guard') && `  guards: ${line(s.charter, 'What you guard')}`,
       `  goals: ${goals.filter((g) => g.owner === s.id).map((g) => g.title).join('; ') || 'none'}`,
-      `  runs ${every(s.every)}, ${({ sonnet: 'Sonnet 5.5', 'gpt-6.1-sol': 'Codex 6.1 Sol' })[s.model] || 'Opus 5.5'}, ${s.permissionMode || 'auto'}, in ${s.cwd}`].filter(Boolean).join('\n')).join('\n\n');
+      `  runs ${every(s.every)}, ${({ sonnet: 'Sonnet 5.5', 'gpt-6.1-sol': 'Codex 6.1 Sol' })[s.model] || s.model || 'Opus 5.5'}, ${s.permissionMode || 'auto'}, in ${s.cwd}`].filter(Boolean).join('\n')).join('\n\n');
   },
   wake: () => call(`/squiggles/${a[0]}/wake`, { why: a[1] || 'lead' }),
   // tell <id> "<text>" [--image <path>]: the image goes to the squiggle as an image block and shows in its chat (t169).

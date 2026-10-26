@@ -111,7 +111,7 @@ function setDefaults(b) {
 function createSquiggle({ id, name, role, cwd, charter, every, permissionMode = 'auto', model }) {
   id = String(id || name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
   if (!id || fs.existsSync(sqDir(id))) throw new Error('name taken or empty');
-  checkModelEffort({ model }); const d = teamDefaults();
+  checkModelEffort({ model }, PI_MODELS); const d = teamDefaults();
   saveSquiggle({ id, name, role, cwd: cwd || '~', every: every == null || every === '' ? d.every : Number(every) || 0, permissionMode, model: model || d.model || undefined, effort: d.effort || undefined, paused: false, created: now() });
   fs.writeFileSync(path.join(sqDir(id), 'charter.md'), (charter || role || '').trim() + '\n');
   fs.writeFileSync(path.join(sqDir(id), 'journal.md'), `# ${name} journal\n`);
@@ -347,7 +347,9 @@ function launch(s) {
 // ---------- other providers (t165) ----------
 // Whitelist in code, not in squiggle.json: the model picks the provider, anything unlisted runs on Claude (modelFor).
 const PROVIDERS = { codex: ['gpt-6.1-sol'] };
-const providerOf = (s) => (CONFIG.codex && Object.keys(PROVIDERS).find((p) => PROVIDERS[p].includes(s.model))) || '';
+// config.pi: the Pi models the user set up in pi itself; a squiggle on one runs on pi. Team defaults stay Claude or Codex.
+const PI_MODELS = Array.isArray(CONFIG.pi) ? CONFIG.pi.map(String).filter(Boolean) : [];
+const providerOf = (s) => (CONFIG.codex && Object.keys(PROVIDERS).find((p) => PROVIDERS[p].includes(s.model))) || (PI_MODELS.includes(s.model) ? 'pi' : '');
 // A provider usage limit holds nothing (t971): the turn just ends and the next wake tries again; limits often reset early.
 // Codex: one `codex app-server` per squiggle, kept between turns, so MCP servers live on (computer use
 // keeps its window bindings, t330). Each wake is a turn on the saved thread; messages mid-turn steer it.
@@ -363,7 +365,8 @@ function capacityRetry(s) {
 }
 function codexServer(s) {
   const r = R(s.id);
-  if (r.cx) return r.cx;
+  if (r.cx && !r.cx.pi) return r.cx;
+  if (r.cx) { r.cx.on = null; r.cx.proc.kill('SIGTERM'); r.cx = null; } // the squiggle moved off pi
   const roots = [sqDir(s.id)];
   // workspace-write keeps .git read-only; the repo's git dir must be a writable root or the squiggle can't commit.
   try { roots.push(timed(`git common-dir ${s.id}`, () => execFileSync('git', ['-C', home(s.cwd), 'rev-parse', '--path-format=absolute', '--git-common-dir'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })).trim()); } catch {}
@@ -452,6 +455,76 @@ async function codexTurn(s, prompt, images = []) {
     if (ended || stopAsked) interrupt();
   } catch (e) { emit(s.id, { k: 'log', text: shortEv(e.message) }); end(e.message, true); }
 }
+// Pi: one `pi --mode rpc` per squiggle, kept between turns, on the session saved as r.piSession.
+// The harness only passes args: keys and providers are pi's own setup (config.piExtensions loads extra ones, e.g. a provider).
+const piKind = (n) => ({ bash: 'cmd', read: 'read', edit: 'edit', write: 'write', grep: 'search', find: 'search', ls: 'search' })[n] || 'tool';
+function piServer(s) {
+  const r = R(s.id);
+  if (r.cx?.pi && r.cx.model === s.model) return r.cx;
+  if (r.cx) { r.cx.on = null; r.cx.proc.kill('SIGTERM'); r.cx = null; } // another provider, or a new model: start over
+  if (!r.piSession) { r.piSession = crypto.randomUUID(); saveState(); }
+  const ext = (Array.isArray(CONFIG.piExtensions) ? CONFIG.piExtensions : []).map((e) => home(String(e)));
+  // --no-extensions: discovered extensions could wrap every tool; pi/guard.ts fences Downloads, Desktop and Documents like claude's --disallowedTools.
+  const proc = spawn(process.env.PI_BIN || 'pi', ['--mode', 'rpc', '--model', s.model, '--models', s.model, '--session-id', r.piSession,
+    '--no-extensions', ...ext.flatMap((e) => ['-e', e]), '-e', path.join(ROOT, 'pi', 'guard.ts'),
+    '--no-skills', '--no-prompt-templates', '--no-mcp', '--append-system-prompt', systemPrompt(s)],
+  { cwd: home(s.cwd), stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, AGENTS_ID: s.id } });
+  lowPriority(s, proc);
+  const cx = r.cx = { pi: true, model: s.model, proc, on: null, cmd: (m) => proc.stdin.write(JSON.stringify(m) + '\n') };
+  let buf = '';
+  proc.stdout.on('data', (chunk) => {
+    buf += chunk; let i;
+    while ((i = buf.indexOf('\n')) >= 0) {
+      const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
+      let m; try { m = JSON.parse(line); } catch { continue; }
+      cx.on?.(m);
+    }
+  });
+  proc.stderr.on('data', (d) => emit(s.id, { k: 'log', text: String(d).slice(0, 2000) }));
+  proc.stdin.on('error', () => {});
+  const gone = (error) => { r.cx = r.cx === cx ? null : r.cx; cx.on?.({ type: 'exit', error }); };
+  proc.on('error', (e) => gone(e.code === 'ENOENT' ? 'pi not found: install the pi CLI' : e.message));
+  proc.on('exit', () => gone());
+  return cx;
+}
+function piTurn(s, prompt, images = []) {
+  const r = R(s.id), cx = piServer(s), cap = s.maxTurns ?? 40;
+  let lastText = '', ended = false, cost = 0, failed = '';
+  const end = (text, err, subtype) => {
+    if (ended) return; ended = true; cx.on = null; r.proc = null; turnEnded(s, text, err, subtype);
+    if (r.queue?.length) { const q = r.queue.splice(0); saveState(); send(s.id, q.join('\n\n'), 'harness', { replay: true }); }
+  };
+  r.proc = { pid: cx.proc.pid, kill: () => cx.cmd({ type: 'abort' }), removeAllListeners() {}, steer: async (text) => { cx.cmd({ type: 'steer', message: text }); } };
+  cx.on = (m) => {
+    if (m.type === 'exit') { if (m.error) emit(s.id, { k: 'log', text: m.error }); return end(m.error || lastText || 'pi stopped', true); }
+    if (m.type === 'response' && m.success === false) { emit(s.id, { k: 'log', text: shortEv(m.error) }); if (m.command === 'prompt') end(m.error || 'pi refused the prompt', true); }
+    else if (m.type === 'tool_execution_start') {
+      const a = m.args || {}, kind = piKind(m.toolName), ev = { k: 'tool', tid: m.toolCallId, name: m.toolName, kind };
+      if (kind === 'cmd') ev.text = shortEv(a.command);
+      else if (kind === 'search' || kind === 'tool') ev.arg = JSON.stringify(a).slice(0, 300);
+      else Object.assign(ev, { file: a.path, old: a.edits?.[0]?.oldText?.slice(0, 4000), new: a.edits?.[0]?.newText?.slice(0, 4000), text: a.content?.slice(0, 4000) });
+      emit(s.id, ev);
+    } else if (m.type === 'tool_execution_end') {
+      const text = (m.result?.content || []).filter((p) => p.type === 'text').map((p) => p.text).join('\n');
+      emit(s.id, { k: 'out', tid: m.toolCallId, text: shortEv(text), err: !!m.isError, imgs: [] });
+    } else if (m.type === 'message_end' && m.message?.role === 'assistant') {
+      const msg = m.message, u = msg.usage || {};
+      const text = (msg.content || []).filter((p) => p.type === 'text').map((p) => p.text).join('\n').trim();
+      if (text) { lastText = text; emit(s.id, { k: 'say', text }); }
+      r.usage = { in: (r.usage?.in || 0) + (u.input || 0), out: (r.usage?.out || 0) + (u.output || 0) }; cost += u.cost?.total || 0;
+      if (msg.stopReason === 'error') failed = msg.errorMessage || 'pi failed';
+      if (++r.turns >= cap) { cx.cmd({ type: 'abort' }); end(lastText, true, 'error_max_turns'); }
+    } else if (m.type === 'agent_settled') {
+      if (cost) emit(s.id, { k: 'log', text: `pi cost: $${cost.toFixed(4)}` });
+      if (m.aborted) return end(lastText, true, 'interrupted');
+      if (!failed) return end(lastText, false);
+      emit(s.id, { k: 'log', text: shortEv(failed) });
+      end(failed, true, /429|rate limit|usage limit|quota/i.test(failed) ? 'provider_limit' : undefined);
+    }
+  };
+  const imgs = images.map((f) => ({ type: 'image', data: fs.readFileSync(path.join(FILES, f)).toString('base64'), mimeType: IMG[path.extname(f).toLowerCase()] || 'image/png' }));
+  cx.cmd({ id: `${s.id}-${Date.now()}`, type: 'prompt', message: prompt, ...(imgs.length && { images: imgs }) });
+}
 // from 'owner' means a person on the page; human says which one (humans.json), and the squiggle reads 'From <name>: '.
 function send(id, text, from = 'owner', { replay = false, human, images = [], asker, slot = false } = {}) {
   const s = loadSquiggle(id);
@@ -501,7 +574,7 @@ function send(id, text, from = 'owner', { replay = false, human, images = [], as
     }
     r.lastWake = now(); r.turns = 0; r.board0 = ownNotes(id);
     setStatus(id, 'working', '');
-    return codexTurn(s, content, images);
+    return providerOf(s) === 'pi' ? piTurn(s, content, images) : codexTurn(s, content, images);
   }
   if (r.proc && r.status !== 'working' && r.sig !== launchSig(s)) { const old = r.proc; r.proc = null; old.kill('SIGTERM'); emit(id, { k: 'log', text: 'settings changed: relaunching' }); }
   if (!r.proc) launch(s);
@@ -793,7 +866,7 @@ function drainSlots() {
 const slotsState = () => {
   const cfg = roomCfg(), busy = {};
   for (const x of listSquiggles()) { const k = slotKey(providerOf(x)); if (R(x.id).status === 'working') busy[k] = (busy[k] || 0) + 1; }
-  return { keys: KEYS, limits: cfg.slots || {}, defaults: DEFAULT_SLOTS, busy, waiting: (persisted['*slots'] || []).map(({ id, key, from, at }) => ({ id, key, from, at })) };
+  return { keys: KEYS.filter((k) => k !== 'pi' || PI_MODELS.length), limits: cfg.slots || {}, defaults: DEFAULT_SLOTS, busy, waiting: (persisted['*slots'] || []).map(({ id, key, from, at }) => ({ id, key, from, at })) };
 };
 function setSlots(b) {
   const slots = { ...(roomCfg().slots || {}), ...checkSlots(b) };
@@ -1353,7 +1426,7 @@ const server = http.createServer(async (req, res) => {
       const d = setDefaults(await body(req, res)); broadcast('*room', { k: 'room', action: 'defaults' }); return json(res, d);
     }
     if (url.pathname === '/api/defaults') return json(res, teamDefaults());
-    if (url.pathname === '/api/room') { const { passcode, ...c } = roomCfg(); return json(res, { ...c, fileRoots: files.SOURCES, fileReal: realRoots(), home: os.homedir() }); } // never the passcode hash; fileRoots: chat images; fileReal: the same behind symlinks (CLI paths are realpaths)
+    if (url.pathname === '/api/room') { const { passcode, ...c } = roomCfg(); return json(res, { ...c, fileRoots: files.SOURCES, fileReal: realRoots(), home: os.homedir(), piModels: PI_MODELS }); } // never the passcode hash; fileRoots: chat images; fileReal: the same behind symlinks (CLI paths are realpaths)
     if (url.pathname === '/api/board') return json(res, { goals: board.goals(), tasks: board.tasks() });
     if (url.pathname === '/api/goals' && req.method === 'POST') return json(res, board.goalOp(await body(req, res)));
     if (url.pathname === '/api/tasks' && req.method === 'POST') {
@@ -1509,7 +1582,7 @@ const server = http.createServer(async (req, res) => {
         case 'remove': return json(res, removeSquiggle(id));
         case 'update': {
           const { charter, ...meta } = b;
-          checkModelEffort(meta); // t905: only allowed models and efforts reach squiggle.json and the launch args
+          checkModelEffort(meta, PI_MODELS); // t905: only allowed models and efforts reach squiggle.json and the launch args
           if ('trust' in meta) meta.trust = trustLevel(meta.trust) ?? undefined; // the user or the lead sets it, never the squiggle itself
           const c = await callerSquiggle(req), owner = () => { try { return pass.session(req); } catch { return false; } };
           const no = updateRefusal(meta, s, { caller: c, callerLead: !!(c && loadSquiggle(c)?.lead), charter: charter != null, owner, passcode: !!roomCfg().passcode?.hash, user: USER });

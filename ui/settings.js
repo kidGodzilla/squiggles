@@ -33,7 +33,8 @@ function renderSettings() {
 const withCur = (l, cur) => (cur != null && cur !== '' && !l.includes(cur) ? [...l, cur] : l), opt = (v, cur, label) => `<option value="${esc(v)}"${String(cur ?? '') === String(v) ? ' selected' : ''}>${esc(label)}</option>`;
 const cap = (m) => ({ xhigh: 'Extra high' })[m] || m[0].toUpperCase() + m.slice(1);
 const every = (m) => (!m ? 'Only when asked' : m % 1440 === 0 ? (m === 1440 ? 'Daily' : `Every ${m / 1440} days`) : m % 60 === 0 ? (m === 60 ? 'Hourly' : `Every ${m / 60} hours`) : `Every ${m} min`);
-const modelOpts = (cur) => withCur(['', 'opus', 'sonnet', 'gpt-6.1-sol'], cur).map((m) => opt(m, cur, m ? modelName(m) : 'Default (Opus 5.5)')).join('');
+// pi: a squiggle's own model may be one of config.pi; team defaults may not.
+const modelOpts = (cur, pi) => withCur(['', 'opus', 'sonnet', 'gpt-6.1-sol', ...(pi ? S.piModels || [] : [])], cur).map((m) => opt(m, cur, m ? modelName(m) : 'Default (Opus 5.5)')).join('');
 const effortOpts = (cur, lead) => withCur(['', 'low', 'medium', 'high', 'xhigh', 'max'], cur).map((m) => opt(m, cur, m ? cap(m) : lead ? 'Default' : 'Medium (default)')).join('');
 const everyOpts = (cur) => withCur([0, 15, 30, 60, 180, 360, 720, 1440], cur || 0).sort((x, y) => x - y).map((m) => opt(m, cur || 0, every(m))).join('');
 // Passcode card (t913). CLI: room passcode.
@@ -65,7 +66,7 @@ $('#setDefaults').onchange = async (e) => {
   toast('Saved team defaults');
 };
 // Turns at once: room.json slots per provider. CLI: slots.
-const SLOT_NAMES = { claude: 'Claude', codex: 'Codex' };
+const SLOT_NAMES = { claude: 'Claude', codex: 'Codex', pi: 'Pi' };
 async function renderSlots() {
   const d = await api('/slots'); if (!d || d.error) return;
   $('#setSlots').innerHTML = d.keys.map((k) => { const n = esc(SLOT_NAMES[k] || k); const w = d.waiting.filter((x) => x.key === k).length;
@@ -87,7 +88,7 @@ function renderSetSqs() {
   $('#setSqs').innerHTML = `<table class="sqtable"><thead><tr><th scope="col">Squiggle</th><th scope="col">Model</th><th scope="col">Effort</th><th scope="col">Wakes</th><th scope="col">Trust</th><th scope="col">Pack</th><th scope="col">Paused</th></tr></thead><tbody>` + S.order.map((id) => {
     const s = S.sq[id], own = s.look ? parseLook(s.look).gen : '';
     return `<tr data-sq="${id}"><th scope="row"><span class="sqname"><span class="tile mini">${avatarSVG(P(id), undefined, 'sq' + P(id).gid + '_')}</span><b>${esc(s.name)}</b></span></th>
-      ${cell('Model', `<select data-f="model">${modelOpts(s.model)}</select>`)}
+      ${cell('Model', `<select data-f="model">${modelOpts(s.model, true)}</select>`)}
       ${cell('Effort', `<select data-f="effort">${effortOpts(s.effort, s.lead)}</select>`)}
       ${cell('Wakes', `<select data-f="every">${everyOpts(s.every)}</select>`)}
       ${s.lead ? '<td></td>' : cell('Trust', `<select data-f="trust" title="${esc(TRUST_HINT)}">${trustOpts(s.trust)}</select>`)}

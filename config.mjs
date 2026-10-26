@@ -12,6 +12,8 @@ export const DEFAULTS = {
   cloudflare: false, // offer sharing over a Cloudflare quick tunnel (needs cloudflared; public link, 8+ character passcode)
   model: 'opus',    // default for new squiggles: opus or sonnet. Anything else runs on Opus.
   codex: false,     // allow squiggles on Codex models (needs the Codex CLI)
+  pi: [],           // Pi models squiggles may run on, as pi names them ("provider/model"; needs the pi CLI and its own keys)
+  piExtensions: [], // pi extensions to load (-e), e.g. one that adds a provider
   fileSources: {},  // extra read-only folders listed by `files`: { "name": "/path" }
 };
 

@@ -32,6 +32,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - An ask cut off by a server restart is marked interrupted at boot and its filer is told; its output is lost.
 
 ### Added
+- Squiggles can run on Pi: list the models in config `pi` and pick one per squiggle (Settings > Squiggles or `set <id> model`). Each keeps one pi process and session between turns, can be steered mid-turn, has its own Turns at once row, and can't touch Downloads, Desktop or Documents.
 - Share without Tailscale: Settings > Sharing > Cloudflare and `share cloudflare on|off|status` open a public Cloudflare quick tunnel link (`"cloudflare": true` in config.json; needs `cloudflared`). Reopens after a restart at a new link.
 - The app icon, favicon and header logo are your lead in a rounded square, and follow its look when you change it. New workspaces' lead starts with the face on the shipped icon.
 - Clean theme: a plain black and white look in the style of shadcn/ui that follows your system light or dark mode. Settings > Room > Theme, or `room theme flat|clean`. Flat stays the default; each browser keeps its own choice.
