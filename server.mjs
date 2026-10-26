@@ -22,6 +22,7 @@ import { dropStale } from './stale.mjs';
 import { createLedger } from './cost.mjs';
 import { load as ownerLoad } from './load.mjs';
 import { modelFor as pickModel, DEFAULT_MODELS, EFFORTS, checkModelEffort } from './models.mjs';
+import { fenced as cursorFenced, HOOKS as CURSOR_HOOKS } from './cursor/install.mjs';
 import { createMeetings, local, markPast, meetingNotes, parseWhen } from './meetings.mjs';
 import { createInbox } from './inbox.mjs';
 import { createHumans } from './humans.mjs';
@@ -111,7 +112,7 @@ function setDefaults(b) {
 function createSquiggle({ id, name, role, cwd, charter, every, permissionMode = 'auto', model }) {
   id = String(id || name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
   if (!id || fs.existsSync(sqDir(id))) throw new Error('name taken or empty');
-  checkModelEffort({ model }, PI_MODELS); const d = teamDefaults();
+  checkModelEffort({ model }, EXTRA_MODELS); const d = teamDefaults();
   saveSquiggle({ id, name, role, cwd: cwd || '~', every: every == null || every === '' ? d.every : Number(every) || 0, permissionMode, model: model || d.model || undefined, effort: d.effort || undefined, paused: false, created: now() });
   fs.writeFileSync(path.join(sqDir(id), 'charter.md'), (charter || role || '').trim() + '\n');
   fs.writeFileSync(path.join(sqDir(id), 'journal.md'), `# ${name} journal\n`);
@@ -349,7 +350,10 @@ function launch(s) {
 const PROVIDERS = { codex: ['gpt-6.1-sol'] };
 // config.pi: the Pi models the user set up in pi itself; a squiggle on one runs on pi. Team defaults stay Claude or Codex.
 const PI_MODELS = Array.isArray(CONFIG.pi) ? CONFIG.pi.map(String).filter(Boolean) : [];
-const providerOf = (s) => (CONFIG.codex && Object.keys(PROVIDERS).find((p) => PROVIDERS[p].includes(s.model))) || (PI_MODELS.includes(s.model) ? 'pi' : '');
+// config.cursor: Cursor models (cursor-agent names) a squiggle may run on; needs the fence from cursor/install.mjs.
+const CURSOR_MODELS = Array.isArray(CONFIG.cursor) ? CONFIG.cursor.map(String).filter(Boolean) : [];
+const EXTRA_MODELS = [...PI_MODELS, ...CURSOR_MODELS];
+const providerOf = (s) => (CONFIG.codex && Object.keys(PROVIDERS).find((p) => PROVIDERS[p].includes(s.model))) || (PI_MODELS.includes(s.model) ? 'pi' : CURSOR_MODELS.includes(s.model) ? 'cursor' : '');
 // A provider usage limit holds nothing (t971): the turn just ends and the next wake tries again; limits often reset early.
 // Codex: one `codex app-server` per squiggle, kept between turns, so MCP servers live on (computer use
 // keeps its window bindings, t330). Each wake is a turn on the saved thread; messages mid-turn steer it.
@@ -525,6 +529,66 @@ function piTurn(s, prompt, images = []) {
   const imgs = images.map((f) => ({ type: 'image', data: fs.readFileSync(path.join(FILES, f)).toString('base64'), mimeType: IMG[path.extname(f).toLowerCase()] || 'image/png' }));
   cx.cmd({ id: `${s.id}-${Date.now()}`, type: 'prompt', message: prompt, ...(imgs.length && { images: imgs }) });
 }
+// Cursor: one `cursor-agent -p --output-format stream-json` per turn, resuming the chat saved as r.cursorSession.
+// Sign-in is the user's. Can't be steered mid-turn, so messages queue.
+// The fence is cursor/guard.sh in ~/.cursor/hooks.json (Cursor has no per-run hooks); without it Cursor turns are refused.
+const cursorKind = (k) => ({ shellToolCall: 'cmd', readToolCall: 'read', editToolCall: 'edit', writeToolCall: 'write', deleteToolCall: 'edit', grepToolCall: 'search', globToolCall: 'search', lsToolCall: 'search' })[k] || 'tool';
+const cursorCall = (tc = {}) => { const k = Object.keys(tc).find((x) => x.endsWith('ToolCall')) || Object.keys(tc)[0] || 'tool'; return [k, tc[k] || {}]; };
+function cursorTurn(s, prompt) {
+  const r = R(s.id), cap = s.maxTurns ?? 40;
+  if (r.cx) { r.cx.on = null; r.cx.proc.kill('SIGTERM'); r.cx = null; } // the squiggle moved off Codex or Pi
+  if (!r.cursorSession) prompt = `${systemPrompt(s)}\n\n---\n\n${prompt}`;
+  const proc = spawn(process.env.CURSOR_BIN || 'cursor-agent', ['-p', '--output-format', 'stream-json', '--model', s.model, '--force', '--trust',
+    '--workspace', home(s.cwd), ...(r.cursorSession ? ['--resume', r.cursorSession] : []), prompt],
+  { cwd: home(s.cwd), stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, AGENTS_ID: s.id, AGENTS_NODE: process.execPath } });
+  let lastText = '', ended = false, stopped = false, done = null, errText = '';
+  const end = (text, err, subtype) => {
+    if (ended) return; ended = true; r.proc = null; turnEnded(s, text, err, subtype);
+    if (r.queue?.length) { const q = r.queue.splice(0); saveState(); send(s.id, q.join('\n\n'), 'harness', { replay: true }); }
+  };
+  r.proc = { pid: proc.pid, kill: () => { stopped = true; proc.kill('SIGTERM'); }, removeAllListeners() {} };
+  let buf = '';
+  proc.stdout.on('data', (chunk) => {
+    buf += chunk; let i;
+    while ((i = buf.indexOf('\n')) >= 0) {
+      const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
+      let m; try { m = JSON.parse(line); } catch { continue; }
+      if (m.type === 'system' && m.session_id && m.session_id !== r.cursorSession) { r.cursorSession = m.session_id; saveState(); }
+      else if (m.type === 'assistant') {
+        const t = (m.message?.content || []).filter((p) => p.type === 'text').map((p) => p.text).join('\n').trim();
+        if (t) { lastText = t; emit(s.id, { k: 'say', text: t }); }
+      } else if (m.type === 'tool_call') {
+        const [name, c] = cursorCall(m.tool_call), a = c.args || {}, kind = cursorKind(name), tid = m.call_id;
+        if (m.subtype === 'started') {
+          const ev = { k: 'tool', tid, name: name.replace(/ToolCall$/, ''), kind };
+          if (kind === 'cmd') ev.text = shortEv(a.command);
+          else if (kind === 'search' || kind === 'tool') ev.arg = JSON.stringify(a).slice(0, 300);
+          else Object.assign(ev, { file: a.path, text: kind === 'write' ? shortEv(a.streamContent || a.fileText) : undefined });
+          emit(s.id, ev);
+        } else if (m.subtype === 'completed') {
+          const res = c.result || {}, o = res.success || res.failure || {};
+          const text = res.error?.errorMessage || res.error?.modelVisibleError || res.error?.error || res.rejected?.reason || o.interleavedOutput || [o.stdout, o.stderr].filter(Boolean).join('\n') || o.content || o.message || o.diffString || (res.success ? '' : JSON.stringify(res).slice(0, 2000));
+          emit(s.id, { k: 'out', tid, text: shortEv(text), err: !res.success, imgs: [] });
+          if (++r.turns >= cap) { stopped = 'cap'; proc.kill('SIGTERM'); }
+        }
+      } else if (m.type === 'result') {
+        done = m; const u = m.usage || {};
+        r.usage = { in: (r.usage?.in || 0) + (u.inputTokens || 0), out: (r.usage?.out || 0) + (u.outputTokens || 0) };
+        emit(s.id, { k: 'log', text: `cursor tokens: ${u.inputTokens || 0} in (${u.cacheReadTokens || 0} cached), ${u.outputTokens || 0} out` });
+      }
+    }
+  });
+  proc.stderr.on('data', (d) => { const t = String(d).trim(); if (t) { errText = (errText + '\n' + t).slice(-4000); emit(s.id, { k: 'log', text: t.slice(0, 2000) }); } });
+  proc.on('error', (e) => { errText = e.code === 'ENOENT' ? 'cursor-agent not found: install the Cursor CLI' : e.message; });
+  proc.on('exit', (code) => {
+    if (stopped === 'cap') return end(lastText, true, 'error_max_turns');
+    if (stopped) return end(lastText, true, 'interrupted');
+    if (done && !done.is_error) return end(String(done.result || lastText).trim(), false);
+    const msg = [done?.result, errText.trim(), `exit ${code}`].filter(Boolean).map(String).join(': ');
+    emit(s.id, { k: 'log', text: shortEv(msg) });
+    end(msg, true, /429|rate limit|usage limit|quota|limit reached|out of usage/i.test(msg) ? 'provider_limit' : undefined);
+  });
+}
 // from 'owner' means a person on the page; human says which one (humans.json), and the squiggle reads 'From <name>: '.
 function send(id, text, from = 'owner', { replay = false, human, images = [], asker, slot = false } = {}) {
   const s = loadSquiggle(id);
@@ -572,9 +636,11 @@ function send(id, text, from = 'owner', { replay = false, human, images = [], as
       if (r.proc.steer) r.proc.steer(content).catch(queue); else queue();
       return;
     }
+    const p = providerOf(s);
+    if (p === 'cursor' && !cursorFenced()) { const why = `Cursor fence missing from ${CURSOR_HOOKS}: run node ${path.join(ROOT, 'cursor', 'install.mjs')}`; emit(id, { k: 'log', text: why }); setStatus(id, 'idle', why); return; }
     r.lastWake = now(); r.turns = 0; r.board0 = ownNotes(id);
     setStatus(id, 'working', '');
-    return providerOf(s) === 'pi' ? piTurn(s, content, images) : codexTurn(s, content, images);
+    return p === 'pi' ? piTurn(s, content, images) : p === 'cursor' ? cursorTurn(s, content) : codexTurn(s, content, images);
   }
   if (r.proc && r.status !== 'working' && r.sig !== launchSig(s)) { const old = r.proc; r.proc = null; old.kill('SIGTERM'); emit(id, { k: 'log', text: 'settings changed: relaunching' }); }
   if (!r.proc) launch(s);
@@ -866,7 +932,7 @@ function drainSlots() {
 const slotsState = () => {
   const cfg = roomCfg(), busy = {};
   for (const x of listSquiggles()) { const k = slotKey(providerOf(x)); if (R(x.id).status === 'working') busy[k] = (busy[k] || 0) + 1; }
-  return { keys: KEYS.filter((k) => k !== 'pi' || PI_MODELS.length), limits: cfg.slots || {}, defaults: DEFAULT_SLOTS, busy, waiting: (persisted['*slots'] || []).map(({ id, key, from, at }) => ({ id, key, from, at })) };
+  return { keys: KEYS.filter((k) => (k !== 'pi' || PI_MODELS.length) && (k !== 'cursor' || CURSOR_MODELS.length)), limits: cfg.slots || {}, defaults: DEFAULT_SLOTS, busy, waiting: (persisted['*slots'] || []).map(({ id, key, from, at }) => ({ id, key, from, at })) };
 };
 function setSlots(b) {
   const slots = { ...(roomCfg().slots || {}), ...checkSlots(b) };
@@ -1426,7 +1492,7 @@ const server = http.createServer(async (req, res) => {
       const d = setDefaults(await body(req, res)); broadcast('*room', { k: 'room', action: 'defaults' }); return json(res, d);
     }
     if (url.pathname === '/api/defaults') return json(res, teamDefaults());
-    if (url.pathname === '/api/room') { const { passcode, ...c } = roomCfg(); return json(res, { ...c, fileRoots: files.SOURCES, fileReal: realRoots(), home: os.homedir(), piModels: PI_MODELS }); } // never the passcode hash; fileRoots: chat images; fileReal: the same behind symlinks (CLI paths are realpaths)
+    if (url.pathname === '/api/room') { const { passcode, ...c } = roomCfg(); return json(res, { ...c, fileRoots: files.SOURCES, fileReal: realRoots(), home: os.homedir(), piModels: PI_MODELS, cursorModels: CURSOR_MODELS }); } // never the passcode hash; fileRoots: chat images; fileReal: the same behind symlinks (CLI paths are realpaths)
     if (url.pathname === '/api/board') return json(res, { goals: board.goals(), tasks: board.tasks() });
     if (url.pathname === '/api/goals' && req.method === 'POST') return json(res, board.goalOp(await body(req, res)));
     if (url.pathname === '/api/tasks' && req.method === 'POST') {
@@ -1582,7 +1648,7 @@ const server = http.createServer(async (req, res) => {
         case 'remove': return json(res, removeSquiggle(id));
         case 'update': {
           const { charter, ...meta } = b;
-          checkModelEffort(meta, PI_MODELS); // t905: only allowed models and efforts reach squiggle.json and the launch args
+          checkModelEffort(meta, EXTRA_MODELS); // t905: only allowed models and efforts reach squiggle.json and the launch args
           if ('trust' in meta) meta.trust = trustLevel(meta.trust) ?? undefined; // the user or the lead sets it, never the squiggle itself
           const c = await callerSquiggle(req), owner = () => { try { return pass.session(req); } catch { return false; } };
           const no = updateRefusal(meta, s, { caller: c, callerLead: !!(c && loadSquiggle(c)?.lead), charter: charter != null, owner, passcode: !!roomCfg().passcode?.hash, user: USER });

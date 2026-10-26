@@ -809,7 +809,7 @@ function showLimit(until) {
 }
 async function load() {
   api('/limit').then((l) => showLimit(l.until || 0));
-  const room = await api('/room').catch(() => ({})); roomGen(room.characters || 'cast'); S.roots = room.fileRoots || {}; S.realRoots = room.fileReal || {}; S.home = room.home || ''; S.piModels = room.piModels || [];
+  const room = await api('/room').catch(() => ({})); roomGen(room.characters || 'cast'); S.roots = room.fileRoots || {}; S.realRoots = room.fileReal || {}; S.home = room.home || ''; S.piModels = room.piModels || []; S.cursorModels = room.cursorModels || [];
   const list = await api('/squiggles').catch(() => null);
   // A failed read must not empty the room (t671): keep what's on screen and try again.
   if (!Array.isArray(list)) { setTimeout(load, 2000); return; }
@@ -899,7 +899,7 @@ async function openSheet(id) {
       <div><label>Wakes every (minutes, 0 = only when asked)</label><input id="shEvery" type="number" min="0" value="${esc(s.every || 0)}"></div>
     </div>
     <div class="row2">
-      <div><label>Model</label><select id="shModel">${['', 'opus', 'sonnet', 'gpt-6.1-sol', ...(S.piModels || [])].map((m) => `<option value="${m}" ${(s.model || '') === m ? 'selected' : ''}>${m ? modelName(m) : 'Default (Opus 5.5)'}</option>`).join('')}</select></div>
+      <div><label>Model</label><select id="shModel">${['', 'opus', 'sonnet', 'gpt-6.1-sol', ...(S.piModels || []), ...(S.cursorModels || [])].map((m) => `<option value="${m}" ${(s.model || '') === m ? 'selected' : ''}>${m ? modelName(m) : 'Default (Opus 5.5)'}</option>`).join('')}</select></div>
       <div><label>Permissions</label><select id="shPerm">${['auto', 'acceptEdits', 'plan', 'bypassPermissions'].map((m) => `<option ${s.permissionMode === m ? 'selected' : ''}>${m}</option>`).join('')}</select></div>
     </div>
     <div class="row2">

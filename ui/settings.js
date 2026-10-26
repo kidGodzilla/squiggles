@@ -34,7 +34,7 @@ const withCur = (l, cur) => (cur != null && cur !== '' && !l.includes(cur) ? [..
 const cap = (m) => ({ xhigh: 'Extra high' })[m] || m[0].toUpperCase() + m.slice(1);
 const every = (m) => (!m ? 'Only when asked' : m % 1440 === 0 ? (m === 1440 ? 'Daily' : `Every ${m / 1440} days`) : m % 60 === 0 ? (m === 60 ? 'Hourly' : `Every ${m / 60} hours`) : `Every ${m} min`);
 // pi: a squiggle's own model may be one of config.pi; team defaults may not.
-const modelOpts = (cur, pi) => withCur(['', 'opus', 'sonnet', 'gpt-6.1-sol', ...(pi ? S.piModels || [] : [])], cur).map((m) => opt(m, cur, m ? modelName(m) : 'Default (Opus 5.5)')).join('');
+const modelOpts = (cur, pi) => withCur(['', 'opus', 'sonnet', 'gpt-6.1-sol', ...(pi ? [...(S.piModels || []), ...(S.cursorModels || [])] : [])], cur).map((m) => opt(m, cur, m ? modelName(m) : 'Default (Opus 5.5)')).join('');
 const effortOpts = (cur, lead) => withCur(['', 'low', 'medium', 'high', 'xhigh', 'max'], cur).map((m) => opt(m, cur, m ? cap(m) : lead ? 'Default' : 'Medium (default)')).join('');
 const everyOpts = (cur) => withCur([0, 15, 30, 60, 180, 360, 720, 1440], cur || 0).sort((x, y) => x - y).map((m) => opt(m, cur || 0, every(m))).join('');
 // Passcode card (t913). CLI: room passcode.
@@ -66,7 +66,7 @@ $('#setDefaults').onchange = async (e) => {
   toast('Saved team defaults');
 };
 // Turns at once: room.json slots per provider. CLI: slots.
-const SLOT_NAMES = { claude: 'Claude', codex: 'Codex', pi: 'Pi' };
+const SLOT_NAMES = { claude: 'Claude', codex: 'Codex', pi: 'Pi', cursor: 'Cursor' };
 async function renderSlots() {
   const d = await api('/slots'); if (!d || d.error) return;
   $('#setSlots').innerHTML = d.keys.map((k) => { const n = esc(SLOT_NAMES[k] || k); const w = d.waiting.filter((x) => x.key === k).length;

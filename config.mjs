@@ -14,6 +14,7 @@ export const DEFAULTS = {
   codex: false,     // allow squiggles on Codex models (needs the Codex CLI)
   pi: [],           // Pi models squiggles may run on, as pi names them ("provider/model"; needs the pi CLI and its own keys)
   piExtensions: [], // pi extensions to load (-e), e.g. one that adds a provider
+  cursor: [],       // Cursor models squiggles may run on, as cursor-agent names them (needs the Cursor CLI, signed in, and node cursor/install.mjs)
   fileSources: {},  // extra read-only folders listed by `files`: { "name": "/path" }
 };
 
