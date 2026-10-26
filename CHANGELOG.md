@@ -5,6 +5,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 ## 0.1.2 (unreleased)
 
 ### Security
+- Pi squiggles start with `--no-approve`, so a repository's own pi files are never trusted.
 - The Pi and Cursor folder fence ignores case (~/downloads), follows symlinks, and catches shell forms like `cd ~ && cat Downloads/x` and `~/Down*`. Still a rough fence, not a sandbox.
 - The squiggle sheet says when Permissions doesn't apply: Pi and Cursor squiggles run every tool call without asking (git push, deploys, your keys). README says so too.
 - Cloudflare share: only the user turns it on (never a squiggle, the lead included); needs a room passcode of 8+ characters, which can't be cleared or shortened while shared; tunnel hits are never local; peers refuse them. Wrong-passcode limits count the address Cloudflare saw, not one the client claims, and guessing over the link never locks you out on your Mac. The link closes when the room stops, and a start ends one a crashed room left open.

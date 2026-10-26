@@ -469,7 +469,7 @@ function piServer(s) {
   if (!r.piSession) { r.piSession = crypto.randomUUID(); saveState(); }
   const ext = (Array.isArray(CONFIG.piExtensions) ? CONFIG.piExtensions : []).map((e) => home(String(e)));
   // --no-extensions: discovered extensions could wrap every tool; pi/guard.ts fences Downloads, Desktop and Documents like claude's --disallowedTools.
-  const proc = spawn(process.env.PI_BIN || 'pi', ['--mode', 'rpc', '--model', s.model, '--models', s.model, '--session-id', r.piSession,
+  const proc = spawn(process.env.PI_BIN || 'pi', ['--mode', 'rpc', '--no-approve', '--model', s.model, '--models', s.model, '--session-id', r.piSession,
     '--no-extensions', ...ext.flatMap((e) => ['-e', e]), '-e', path.join(ROOT, 'pi', 'guard.ts'),
     '--no-skills', '--no-prompt-templates', '--no-mcp', '--append-system-prompt', systemPrompt(s)],
   { cwd: home(s.cwd), stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, AGENTS_ID: s.id } });
