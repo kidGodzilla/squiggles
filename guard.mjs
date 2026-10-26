@@ -1,15 +1,16 @@
 // Who may talk to the server (t762). It listens on 127.0.0.1, but any web page the user opens can still
 // send it requests: a "simple" cross-site POST (text/plain) or an <img> GET, or a DNS-rebinding page
 // that reads everything. Only this Mac's own names get through: localhost, 127.0.0.1 and, when shared,
-// its tailnet name (tailscale serve keeps the Host header).
+// its tailnet name (tailscale serve keeps the Host header) and its Cloudflare tunnel name (cloudflared keeps it too).
 import { execFile } from 'node:child_process';
 
-export function makeGuard(port, tailnetHost = () => '') {
+export function makeGuard(port, tailnetHost = () => '', tunnelHost = () => '') {
   const local = new Set([`127.0.0.1:${port}`, `localhost:${port}`]);
-  const hostOk = (h) => local.has(h) || (!!tailnetHost() && h === tailnetHost());
+  const shared = (h) => [tailnetHost(), tunnelHost()].some((s) => !!s && h === s);
+  const hostOk = (h) => local.has(h) || shared(h);
   const originOk = (o) => {
     let u; try { u = new URL(o); } catch { return false; }
-    return (u.protocol === 'http:' && local.has(u.host)) || (u.protocol === 'https:' && !!tailnetHost() && u.host === tailnetHost());
+    return (u.protocol === 'http:' && local.has(u.host)) || (u.protocol === 'https:' && shared(u.host));
   };
   // '' = allowed, else why not.
   return function refuse(req) {

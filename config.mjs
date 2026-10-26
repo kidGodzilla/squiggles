@@ -9,6 +9,7 @@ export const DEFAULTS = {
   port: 4327,
   userName: '',     // what squiggles call you; empty: "the user"
   tailnet: false,   // offer "Share on tailnet" (needs Tailscale)
+  cloudflare: false, // offer sharing over a Cloudflare quick tunnel (needs cloudflared; public link, 8+ character passcode)
   model: 'opus',    // default for new squiggles: opus or sonnet. Anything else runs on Opus.
   codex: false,     // allow squiggles on Codex models (needs the Codex CLI)
   fileSources: {},  // extra read-only folders listed by `files`: { "name": "/path" }

@@ -5,6 +5,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 ## 0.1.2 (unreleased)
 
 ### Security
+- Cloudflare share: only the user turns it on (never a squiggle, the lead included); needs a room passcode of 8+ characters, which can't be cleared or shortened while shared; tunnel hits are never local; peers refuse them.
 - A squiggle can no longer make itself lead or change its own permission mode, working directory, trust or model: only you or the lead can (lead only you). Updates accept known fields only; others are refused. A squiggle other than the lead changes only itself, charter included. Changing lead or those fields from the page or terminal needs a room passcode, and an unlocked page; so does a charter once a passcode is set. Save prompts to unlock and sends the charter only when you changed it.
 - Hiring is the lead's or yours, and waits for a room passcode: until one is set any program on your Mac could claim the room. The page asks you to set one each visit, the lead's onboarding asks too, and squiggles can't set, clear or loosen it. Other squiggles can't create squiggles; New squiggle needs an unlocked page. Permission mode must be auto, acceptEdits, plan or bypassPermissions.
 - Shared files other than images, audio, PDF, HTML and plain text are served as plain text, so a dropped script or stylesheet can never run as the room's own. A task status from an agent's to-do list never reaches the page's markup unchecked.
@@ -31,6 +32,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - An ask cut off by a server restart is marked interrupted at boot and its filer is told; its output is lost.
 
 ### Added
+- Share over a Cloudflare quick tunnel without Tailscale: `"cloudflare": true` in config.json, then `POST /api/share {"via":"cloudflare","on":true}`. Needs `cloudflared`. Reopens after a restart at a new URL.
 - The app icon, favicon and header logo are your lead in a rounded square, and follow its look when you change it. New workspaces' lead starts with the face on the shipped icon.
 - Clean theme: a plain black and white look in the style of shadcn/ui that follows your system light or dark mode. Settings > Room > Theme, or `room theme flat|clean`. Flat stays the default; each browser keeps its own choice.
 - Provider slots: at most a set number of turns run at once per provider (`slots` in room.json; defaults 24 Claude, 4 Codex; 0 means no cap). A turn over the cap waits in line and starts when one ends: you first, then the lead, then squiggles, then scheduled wakes. The lead and you never wait. `GET /api/slots` shows the line; the lead or the unlocked page changes caps with `POST /api/slots`.

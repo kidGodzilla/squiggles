@@ -7,11 +7,12 @@
 import crypto from 'node:crypto';
 
 const COOKIE = 'agents_s', DAY = 864e5, TTL = 30 * DAY;
+const PROXIED = /\.(ts\.net|trycloudflare\.com)$/i; // hosts only tailscale serve or cloudflared hand us
 const sha = (s) => crypto.createHash('sha256').update(s).digest('hex');
 const hashCode = (code, salt) => crypto.scryptSync(String(code), salt, 32).toString('hex');
 
 export function makePasscode({ read, write, now = () => Date.now() }) {
-  const disk = (p) => (p?.hash ? { salt: p.salt, hash: p.hash, localSkips: !!p.localSkips } : null);
+  const disk = (p) => (p?.hash ? { salt: p.salt, hash: p.hash, localSkips: !!p.localSkips, ...(p.codeLen && { codeLen: p.codeLen }) } : null);
   let mem = disk(read());
   if (read()?.sessions) write(mem); // sessions an older server stored
   const cfg = () => mem;
@@ -20,8 +21,8 @@ export function makePasscode({ read, write, now = () => Date.now() }) {
   let recent = []; // failure times, all clients
 
   const cookieTok = (req) => (String(req.headers?.cookie || '').match(new RegExp(`(?:^|;\\s*)${COOKIE}=([a-f0-9]{64})`)) || [])[1] || '';
-  // Belt and braces: a request naming the tailnet host came through tailscale serve, even without x-forwarded-for.
-  const isLocal = (req) => /^(::1|127\.|::ffff:127\.)/.test(req.socket?.remoteAddress || '') && !req.headers?.['x-forwarded-for'] && !/\.ts\.net$/i.test(String(req.headers?.host || '').split(':')[0]);
+  // Belt and braces: a request naming the tailnet or tunnel host, or carrying Cloudflare's client header, came through a proxy.
+  const isLocal = (req) => /^(::1|127\.|::ffff:127\.)/.test(req.socket?.remoteAddress || '') && !req.headers?.['x-forwarded-for'] && !req.headers?.['cf-connecting-ip'] && !PROXIED.test(String(req.headers?.host || '').split(':')[0]);
   // Node's fetch sends sec-fetch-mode too, so only these mark a browser.
   const isBrowser = (req) => ['sec-fetch-site', 'origin', 'cookie'].some((h) => req.headers?.[h] !== undefined) || /Mozilla\//.test(req.headers?.['user-agent'] || '');
   // Local non-browser callers (CLI, scripts) get their own bucket, so one can't lock out the user's browser on 127.0.0.1.
@@ -42,7 +43,7 @@ export function makePasscode({ read, write, now = () => Date.now() }) {
     sessions[sha(tok)] = now() + TTL; save({ ...p, sessions }); return tok;
   }
   const cookie = (req, tok, age = TTL / 1000) => {
-    const secure = req.headers?.['x-forwarded-proto'] === 'https' || /\.ts\.net$/i.test(String(req.headers?.host || '').split(':')[0]);
+    const secure = req.headers?.['x-forwarded-proto'] === 'https' || PROXIED.test(String(req.headers?.host || '').split(':')[0]);
     return `${COOKIE}=${tok}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${age}${secure ? '; Secure' : ''}`;
   };
 
@@ -102,7 +103,7 @@ export function makePasscode({ read, write, now = () => Date.now() }) {
       const code = String(b.code ?? '');
       if (code.length < 4 || code.length > 64) throw err('passcode: 4 to 64 characters');
       const salt = crypto.randomBytes(16).toString('hex');
-      const next = { salt, hash: hashCode(code, salt), localSkips: !!p.localSkips, sessions: {} };
+      const next = { salt, hash: hashCode(code, salt), localSkips: !!p.localSkips, codeLen: code.length, sessions: {} }; // codeLen: public share needs 8+
       save(next);
       // The device that set it stays unlocked; every other session ends.
       return isBrowser(req) ? { body: { ...status(req), ok: true }, cookie: cookie(req, issue(next)) } : { body: status(req) };
@@ -113,5 +114,5 @@ export function makePasscode({ read, write, now = () => Date.now() }) {
     throw err('op: unlock, lock, set, clear, local or status');
   }
 
-  return { ok, status, op, session, owner };
+  return { ok, status, op, session, owner, codeLen: () => mem?.codeLen || 0 };
 }

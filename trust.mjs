@@ -48,6 +48,11 @@ export function slotsRefusal({ caller = '', callerLead = false, owner = () => fa
   if (caller) return callerLead ? null : { status: 403, error: `${caller} can't change provider slots: ${user} or the lead does` };
   return !passcode || owner() ? null : { status: 403, error: `Unlock with the room passcode first: changing slots is ${user} or the lead`, unlock: true };
 }
+// Public share (Cloudflare tunnel): the user only, from an unlocked page or their terminal. No squiggle, the lead included.
+export function shareRefusal({ caller = '', owner = () => false, user = 'the user' } = {}) {
+  if (caller) return { status: 403, error: `${caller} can't share the room on the internet: ${user} does, in Settings > Sharing` };
+  return owner() ? null : { status: 403, error: `Unlock with the room passcode first: sharing on the internet is ${user}'s`, unlock: true };
+}
 export function updateRefusal(meta, s, { caller = '', callerLead = false, charter = false, owner = () => false, passcode = true, user = 'the user' } = {}) {
   const bad = Object.keys(meta).filter((k) => !UPDATE_FIELDS.includes(k));
   if (bad.length) return { status: 400, error: `can't update ${bad.join(', ')}` };
