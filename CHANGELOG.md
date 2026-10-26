@@ -99,6 +99,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Merge merges every goal repo carrying the task's branch (Repo shows "api + web"; detail lists "Also merges"). `repo:branch` accepts a goal repo's bare name.
 - Picks: `pick ask "<question>" "<option>" "<option>" [--images a,b] [--task <id>]` files a choice for the user; open picks collect on one card above the lead chat composer, options as buttons (images shown when they live in files/ or research/). A tap answers and the asker is told; the lead relays a spoken answer with `pick <id> <option>`. `picks [all]`, `pick drop <id>`. Answering needs the room passcode.
 ### Changed
+- Every editor popup is a dialog: a title, a close button, a dimmed page behind it, only the body scrolls, and the footer keeps delete on the left and save on the right. On phones it is a bottom sheet. The task peek stays beside its note.
 - README shows a screenshot of the room.
 - `restart` is refused when no server code or `config.json` changed since the server started (UI changes need only `room reload`, prompts the next wake). `restart force` restarts anyway.
 - Squiggle shells use nvm's Node (the repo's `.nvmrc`, else nvm's default) ahead of Homebrew's. No change without nvm.
@@ -134,6 +135,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - The lead's "Handled." replies fold with the reports they answer into one line that opens to list them.
 
 ### Fixed
+- Tasks with filters that match nothing show one line with a Clear button, and the search box is full width on phones.
 - Popovers (meeting, goal, note, person, task link) are wider, never taller than the window, scroll inside with the action row pinned, and open beside, opposite or below what you clicked. Meeting attendees sit in an even grid, 44px rows on touch.
 - Long goals stay short: goal cards show three lines of title and two of note, Team cards one line of goals; hover for the full text.
 - Team cards stay a sane height: bigger photo, every field clamped to a line or two (hover for the full text), cards in a row line up with their buttons on one baseline, and phones hide the charter lines.

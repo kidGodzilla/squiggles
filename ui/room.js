@@ -1164,7 +1164,7 @@ function threadTo(text) {
 }
 addEventListener('resize', () => layoutMeet());
 $('#officeBack').onclick = () => setView('room');
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && S.office && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName) && !document.querySelector('.overlay.on')) setView('room'); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && S.office && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName) && !document.querySelector('.overlay.on, .pop.on')) setView('room'); });
 function renderJoinCast() { $('#joinCast').innerHTML = S.order.slice(0, 5).map((id, i) => `<div class="tile">${avatarSVG(P(id), undefined, 'j' + i + '_')}</div>`).join(''); }
 // Lock: back to the splash with all sound stopped. The team keeps working; joining again picks up where it was.
 function lock(why = '') {

@@ -104,8 +104,13 @@ function renderTasks() {
   ownSel.innerHTML = `<option value="">Everyone</option><option value="-">Nobody</option>` + S.order.map((id) => `<option value="${esc(id)}">${esc(S.sq[id].name)}</option>`).join('');
   goalSel.value = B.tgoal; ownSel.value = B.towner;
   document.querySelectorAll('#tshow button').forEach((b) => b.classList.toggle('on', b.dataset.v === B.tshow));
-  const vis = B.tasks.filter(taskVisible);
-  $('#corkcols').innerHTML = COLS.map(([st, name]) => {
+  const vis = B.tasks.filter(taskVisible), cols = $('#corkcols');
+  // Filters that match nothing get one line, not five empty columns.
+  const none = !vis.length && (B.tq || B.tgoal || B.towner);
+  cols.classList.toggle('none', !!none);
+  if (none) cols.innerHTML = B.tq ? `<div class="empty">No notes match “${esc(B.tq)}”.<button class="chip" data-tclear="q">Clear search</button></div>`
+    : '<div class="empty">No notes match these filters.<button class="chip" data-tclear="f">Clear filters</button></div>';
+  else cols.innerHTML = COLS.map(([st, name]) => {
     const list = vis.filter((t) => t.status === st);
     let body;
     if (B.tidy && !B.towner && B.tshow !== 'suggest') {
@@ -146,6 +151,11 @@ function noteHtml(t) {
 document.addEventListener('click', (e) => { const f = e.target.closest('[data-fold]'); if (f) foldGoals(f.dataset.fold); });
 $('#gq').oninput = (e) => { B.gq = e.target.value; renderGoals(); syncUrl(); };
 $('#tq').oninput = (e) => { B.tq = e.target.value; renderTasks(); syncUrl(); };
+$('#corkcols').addEventListener('click', (e) => {
+  const c = e.target.closest('[data-tclear]'); if (!c) return;
+  if (c.dataset.tclear === 'q') { B.tq = ''; $('#tq').value = ''; } else { B.tgoal = ''; B.towner = ''; }
+  renderTasks(); syncUrl();
+});
 $('#tgoal').onchange = (e) => { B.tgoal = e.target.value; renderTasks(); syncUrl(); };
 $('#towner').onchange = (e) => { B.towner = e.target.value; renderTasks(); syncUrl(); };
 $('#ttidy').onclick = () => { B.tidy = !B.tidy; try { localStorage.agentsTidy = B.tidy ? '1' : '0'; } catch {} renderTasks(); };
@@ -215,19 +225,30 @@ function addNote() {
 // ---------- popover editors ----------
 const ownerOptions = (cur) => `<option value="">Nobody</option>` + S.order.map((id) => `<option value="${esc(id)}" ${cur === id ? 'selected' : ''}>${esc(S.sq[id].name)}</option>`).join('');
 const goalOptions = (cur) => `<option value="">No goal</option>` + ['active', 'hold', 'todo'].flatMap((t) => B.goals[t]).map((g) => `<option value="${esc(g.id)}" ${cur === g.id ? 'selected' : ''}>${esc(g.title)}</option>`).join('');
-function showPop(anchor, html, wire) {
-  const pop = $('#pop'), r = anchor.getBoundingClientRect();
-  pop.innerHTML = html; pop.classList.add('on');
-  // Auto-growing textareas show the whole text (CSS caps them), measured before the popover is placed.
+// Shared editor: a centred dialog with a title and ×, a phone bottom sheet; only the body scrolls.
+// Callers mark the footer row class="mft" (destructive left, primary right). o.peek keeps the anchored glance (task links).
+function showPop(anchor, html, wire, o = {}) {
+  const pop = $('#pop');
+  pop.removeAttribute('style'); pop.className = 'pop'; pop.scrollTop = 0;
+  if (o.peek) {
+    $('#popScrim').classList.remove('on'); pop.innerHTML = html; pop.classList.add('on');
+    const r = anchor.getBoundingClientRect(), w = pop.offsetWidth; let x = r.right + 12, y = r.top;
+    if (x + w > innerWidth - 8) x = r.left - w - 12;
+    if (x < 8) { x = Math.min(Math.max(8, r.left), innerWidth - w - 8); y = r.bottom + 8; }
+    pop.style.left = Math.max(8, x) + 'px'; pop.style.top = Math.max(60, Math.min(innerHeight - pop.offsetHeight - 10, y)) + 'px';
+    return wire(pop);
+  }
+  pop.innerHTML = `<div class="mhd"><h2>${esc(o.title || '')}</h2><button type="button" class="x" aria-label="Close" data-x>×</button></div><div class="mbd">${html}</div>`;
+  const foot = pop.querySelector('.mbd > .mft'); if (foot) pop.append(foot);
+  pop.classList.add('modal', 'on'); pop.classList.toggle('sm', !!o.sm);
+  pop.setAttribute('role', 'dialog'); pop.setAttribute('aria-modal', 'true'); $('#popScrim').classList.add('on');
   for (const ta of pop.querySelectorAll('textarea.grow')) { const fit = () => { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 2 + 'px'; }; fit(); ta.oninput = fit; }
-  // Beside the anchor, else the other side, else below it; CSS caps the height so it always fits and scrolls inside.
-  const w = pop.offsetWidth; let x = r.right + 12, y = r.top;
-  if (x + w > innerWidth - 8) x = r.left - w - 12;
-  if (x < 8) { x = Math.min(Math.max(8, r.left), innerWidth - w - 8); y = r.bottom + 8; }
-  pop.scrollTop = 0; pop.style.left = Math.max(8, x) + 'px'; pop.style.top = Math.max(60, Math.min(innerHeight - pop.offsetHeight - 10, y)) + 'px';
-  wire(pop); pop.querySelector('input,textarea')?.focus();
+  wire(pop);
+  const x = pop.querySelector('[data-x]'); x.addEventListener('click', (e) => { e.stopPropagation(); closePop(); });
+  if (!matchMedia('(pointer: coarse)').matches) pop.querySelector('.mbd :is(input,textarea)')?.focus();
 }
-function closePop() { $('#pop').classList.remove('on', 'tpop-on'); }
+function closePop() { $('#pop').classList.remove('on', 'tpop-on'); $('#popScrim').classList.remove('on'); }
+$('#popScrim').onclick = closePop;
 function editGoal(el) {
   const g = goalById(el.dataset.goal); if (!g) return;
   const open = openCount(g.id), area = isArea(g);
@@ -239,8 +260,8 @@ function editGoal(el) {
     <label>Repos (space separated)</label><input id="pgR" value="${esc((g.repos || []).join(' '))}" placeholder="~/project">
     ${area ? '' : `<label>Due</label><input id="pgD" type="date" value="${esc(g.due || '')}">`}
     <label>Merge policy</label><select id="pgM"><option value="gated" ${g.merge !== 'open' ? 'selected' : ''}>Gated: branch per task, you merge</option><option value="open" ${g.merge === 'open' ? 'selected' : ''}>Open: commits go to main</option></select>
-    <div class="row"><button class="go" data-a="save">Save</button>${area ? '' : '<button data-a="confirm">Still on</button>'}<button data-a="notes">Its notes (${open})</button></div>
-    <div class="row">${area ? '' : '<button data-a="done">Mark done</button>'}<button data-a="chat">${g.owner ? 'Chat with owner' : 'Ask the lead'}</button><button class="bad" data-a="drop">Erase</button></div>`, (pop) => {
+    <div class="row">${area ? '' : '<button data-a="confirm">Still on</button><button data-a="done">Mark done</button>'}<button data-a="notes">Its notes (${open})</button><button data-a="chat">${g.owner ? 'Chat with owner' : 'Ask the lead'}</button></div>
+    <div class="mft"><button class="bad" data-a="drop">Erase</button><button class="go" data-a="save">Save</button></div>`, (pop) => {
     pop.onclick = async (e) => {
       const k = e.target.closest('[data-k]'); if (k) { pop.querySelectorAll('[data-k]').forEach((b) => b.classList.toggle('on', b === k)); return; }
       const a = e.target.dataset.a; if (!a) return;
@@ -253,7 +274,7 @@ function editGoal(el) {
       closePop();
     };
     pop.querySelector('#pgT').onkeydown = (e) => { if (e.key === 'Enter') pop.querySelector('[data-a=save]').click(); };
-  });
+  }, { title: area ? 'Edit area' : 'Edit goal' });
 }
 function editTask(el) {
   const t = B.tasks.find((x) => x.id === el.dataset.task); if (!t) return;
@@ -267,8 +288,9 @@ function editTask(el) {
     <div class="row"><button class="go" data-a="accept">Accept</button><button class="bad" data-a="decline">Decline</button></div>` : ''}
     <label>Split into subtasks (one per line)</label><textarea id="ptS" placeholder="First small piece&#10;Second small piece"></textarea>
     <div class="row"><button data-a="split">Split now</button><button data-a="mark" class="${t.split ? 'cur' : ''}">${t.split ? 'Marked: needs splitting' : 'Split later'}</button></div>
-    <div class="row"><button class="go" data-a="save">Save</button><button data-a="confirm">Still needed</button>${t.owner ? '<button data-a="release">Release</button><button data-a="chat">Chat with owner</button>' : ''}<button class="bad" data-a="drop">Tear off</button></div>
-    <div class="row" style="color:var(--dim);font-size:11.5px">Added ${esc(t.created)}${t.by ? ` by ${esc(ownerName(t.by))}` : ''} · confirmed ${esc(t.confirmed)}</div>`, (pop) => {
+    <div class="row"><button data-a="confirm">Still needed</button>${t.owner ? '<button data-a="release">Release</button><button data-a="chat">Chat with owner</button>' : ''}</div>
+    <div class="mft"><button class="bad" data-a="drop">Tear off</button><button class="go" data-a="save">Save</button></div>
+    <div class="mmeta">Added ${esc(t.created)}${t.by ? ` by ${esc(ownerName(t.by))}` : ''} · confirmed ${esc(t.confirmed)}</div>`, (pop) => {
     pop.onclick = async (e) => {
       const sub = e.target.closest('[data-sub]'); if (sub) { closePop(); const n = document.querySelector(`[data-task="${sub.dataset.sub}"]`); if (n) { n.scrollIntoView({ block: 'center', behavior: 'smooth' }); editTask(n); } return; }
       const st = e.target.dataset.st, a = e.target.dataset.a; if (!st && !a) return;
@@ -287,7 +309,7 @@ function editTask(el) {
       if (a === 'chat') openChat(t.owner);
       closePop();
     };
-  });
+  }, { title: 'Edit note' });
 }
 
 // ---------- Merge: branches in review across gated goals ----------
@@ -478,7 +500,7 @@ function editHuman(anchor, id) {
   const h = id && B.humans.find((x) => x.id === id);
   showPop(anchor, `<label>Name</label><input id="hmN" value="${esc(h?.name || '')}" placeholder="Their name">
     <label>Avatar (emoji, up to 4 letters, or an image link)</label><input id="hmA" value="${esc(h?.avatar || '')}" placeholder="Empty: their initial">
-    <div class="row"><button class="go" data-a="save">${h ? 'Save' : 'Add'}</button>${h && h.id !== 'owner' ? '<button class="bad" data-a="remove">Remove</button>' : ''}</div>`, (pop) => {
+    <div class="mft">${h && h.id !== 'owner' ? '<button class="bad" data-a="remove">Remove</button>' : ''}<button class="go" data-a="save">${h ? 'Save' : 'Add'}</button></div>`, (pop) => {
     pop.onclick = async (e) => {
       const a = e.target.dataset.a; if (!a) return;
       let r;
@@ -487,7 +509,7 @@ function editHuman(anchor, id) {
       if (r?.error) return toast(r.error);
       closePop(); loadHumans();
     };
-  });
+  }, { title: h ? 'Edit person' : 'Add person', sm: true });
 }
 // Who's at this browser (t141): asked on joining when there's more than one human, switched from the top bar. Messages carry it.
 S.me = localStorage.getItem('agents.me') || '';
@@ -501,9 +523,9 @@ function paintMe() {
 }
 function setMe(id) { S.me = id; localStorage.setItem('agents.me', id); paintMe(); }
 $('#joinWho').onclick = (e) => { const b = e.target.closest('[data-me]'); if (b) { setMe(b.dataset.me); $('#joinBtn').click(); } };
-$('#meBtn').onclick = (e) => showPop(e.currentTarget, `<label>Who is using this browser?</label><div class="who">${whoButtons()}</div>`, (pop) => {
+$('#meBtn').onclick = (e) => showPop(e.currentTarget, `<div class="who">${whoButtons()}</div>`, (pop) => {
   pop.onclick = (ev) => { const b = ev.target.closest('[data-me]'); if (b) { setMe(b.dataset.me); closePop(); toast(`You're ${me().name}`); } };
-});
+}, { title: 'Who is using this browser?', sm: true });
 loadHumans();
 $('#teamPerson').onclick = (e) => editHuman(e.currentTarget);
 $('#peopleList').onclick = $('#setPeople').onclick = (e) => { const b = e.target.closest('[data-human],[data-human-add]'); if (b) editHuman(b, b.dataset.human); };
@@ -633,8 +655,8 @@ function meetingForm(m, date, occ) {
     <div class="calwho"><label><input type="checkbox" id="cmS" ${m?.showtell ? 'checked' : ''}>Show and tell: each presenter's agenda is their work since the last one</label></div>
     <label>Agenda</label><textarea id="cmA" class="grow" rows="4" placeholder="What to cover; attendees get this when they wake">${esc(m?.agenda || '')}</textarea>
     ${occ?.past && S.meeting?.id !== m.id ? `<label>Notes</label>${occ.notes ? `<pre class="calnotes">${esc(occ.notes)}</pre>` : `<p class="calempty">${occ.past === 'done' ? 'No notes in runs/meetings.log.' : 'It never started.'}</p>`}`
-      : m ? `<div class="row">${S.meeting?.id === m.id ? '<button class="go" data-a="join">Join</button>' : '<button class="go" data-a="start">Meet now</button>'}</div>` : ''}
-    <div class="row"><button class="go" data-a="save">${m ? 'Save' : 'Schedule'}</button>${m ? `${m.repeat !== 'once' ? `<button data-a="skip">Cancel ${esc(new Date(date + 'T12:00').toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }))}</button>` : ''}<button class="bad" data-a="cancel">${m.repeat !== 'once' ? 'Cancel series' : 'Cancel meeting'}</button>` : ''}</div>`;
+      : m ? `<div class="row">${S.meeting?.id === m.id ? '<button data-a="join">Join</button>' : '<button data-a="start">Meet now</button>'}</div>` : ''}
+    <div class="mft"><button class="go" data-a="save">${m ? 'Save' : 'Schedule'}</button>${m ? `${m.repeat !== 'once' ? `<button data-a="skip">Cancel ${esc(new Date(date + 'T12:00').toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }))}</button>` : ''}<button class="bad" data-a="cancel">${m.repeat !== 'once' ? 'Cancel series' : 'Cancel meeting'}</button>` : ''}</div>`;
 }
 function editMeeting(anchor, id, date, start) {
   const m = id && B.cal.meetings.find((x) => x.id === id), occ = start && B.cal.upcoming.find((o) => o.id === id && o.start === start);
@@ -659,7 +681,7 @@ function editMeeting(anchor, id, date, start) {
       if (r?.error) return toast(r.error);
       closePop(); loadCal();
     };
-  });
+  }, { title: m ? 'Edit meeting' : 'New meeting' });
 }
 const calStep = (n) => { if (calMonth()) B.month = new Date(B.month.getFullYear(), B.month.getMonth() + n, 1); else B.week.setDate(B.week.getDate() + 7 * n); loadCal(); syncUrl(); };
 $('#calPrev').onclick = () => calStep(-1);
@@ -671,10 +693,10 @@ $('#calAdd').onclick = (e) => editMeeting(e.currentTarget);
 // New meeting (t146, was Meet now): pick who, an optional topic and presenters (t604; default: the attendees); a 30-minute meeting starts at once. CLI: meet now <id,id> ["topic"] [--presenters <id,id>].
 function meetNowPop(anchor, id) {
   const who = new Set([id || leadId()].filter(Boolean));
-  showPop(anchor, `<label>New meeting with</label><div class="calwho">${S.order.map((x) => `<label><input type="checkbox" value="${esc(x)}" ${who.has(x) ? 'checked' : ''}>${esc(S.sq[x].name)}</label>`).join('')}</div>
+  showPop(anchor, `<label>Who</label><div class="calwho">${S.order.map((x) => `<label><input type="checkbox" value="${esc(x)}" ${who.has(x) ? 'checked' : ''}>${esc(S.sq[x].name)}</label>`).join('')}</div>
     <label>Topic (optional)</label><input id="mnT" placeholder="What it's about">
     <label>Presenters, in order (optional)</label><input id="mnP" placeholder="Empty: everyone ticked, in this order">
-    <div class="row"><button class="go" data-a="start">Start, 30 minutes</button></div>`, (pop) => {
+    <div class="mft"><button class="go" data-a="start">Start, 30 minutes</button></div>`, (pop) => {
     pop.querySelector('#mnT').onkeydown = (e) => { if (e.key === 'Enter') pop.querySelector('[data-a=start]').click(); };
     pop.onclick = async (e) => {
       if (e.target.dataset.a !== 'start') return;
@@ -685,7 +707,7 @@ function meetNowPop(anchor, id) {
       if (r?.error) return toast(r.error);
       closePop(); toast(`Meeting on: ${r.title}`);
     };
-  });
+  }, { title: 'New meeting now', sm: true });
 }
 $('#calNow').onclick = (e) => meetNowPop(e.currentTarget);
 $('#teamMeet').onclick = (e) => meetNowPop(e.currentTarget);
@@ -821,7 +843,7 @@ function taskPop(a) {
     <div class="row"><button class="go" data-a="open">Open on the board</button></div></div>`, (pop) => {
     pop.classList.add('tpop-on');
     pop.onclick = (e) => { if (e.target.dataset.a === 'open') { closePop(); openTaskNote(t.id); } };
-  });
+  }, { peek: true });
 }
 // Shows one note on the Tasks board with filters cleared enough to include it, then opens it.
 function openTaskNote(id) {
