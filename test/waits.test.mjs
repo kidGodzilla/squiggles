@@ -33,7 +33,7 @@ test('pid on a host: ssh with a fixed probe; gone ends it, an ssh failure does n
   assert.deepEqual(await probe({ pid: 42, host: 'ubuntu@100.1.2.3' }, f), { fail: 'Connection timed out' });
   assert.deepEqual(await probe({ pid: 42, host: 'ubuntu@100.1.2.3' }, f), { done: false });
   assert.deepEqual(await probe({ pid: 42, host: 'ubuntu@100.1.2.3' }, f), { done: true, result: 'pid 42 on ubuntu@100.1.2.3 exited' });
-  assert.deepEqual(f.ran[0], ['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10', 'ubuntu@100.1.2.3', 'kill -0 42 2>/dev/null && echo alive || echo gone']);
+  assert.deepEqual(f.ran[0], ['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=25', '-o', 'ServerAliveInterval=5', '-o', 'ServerAliveCountMax=3', 'ubuntu@100.1.2.3', 'kill -0 42 2>/dev/null && echo alive || echo gone']);
 });
 
 test('a /tmp file is read back masked; other files only reported', async () => {
@@ -98,4 +98,20 @@ test('a task-state wait ends when the task reaches the status, or is dropped', a
   const ended = await w.tick({ taskStatus });
   assert.deepEqual(ended.map((e) => [e.task, e.status]), [['t1', 'done'], ['t2', 'done']]);
   assert.match(ended[0].result, /t1 is done/); assert.match(ended[1].result, /t2 is no longer on the board/);
+});
+
+test('remote checks allow a slow first connect and drop a stalled session', async () => {
+  let seen; const exec = (cmd, args, o, cb) => { seen = { cmd, args, timeout: o.timeout }; cb(null, 'alive', ''); };
+  assert.deepEqual(await probe({ pid: 42, host: 'ubuntu@100.1.2.3' }, { exec }), { done: false });
+  assert.equal(seen.cmd, 'ssh');
+  assert.ok(seen.args.includes('ConnectTimeout=25') && seen.args.includes('ServerAliveInterval=5') && seen.args.includes('BatchMode=yes'));
+  assert.ok(seen.timeout > 25000 + 15000, 'the check outlasts connect + stall limits');
+});
+
+test('a file outside /tmp runs a valid script in a real shell', async () => {
+  assert.deepEqual(await probe({ file: '/etc/hosts' }), { done: true, result: '/etc/hosts appeared' });
+  assert.deepEqual(await probe({ file: '/etc/no-such-wait-file' }), { done: false });
+  const t = fs.mkdtempSync('/tmp/wfile-'), f = `${t}/x.exit`; fs.writeFileSync(f, '0');
+  assert.equal((await probe({ file: f })).result, `${f} appeared:\n0`);
+  fs.rmSync(t, { recursive: true });
 });

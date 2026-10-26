@@ -12,6 +12,9 @@ import { mask } from './asks.mjs';
 const MIN = 6e4, HOUR = 36e5;
 const STATES = ['todo', 'doing', 'blocked', 'review', 'done'];
 const MAX_OPEN = 5, MAX_FAILS = 10, SHOW = 2048;
+// A host reached through a relay (such as a VPN mesh) can take over 10s to answer the first connect after idle, and a session can stall
+// after connecting: 25s to connect, keepalives drop a stall after 15s, inside the 45s the check gets.
+export const SSH = ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=25', '-o', 'ServerAliveInterval=5', '-o', 'ServerAliveCountMax=3'];
 const err = (m, code = 400) => Object.assign(new Error(m), { code });
 // "90s", "5m", "4h", or minutes.
 export function dur(v, def) {
@@ -32,8 +35,8 @@ export function probe(w, { exec = execFile, taskStatus } = {}) {
     let st; try { st = taskStatus(w.task); } catch (e) { return Promise.resolve({ fail: `board: ${e.message}` }); } // never read as dropped
     return Promise.resolve(st == null ? { done: true, result: `${w.task} is no longer on the board (dropped)` } : st === w.state ? { done: true, result: `${w.task} is ${st}` } : { done: false });
   }
-  const run = (cmd, args) => new Promise((res) => exec(cmd, args, { timeout: 30000, maxBuffer: 64 * 1024 }, (e, out, er) => res({ code: e ? (typeof e.code === 'number' ? e.code : 255) : 0, out: String(out || ''), err: String(er || e?.message || '') })));
-  const sh = (script) => (w.host ? run('ssh', ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10', w.host, script]) : run('/bin/sh', ['-c', script]));
+  const run = (cmd, args) => new Promise((res) => exec(cmd, args, { timeout: w.host ? 45000 : 30000, maxBuffer: 64 * 1024 }, (e, out, er) => res({ code: e ? (typeof e.code === 'number' ? e.code : 255) : 0, out: String(out || ''), err: String(er || e?.message || '') })));
+  const sh = (script) => (w.host ? run('ssh', SSH.concat(w.host, script)) : run('/bin/sh', ['-c', script]));
   const where = w.host ? ` on ${w.host}` : '';
   // The script prints one word, so an ssh failure (255) is never read as "gone".
   if (w.pid) return sh(`kill -0 ${w.pid} 2>/dev/null && echo alive || echo gone`).then((r) =>
@@ -43,7 +46,7 @@ export function probe(w, { exec = execFile, taskStatus } = {}) {
   // A plain file really in /tmp: no symlink (itself or a parent), no hard link to a file elsewhere.
   const show = /^\/tmp\//.test(f) && !f.includes('..');
   const read = `case "$(realpath ${q} 2>/dev/null)" in /tmp/*|/private/tmp/*) [ ! -L ${q} ] && [ -n "$(find ${q} -maxdepth 0 -type f -links 1 2>/dev/null)" ] && head -c ${SHOW} ${q};; esac`;
-  return sh(`if [ -e ${q} ]; then echo present; ${show ? read : ''}; else echo absent; fi`).then((r) => {
+  return sh(`if [ -e ${q} ]; then echo present; ${show ? `${read}; ` : ''}else echo absent; fi`).then((r) => {
     if (/^present\n?/.test(r.out)) { const body = r.out.replace(/^present\n?/, '').trim(); return { done: true, result: `${w.file}${where} appeared${body ? `:\n${mask(body)}` : ''}` }; }
     return /^absent/.test(r.out) ? { done: false } : { fail: (r.err || `exit ${r.code}`).trim().slice(0, 200) };
   });
