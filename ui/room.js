@@ -923,7 +923,7 @@ async function openSheet(id) {
     <h3>Recent activity</h3><div class="feed">${feed.map((f) => `<div>${f}</div>`).join('') || '<div>Nothing yet</div>'}</div>`;
   // Pi and Cursor have no approval step: Permissions doesn't apply, and every tool call runs as you.
   const permNote = () => { const m = $('#shModel').value, other = (S.piModels || []).includes(m) ? 'Pi' : (S.cursorModels || []).includes(m) ? 'Cursor' : '';
-    $('#shPerm').disabled = !!other; $('#shPermNote').textContent = other ? `Not used on ${other}: nothing asks first, every tool call runs as you (git push, deploys, ~/.ssh). A hook keeps it out of Downloads, Desktop and Documents, but not reliably.` : ''; };
+    $('#shPerm').disabled = !!other; $('#shPermNote').textContent = other ? `Not used on ${other}: nothing asks first, every tool call runs as you (deploys, scripts, your accounts). A hook blocks git push, ~/.ssh, Downloads, Desktop and Documents, but not reliably.` : ''; };
   $('#shModel').onchange = permNote; permNote();
   $('#sheetBody').onclick = async (e) => {
     const a = e.target.dataset.a; if (!a) return;

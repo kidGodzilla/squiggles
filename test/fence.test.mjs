@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fencedPath, fencedCommand, mentionsHome } from '../fence.mjs';
+import { fencedPath, fencedCommand, mentionsHome, commandReason, pathReason, REASONS } from '../fence.mjs';
 import { check } from '../cursor/guard.mjs';
 
 const H = os.homedir();
@@ -28,4 +28,14 @@ test('fence: file contents only trip on home paths', () => {
   assert.ok(mentionsHome('see ~/Documents/plan'));
   assert.ok(!check({ tool_input: { path: '/tmp/w/README.md', fileText: 'Downloads and documents' }, cwd: '/tmp/w' }));
   assert.ok(check({ tool_input: { command: 'cd ~ && cat downloads/x' }, cwd: '/tmp/w' }));
+});
+
+test('fence: ~/.ssh and git push', () => {
+  for (const c of ['git push', 'git -C /tmp/r push origin main', 'make && git push dokku main', '(cd r; git -c a=b push)', 'cat ~/.ssh/id_ed25519', 'cp "$HOME"/.SSH/config x'])
+    assert.ok(commandReason(c, '/tmp'), c);
+  assert.equal(commandReason('cat .ssh/config', H), REASONS.ssh); assert.equal(commandReason('cat .ssh/config', '/tmp'), '');
+  for (const c of ['git commit -m "push fix"', 'git status', 'npm run push-notes', 'echo ~/.sshd']) assert.equal(commandReason(c, '/tmp'), '', c);
+  assert.equal(pathReason('~/.ssh/known_hosts', '/tmp'), REASONS.ssh); assert.equal(pathReason('~/Downloads', '/tmp'), REASONS.dirs);
+  assert.equal(check({ tool_input: { command: 'git push' }, cwd: '/tmp/w' }), REASONS.push);
+  assert.equal(check({ tool_input: { file_path: `${H}/.ssh/id_rsa` }, cwd: '/tmp/w' }), REASONS.ssh);
 });
