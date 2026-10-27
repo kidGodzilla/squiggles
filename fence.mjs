@@ -18,8 +18,18 @@ const under = (names, p, cwd, home) => {
 };
 export const fencedPath = (p, cwd = process.cwd(), home = os.homedir()) => under(DIRS, p, cwd, home);
 export const sshPath = (p, cwd = process.cwd(), home = os.homedir()) => under(['.ssh'], p, cwd, home);
-const globRe = (g) => new RegExp(`^${g.replace(/[.+^${}()|\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.').replace(/\[!/g, '[^')}$`, 'i');
-const globHits = (seg, names = DIRS) => /[*?[]/.test(seg) && names.some((d) => { try { return globRe(seg).test(d); } catch { return true; } });
+// A shell glob as a regex source: * ? [abc] [!a] [^a] {a,b}.
+const globSrc = (g) => { let r = '';
+  for (let i = 0; i < g.length; i++) {
+    const ch = g[i], j = ch === '[' ? g.indexOf(']', i + 2) : ch === '{' ? g.indexOf('}', i) : -1;
+    if (ch === '*') r += '.*'; else if (ch === '?') r += '.';
+    else if (ch === '[' && j > 0) { const b = g.slice(i + 1, j).replace(/\\/g, '\\\\'); r += `[${/^[!^]/.test(b) ? '^' + b.slice(1) : b}]`; i = j; }
+    else if (ch === '{' && j > 0) { r += `(?:${g.slice(i + 1, j).split(',').map(globSrc).join('|')})`; i = j; }
+    else r += ch.replace(/[.+^$(){}|[\]\\]/g, '\\$&');
+  }
+  return r; };
+const globRe = (g) => new RegExp(`^${globSrc(g)}$`, 'i');
+const globHits = (seg, names = DIRS) => /[*?[{]/.test(seg) && names.some((d) => { try { return globRe(seg).test(d); } catch { return true; } });
 const homeRef = (home) => new RegExp(`(?:~|\\$HOME|\\$\\{HOME\\}|${esc(home)})["']?/["']?([^/\\s"';|&)]*)`, 'gi');
 // Any text (file contents too): a folder reached from home, in any case or by glob (~/downloads, "$HOME"/Desktop, ~/Down*).
 export function mentionsHome(text, home = os.homedir(), names = DIRS) {
@@ -78,6 +88,14 @@ const RECURSE = { grep: /^-[a-zA-Z]*[rR]|^--(dereference-)?recursive$/, cp: /^-[
   rsync: /^-[a-zA-Z]*[ra]|^--(recursive|archive)$/, zip: /^-[a-zA-Z]*r|^--recurse-paths$/, scp: /^-[a-zA-Z]*r/,
   rg: true, find: true, du: true, tar: true, tree: true, ditto: true, fd: true, ag: true, '7z': true, '7za': true, '7zz': true };
 const NEEDS_PATH = new Set(['cp', 'tar', 'rsync', 'zip', 'scp', 'ditto', '7z', '7za', '7zz']), PATTERN_FIRST = new Set(['grep', 'rg', 'fd', 'ag']);
+// Flags whose next word is a value, not a path (rg -g '*.md', fd -e md); a pattern given by -e or -f leaves every operand a path.
+const VAL = { grep: /^-[a-zA-Z]*[efmABCD]$|^--(regexp|file|max-count|context|after-context|before-context)$/,
+  rg: /^-[a-zA-Z]*[efgtTmABCMj]$|^--(regexp|file|glob|iglob|type|type-not|max-count|context|after-context|before-context|max-columns|threads)$/,
+  fd: /^-[a-zA-Z]*[etdExXcjS]$|^--(extension|type|max-depth|min-depth|exclude|exec|exec-batch|color|threads|size)$/,
+  ag: /^-[a-zA-Z]*[GgABCm]$|^--(file-search-regex|ignore|context|after|before|max-count)$/, du: /^-[dB]$/ };
+const PATTERN_FLAG = /^-[a-zA-Z]*[ef]$|^--(regexp|file)\b/;
+// Wrapper flags that take a value (sudo -u root, xargs -I {}, bash -O extglob).
+const WRAP_VAL = { sudo: /^-[ugCDhpRrT]$/, xargs: /^-[IndELPs]$/, nice: /^-n$/, timeout: /^-[sk]$/, exec: /^-a$/ };
 // Words that run the command after them: sudo, env [-C dir], nice [-n N], timeout [-s SIG] N, bash/sh/zsh -c, and so on.
 const WRAP = /^(sudo|command|builtin|exec|nice|time|nohup|xargs|env|timeout|bash|sh|zsh|dash|\w+=\S*)$/;
 const aboveHome = (abs, home) => { const a = abs.toLowerCase(), h = home.toLowerCase(); return a === h || a === '/' || h.startsWith(a.replace(/\/$/, '') + '/'); };
@@ -85,12 +103,10 @@ function treeReason(cmd, cwd, home) {
   let cur = path.resolve(cwd);
   for (const seg of cmd.split(/[;&|\n()`]|\$\(/)) {
     const w = seg.trim().split(/\s+/).filter(Boolean);
-    while (w.length && WRAP.test(w[0])) {
-      const c0 = w.shift(), flags = (arg) => { while (/^-/.test(w[0] || '')) if (arg.test(w.shift())) w.shift(); };
-      if (c0 === 'nice') flags(/^-n$/);
-      if (c0 === 'timeout') { flags(/^-[sk]$/); w.shift(); }
-      if (/^(bash|sh|zsh|dash)$/.test(c0)) { if (!w.some((a) => /^-[a-z]*c[a-z]*$/.test(a))) { w.unshift(c0); break; } flags(/^-o$/); }
-      if (c0 !== 'env') continue;
+    while (w.length && WRAP.test(path.basename(w[0]))) {
+      const c0 = path.basename(w.shift()), flags = (arg) => { while (/^[-+]/.test(w[0] || '')) if (arg.test(w.shift())) w.shift(); };
+      if (/^(bash|sh|zsh|dash)$/.test(c0)) { if (!w.some((a) => /^-[a-zA-Z]*c[a-zA-Z]*$/.test(a))) { w.unshift(c0); break; } flags(/^[-+][oO]$/); continue; }
+      if (c0 !== 'env') { flags(WRAP_VAL[c0] || /^$/); if (c0 === 'timeout') w.shift(); continue; }
       while (/^-|^\w+=/.test(w[0] || '')) { const f = w.shift(), m = f.match(/^(?:-C|--chdir=?)(.*)$/); if (!m) continue;
         const t = (m[1] || w.shift() || '').replace(homeArg(home), home); cur = !t || /^[-~]|\$/.test(t) ? home : path.resolve(cur, t); }
     }
@@ -100,8 +116,11 @@ function treeReason(cmd, cwd, home) {
     const rx = RECURSE[name];
     if (!rx || (rx !== true && !args.some((a) => rx.test(a)))) continue;
     if (name === 'find') while (/^-[HLPEXdsx]+$/.test(args[0] || '')) args.shift();
-    let ops = name === 'find' ? args.slice(0, (args.findIndex((a) => /^[-!(]/.test(a)) + 1 || args.length + 1) - 1) : args.filter((a) => !a.startsWith('-'));
-    if (PATTERN_FIRST.has(name) && !args.some((a) => /^-[a-zA-Z]*[ef]|^--(regexp|file)\b/.test(a))) ops = ops.slice(1);
+    let ops = [];
+    if (name === 'find') ops = args.slice(0, (args.findIndex((a) => /^[-!(]/.test(a)) + 1 || args.length + 1) - 1);
+    else for (let i = 0; i < args.length; i++) { if (!args[i].startsWith('-')) ops.push(args[i]); else if (VAL[name]?.test(args[i])) i++; }
+    if (PATTERN_FIRST.has(name) && !((name === 'grep' || name === 'rg') && args.some((a) => PATTERN_FLAG.test(a)))) ops = ops.slice(1);
+    if (/^7z/.test(name) && /^[au]$/.test(ops[0] || '') && ops.length === 2) ops.push('.'); // 7z a out.7z: no file list adds the whole folder
     if (!ops.length && !NEEDS_PATH.has(name)) ops = ['.'];
     for (const o of ops) { const t = o.replace(homeArg(home), home); if (/^\$|^~/.test(t) || aboveHome(path.resolve(cur, t), home)) return REASONS.tree; }
   }

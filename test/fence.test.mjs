@@ -114,3 +114,16 @@ test('fence: wrappers, more recursive tools and dotfile globs at home', () => {
   for (const c of ['bash -c "rg x src"', 'timeout 5 rg x', 'nice -n 10 make', 'scp a.txt host:b', 'scp -r src host:b', 'fd x', 'ag x src', '7z x ../a.7z', 'ls .[!.]*', 'bash build.sh'])
     assert.equal(commandReason(c, P), '', c);
 });
+
+test('fence: [^.] and brace globs, wrapper paths and flags, -e patterns, 7z with no file list', () => {
+  const P = path.join(H, 'proj');
+  for (const c of ['cat ~/.[^.]*/id_ed25519', 'cat ~/.{ssh,x}/config', 'cd ~ && cat .[^.]*/config'])
+    assert.equal(commandReason(c, P), REASONS.ssh, c);
+  assert.equal(commandReason('ls ~/{Desktop,x}', P), REASONS.dirs);
+  for (const [c, d] of [['/bin/bash -c "rg x ~"', P], ['/usr/bin/env -C ~ rg x', P], ['/usr/bin/timeout 5 rg x ~', P], ['sudo -u root grep -r x ~', P],
+    ['xargs -0 grep -r x ..', P], ['time -p rg x ~', P], ['command -p grep -r x ..', P], ['bash -O extglob -c "rg x ~"', P],
+    ['rg -e x', H], ['grep -r -e x', H], ['fd -e md x', H], ['rg --regexp x', H], ['7z a /tmp/a.7z', H], ['rg -g "*.md" x', H]])
+    assert.equal(commandReason(c, d), REASONS.tree, c);
+  for (const c of ['rg -e x', 'grep -r -e x src', 'fd -e md x', 'sudo -u root make', '/bin/bash -c "rg x src"', '7z a /tmp/a.7z', 'rg -g "*.md" x src', 'cat {a,b}.txt'])
+    assert.equal(commandReason(c, P), '', c);
+});
