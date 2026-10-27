@@ -103,3 +103,14 @@ test('fence: recursive reads run from home through env -C', () => {
   for (const c of ['env -C src rg x', 'env FOO=1 rg x', 'env -C .. ls'])
     assert.equal(commandReason(c, P), '', c);
 });
+
+test('fence: wrappers, more recursive tools and dotfile globs at home', () => {
+  const P = path.join(H, 'proj');
+  for (const c of ['bash -c "grep -r x .."', "sh -c 'cd ~; rg x'", 'zsh -lc "du -sh ~"', 'timeout 5 grep -r x ..', 'timeout -s KILL 5 rg x ~', 'nice -n 10 find ..',
+    'nice -n10 rg x ~', 'ditto .. /tmp/b', 'scp -r .. host:b', 'fd x ..', 'ag x ~', '7z a /tmp/a.7z ..', 'cd; fd'])
+    assert.equal(commandReason(c, P), REASONS.tree, c);
+  for (const c of ['cat ../.[!.]*/config', 'cd ~ && ls .[!.]*'])
+    assert.equal(commandReason(c, P), REASONS.ssh, c);
+  for (const c of ['bash -c "rg x src"', 'timeout 5 rg x', 'nice -n 10 make', 'scp a.txt host:b', 'scp -r src host:b', 'fd x', 'ag x src', '7z x ../a.7z', 'ls .[!.]*', 'bash build.sh'])
+    assert.equal(commandReason(c, P), '', c);
+});

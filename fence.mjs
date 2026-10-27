@@ -18,7 +18,7 @@ const under = (names, p, cwd, home) => {
 };
 export const fencedPath = (p, cwd = process.cwd(), home = os.homedir()) => under(DIRS, p, cwd, home);
 export const sshPath = (p, cwd = process.cwd(), home = os.homedir()) => under(['.ssh'], p, cwd, home);
-const globRe = (g) => new RegExp(`^${g.replace(/[.+^${}()|\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.')}$`, 'i');
+const globRe = (g) => new RegExp(`^${g.replace(/[.+^${}()|\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.').replace(/\[!/g, '[^')}$`, 'i');
 const globHits = (seg, names = DIRS) => /[*?[]/.test(seg) && names.some((d) => { try { return globRe(seg).test(d); } catch { return true; } });
 const homeRef = (home) => new RegExp(`(?:~|\\$HOME|\\$\\{HOME\\}|${esc(home)})["']?/["']?([^/\\s"';|&)]*)`, 'gi');
 // Any text (file contents too): a folder reached from home, in any case or by glob (~/downloads, "$HOME"/Desktop, ~/Down*).
@@ -75,15 +75,22 @@ export const pushes = (cmd) => /\bgit\b(\s+(-[Cc]\s+\S+|--?[\w-]+(=\S+)?))*\s+pu
 // Recursive reads and copies (grep -r, rg, find, cp -r, tar, du, ls -R, rsync -a, zip -r, tree) rooted at home or above reach
 // every fenced folder at once. Each simple command is checked from the folder it runs in, following cd and env -C; no path means that folder.
 const RECURSE = { grep: /^-[a-zA-Z]*[rR]|^--(dereference-)?recursive$/, cp: /^-[a-zA-Z]*[rRa]|^--(recursive|archive)$/, ls: /^-[a-zA-Z]*R|^--recursive$/,
-  rsync: /^-[a-zA-Z]*[ra]|^--(recursive|archive)$/, zip: /^-[a-zA-Z]*r|^--recurse-paths$/, rg: true, find: true, du: true, tar: true, tree: true };
-const NEEDS_PATH = new Set(['cp', 'tar', 'rsync', 'zip']), PATTERN_FIRST = new Set(['grep', 'rg']);
+  rsync: /^-[a-zA-Z]*[ra]|^--(recursive|archive)$/, zip: /^-[a-zA-Z]*r|^--recurse-paths$/, scp: /^-[a-zA-Z]*r/,
+  rg: true, find: true, du: true, tar: true, tree: true, ditto: true, fd: true, ag: true, '7z': true, '7za': true, '7zz': true };
+const NEEDS_PATH = new Set(['cp', 'tar', 'rsync', 'zip', 'scp', 'ditto', '7z', '7za', '7zz']), PATTERN_FIRST = new Set(['grep', 'rg', 'fd', 'ag']);
+// Words that run the command after them: sudo, env [-C dir], nice [-n N], timeout [-s SIG] N, bash/sh/zsh -c, and so on.
+const WRAP = /^(sudo|command|builtin|exec|nice|time|nohup|xargs|env|timeout|bash|sh|zsh|dash|\w+=\S*)$/;
 const aboveHome = (abs, home) => { const a = abs.toLowerCase(), h = home.toLowerCase(); return a === h || a === '/' || h.startsWith(a.replace(/\/$/, '') + '/'); };
 function treeReason(cmd, cwd, home) {
   let cur = path.resolve(cwd);
   for (const seg of cmd.split(/[;&|\n()`]|\$\(/)) {
     const w = seg.trim().split(/\s+/).filter(Boolean);
-    while (w.length && /^(sudo|command|builtin|exec|nice|time|nohup|xargs|env|\w+=\S*)$/.test(w[0])) {
-      if (w.shift() !== 'env') continue;
+    while (w.length && WRAP.test(w[0])) {
+      const c0 = w.shift(), flags = (arg) => { while (/^-/.test(w[0] || '')) if (arg.test(w.shift())) w.shift(); };
+      if (c0 === 'nice') flags(/^-n$/);
+      if (c0 === 'timeout') { flags(/^-[sk]$/); w.shift(); }
+      if (/^(bash|sh|zsh|dash)$/.test(c0)) { if (!w.some((a) => /^-[a-z]*c[a-z]*$/.test(a))) { w.unshift(c0); break; } flags(/^-o$/); }
+      if (c0 !== 'env') continue;
       while (/^-|^\w+=/.test(w[0] || '')) { const f = w.shift(), m = f.match(/^(?:-C|--chdir=?)(.*)$/); if (!m) continue;
         const t = (m[1] || w.shift() || '').replace(homeArg(home), home); cur = !t || /^[-~]|\$/.test(t) ? home : path.resolve(cur, t); }
     }
