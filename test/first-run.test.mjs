@@ -16,7 +16,9 @@ test('first run: empty data dir boots with only the lead', async () => {
     for (const s of [p.stdout, p.stderr]) s.on('data', (b) => { out += b; if (/ on http/.test(out)) { clearTimeout(t); res(true); } });
     p.on('exit', () => { clearTimeout(t); res(false); });
   });
+  const gone = new Promise((res) => (p.exitCode !== null || p.signalCode) ? res() : p.once('exit', res));
   p.kill();
+  await gone; // the server still writes runs/ while it shuts down; removing the dir before it exits races it
   try {
     assert.ok(up, out);
     assert.deepEqual(fs.readdirSync(path.join(d, 'squiggles')), ['lead']);
