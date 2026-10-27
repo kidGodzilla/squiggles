@@ -16,7 +16,7 @@ import { createAsks, runAsk } from './asks.mjs';
 import { createPicks } from './picks.mjs';
 import { createWaits } from './waits.mjs';
 import { mimeFor } from './mime.mjs';
-import { trustLevel, trustOf, trustRules, updateRefusal, createRefusal, quitRefusal, slotsRefusal, shareRefusal, fileRmRefusal, fileBy, charterDiff, charterEdit } from './trust.mjs';
+import { trustLevel, trustOf, trustRules, updateRefusal, createRefusal, quitRefusal, slotsRefusal, shareRefusal, fileRmRefusal, fileBy, charterDiff, charterEdit, charterStart } from './trust.mjs';
 import { KEYS, DEFAULT_SLOTS, slotKey, rankOf, limitOf, enqueue, drain, leave, checkSlots } from './slots.mjs';
 import { dropStale } from './stale.mjs';
 import { createLedger } from './cost.mjs';
@@ -115,7 +115,8 @@ function createSquiggle({ id, name, role, cwd, charter, every, permissionMode = 
   if (!id || fs.existsSync(sqDir(id))) throw new Error('name taken or empty');
   checkModelEffort({ model }, EXTRA_MODELS); const d = teamDefaults();
   saveSquiggle({ id, name, role, cwd: cwd || '~', every: every == null || every === '' ? d.every : Number(every) || 0, permissionMode, model: model || d.model || undefined, effort: d.effort || undefined, paused: false, created: now() });
-  fs.writeFileSync(path.join(sqDir(id), 'charter.md'), (charter || role || '').trim() + '\n');
+  const text = (charter || role || '').trim() + '\n';
+  fs.writeFileSync(path.join(sqDir(id), 'charter.md'), text); R(id).charterAt = text; saveState();
   fs.writeFileSync(path.join(sqDir(id), 'journal.md'), `# ${name} journal\n`);
   return loadSquiggle(id);
 }
@@ -602,7 +603,7 @@ function send(id, text, from = 'owner', { replay = false, human, images = [], as
   // A wake keeps its ⟨wake due⟩ token through the slot and restart queues; what's shown or sent is stamped now.
   const raw = text; text = stampWake(text);
   // Who asked this turn (Proactive): the user, a person, the lead, or a non-scheduled wake. Tasks filed while it runs are theirs, not the squiggle's own idea.
-  if (!replay && r.status !== 'working') { r.asked = []; r.charterAt = readText(path.join(sqDir(id), 'charter.md')); } // checked at turn end
+  if (!replay && r.status !== 'working') { r.asked = []; charterAtStart(s); } // checked again at turn end
   asker ||= from === 'harness' ? '' : from === 'owner' ? human || 'owner' : from;
   if (asker && !(r.asked ||= []).includes(asker)) r.asked.push(asker);
   // A pending restart waits for everyone to be idle; new turns would starve it (a report wakes the lead, the lead wakes someone).
@@ -759,15 +760,26 @@ function lastSaved(s) {
 
 // Reports that need the lead's attention, delivered together whenever the lead is free.
 const inbox = [];
+// r.charterAt is the last approved charter, saved with the runtime state. A charter.md that changed between turns
+// (a job a past turn left running, or an edit across a restart) is put back before the turn starts.
+function charterAtStart(s) {
+  const r = R(s.id), f = path.join(sqDir(s.id), 'charter.md'), disk = readText(f);
+  if (charterStart({ approved: r.charterAt, disk, lead: !!s.lead }) === 'adopt') { r.charterAt = disk; saveState(); return; }
+  fs.writeFileSync(f, r.charterAt);
+  emit(s.id, { k: 'log', text: 'charter.md changed between turns; put back' });
+  inbox.push(`[${s.name} · CHARTER] charter.md changed between turns; put back:\n${charterDiff(r.charterAt, disk)}`);
+  flushInbox();
+}
 // A charter.md the squiggle rewrote with file tools gets the update route's rule: kept and shown to the lead when the
 // user or the lead asked this turn, otherwise put back.
 function charterAtEnd(s) {
   const r = R(s.id), f = path.join(sqDir(s.id), 'charter.md'), after = readText(f), before = r.charterAt;
   const leadId = listSquiggles().find((x) => x.lead)?.id || '', act = charterEdit({ before, after, askers: r.asked || [], leadId, lead: !!s.lead });
   r.charterAt = after;
-  if (act === 'keep') return;
+  if (act === 'keep') return saveState();
   const diff = charterDiff(before, after);
   if (act === 'revert') { fs.writeFileSync(f, before); r.charterAt = before; emit(s.id, { k: 'log', text: `charter edit put back: ${USER} or the lead didn't ask for it this turn` }); }
+  saveState();
   inbox.push(act === 'revert' ? `[${s.name} · CHARTER] edited its own charter.md unasked; put back:\n${diff}` : `[${s.name} · CHARTER] rewrote its own charter.md (asked by ${r.asked.join(', ')}):\n${diff}`);
   flushInbox();
 }
@@ -1679,7 +1691,7 @@ const server = http.createServer(async (req, res) => {
           if (s.lead && ('look' in meta || 'lookSeed' in meta)) drawIcons();
           if (charter != null) {
             const f = path.join(sqDir(id), 'charter.md'), before = readText(f);
-            fs.writeFileSync(f, charter.trim() + '\n'); R(id).charterAt = charter.trim() + '\n';
+            fs.writeFileSync(f, charter.trim() + '\n'); R(id).charterAt = charter.trim() + '\n'; saveState();
             // The lead sees every charter a squiggle rewrote for itself, and who asked.
             if (c === id && id !== leadId && before.trim() !== charter.trim()) { inbox.push(`[${s.name} · CHARTER] rewrote its own charter (asked by ${R(c).asked.join(', ')}):\n${charterDiff(before, charter)}`); flushInbox(); }
           }

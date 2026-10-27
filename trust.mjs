@@ -89,6 +89,12 @@ export function charterEdit({ before, after, askers = [], leadId = '', lead = fa
   return askers.some((a) => CHARTER_ASKERS(leadId).includes(a)) ? 'report' : 'revert';
 }
 
+// At turn start, charter.md against the last approved copy (kept across restarts): 'adopt' when they match, nothing was
+// approved yet, or it's the lead; else 'revert' (changed between turns, e.g. by a job a past turn left running).
+export function charterStart({ approved, disk, lead = false }) {
+  return approved == null || lead || String(approved).trim() === String(disk ?? '').trim() ? 'adopt' : 'revert';
+}
+
 // Shared files: a squiggle deletes only what it added; the rest needs the user (an unlocked page once a passcode is set).
 export function fileRmRefusal({ caller, uploader, owner, passcode, user }) {
   if (caller) return uploader === caller ? null : { status: 403, error: `${caller} can delete only files it added: ${user} deletes the rest` };

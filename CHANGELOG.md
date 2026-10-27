@@ -6,7 +6,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 
 ### Security
 - Codex squiggles can't run git push or touch ~/.ssh, Downloads, Desktop or Documents: a Codex hook blocks them, patches included. Until you trust it, Codex turns are refused.
-- A squiggle rewrites its own charter only in a turn you or the lead asked for, so instructions planted in mail, pages or files can't. Unasked `charter` calls are refused and charter.md edits are put back; the lead sees every self-rewrite as a diff.
+- A squiggle rewrites its own charter only in a turn you or the lead asked for, so instructions planted in mail, pages or files can't. Unasked `charter` calls are refused and charter.md edits are put back; the lead sees every self-rewrite as a diff. A charter.md changed between turns (a job left running, or while the room was down) is put back at the next turn and the lead is told: change charters on the squiggle sheet.
 - A Cursor squiggle's prompt is never read as cursor-agent options.
 - Pi and Cursor squiggles can't run git push or touch ~/.ssh (same rough fence as Downloads, Desktop and Documents).
 - Pi squiggles start with `--no-approve`, so a repository's own pi files are never trusted.
