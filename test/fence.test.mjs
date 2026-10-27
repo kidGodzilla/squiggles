@@ -57,3 +57,13 @@ test('fence: relative cd to home, and push by alias, variable or send-pack', () 
   for (const c of ['cd src && ls *.js', 'cd ../lib; ls D*.md', 'git commit -m "push $x"'.replace('$x', 'fix')])
     assert.equal(commandReason(c, sub), '', c);
 });
+
+test('fence: relative paths and globs to home folders, cd spelled other ways, subtree and lfs push', () => {
+  const sub = path.join(H, 'code');
+  for (const c of ['ls ../D*', 'cat ../Docu*/x', 'builtin cd ..; ls D*', 'command cd .. && ls De*', 'env -C .. ls D*', 'cd ~someone; ls D*'])
+    assert.equal(commandReason(c, sub), REASONS.dirs, c);
+  for (const c of ['cat ../.ssh/config', 'cp x ../.ssh/authorized_keys', 'ls ../.ss*']) assert.equal(commandReason(c, sub), REASONS.ssh, c);
+  for (const c of ['git subtree push --prefix=d origin main', 'git lfs push origin main']) assert.equal(commandReason(c, sub), REASONS.push, c);
+  for (const c of ['ls ../*.md', 'cat ../code/D*.txt', 'cat ./notes/.sshrc', 'git subtree pull --prefix=d origin main', 'cd ../lib && ls'])
+    assert.equal(commandReason(c, sub), '', c);
+});

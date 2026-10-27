@@ -29,31 +29,46 @@ export const mentionsSsh = (text, home = os.homedir()) => mentionsHome(text, hom
 // Shell commands are matched after dropping quotes and backslashes (~/Down"loads", D\ocuments), and a bare cd
 // (or cd ~, cd $HOME) counts as running from home.
 const unquote = (cmd) => String(cmd).replace(/\\\n/g, '').replace(/["'\\]/g, '');
-// Each cd or pushd is followed from cwd (cd .., pushd ~ >/dev/null); a target it can't read (cd -, cd $DIR) counts as home.
-const startsHome = (cmd, cwd, home) => {
-  const h = home.toLowerCase(), homeArg = new RegExp(`^(~|\\$HOME|\\$\\{HOME\\}|${esc(home)})(?=/|$)`, 'i');
-  let cur = path.resolve(cwd);
-  if (cur.toLowerCase() === h) return true;
-  for (const m of String(cmd).matchAll(/(?:^|[;&|(`\n]|\$\()\s*(?:cd|pushd)\b(?:[ \t]+([^\s;&|)<>`]+))?/gi)) {
-    const t = m[1] ? m[1].replace(homeArg, home) : home;
-    if (/^-|\$/.test(t)) return true;
-    cur = path.resolve(cur, t);
-    if (cur.toLowerCase() === h) return true;
+// The folders a command may run in: cwd, then each cd or pushd target (also builtin cd, command cd, env -C), followed
+// from the last (cd .., pushd ~ >/dev/null). A target it can't read (cd -, cd $DIR, cd ~someone) counts as home.
+const CD = /(?:^|[;&|(`\n]|\$\()\s*(?:(?:builtin|command)\s+)?(?:cd|pushd)\b(?:[ \t]+([^\s;&|)<>`]+))?|\benv\b[^;&|\n]*?(?:\s-C\s*|\s--chdir[=\s]+)([^\s;&|)<>`]+)/gi;
+const homeArg = (home) => new RegExp(`^(~|\\$HOME|\\$\\{HOME\\}|${esc(home)})(?=/|$)`, 'i');
+function places(cmd, cwd, home) {
+  let cur = path.resolve(cwd); const out = [cur];
+  for (const m of String(cmd).matchAll(CD)) {
+    const a = m[1] ?? m[2], t = a ? a.replace(homeArg(home), home) : home;
+    if (/^[-~]|\$/.test(t)) { out.push(home); continue; }
+    out.push(cur = path.resolve(cur, t));
   }
-  return false;
-};
+  return out;
+}
+const startsHome = (cmd, cwd, home) => places(cmd, cwd, home).some((d) => d.toLowerCase() === home.toLowerCase());
+// A path-like word (../.ssh/config, ../D*) resolved from each folder the command may run in.
+function relReason(cmd, cwd, home) {
+  const h = home.toLowerCase(), words = cmd.split(/[\s;|&()<>=`]+/).filter((w) => w.includes('/'));
+  for (const d of places(cmd, cwd, home)) for (const w of words) {
+    const abs = path.resolve(d, w.replace(homeArg(home), home)), parts = abs.split('/');
+    if (fencedPath(abs, d, home)) return REASONS.dirs;
+    if (sshPath(abs, d, home)) return REASONS.ssh;
+    for (let k = 1; k < parts.length; k++) if (parts.slice(0, k).join('/').toLowerCase() === h) {
+      if (globHits(parts[k])) return REASONS.dirs;
+      if (globHits(parts[k], ['.ssh'])) return REASONS.ssh;
+    }
+  }
+  return '';
+}
 // A shell command, also: any word naming one of the folders (cd ~ && cat Downloads/x), and, run from home, a bare glob (D*).
 export function fencedCommand(cmd, cwd = process.cwd(), home = os.homedir()) {
   cmd = unquote(cmd);
   if (mentionsHome(cmd, home) || /(^|[^a-z0-9_.-])(downloads|desktop|documents)([^a-z0-9_.-]|$)/i.test(cmd)) return true;
   if (startsHome(cmd, cwd, home)) for (const t of cmd.split(/[\s;|&()<>=`]+/)) if (globHits(t.split('/')[0])) return true;
-  return false;
+  return relReason(cmd, cwd, home) === REASONS.dirs;
 }
 // Any text (file contents, a patch): a home path to a fenced folder or ~/.ssh.
 export const mentionReason = (text, home = os.homedir()) => mentionsHome(text, home) ? REASONS.dirs : mentionsSsh(text, home) ? REASONS.ssh : '';
 // git [-C dir] [-c k=v] [--flags] push, anywhere in a chain or subshell.
-// Also git send-pack, an alias set to push, and push reached through a variable or eval (c=push; git $c).
-export const pushes = (cmd) => /\bgit\b(\s+(-[Cc]\s+\S+|--?[\w-]+(=\S+)?))*\s+push\b/.test(cmd) || /\bgit\b.*\bsend-pack\b/.test(cmd)
+// Also git send-pack, subtree or lfs push, an alias set to push, and push reached through a variable or eval (c=push; git $c).
+export const pushes = (cmd) => /\bgit\b(\s+(-[Cc]\s+\S+|--?[\w-]+(=\S+)?))*\s+push\b/.test(cmd) || /\bgit\b.*\bsend-pack\b/.test(cmd) || /\bgit\b[^;&|\n]*\b(subtree|lfs)\b[^;&|\n]*\bpush\b/.test(cmd)
   || /\balias\.[\w-]+[\s=]+!?(git\s+)?push\b/.test(cmd) || (/\bpush\b/.test(cmd) && /\$\{?\w|\beval\b/.test(cmd) && /\bgit\b/.test(cmd));
 // The reason a path or shell command is refused, or ''.
 export function pathReason(p, cwd = process.cwd(), home = os.homedir()) {
@@ -62,6 +77,6 @@ export function pathReason(p, cwd = process.cwd(), home = os.homedir()) {
 export function commandReason(cmd, cwd = process.cwd(), home = os.homedir()) {
   if (fencedCommand(cmd, cwd, home)) return REASONS.dirs;
   cmd = unquote(cmd);
-  if (mentionsSsh(cmd, home) || (startsHome(cmd, cwd, home) && /(^|[\s=;&|(`])\.ssh\b/i.test(cmd))) return REASONS.ssh;
+  if (mentionsSsh(cmd, home) || (startsHome(cmd, cwd, home) && /(^|[\s=;&|(`])\.ssh\b/i.test(cmd)) || relReason(cmd, cwd, home) === REASONS.ssh) return REASONS.ssh;
   return pushes(cmd) ? REASONS.push : '';
 }
