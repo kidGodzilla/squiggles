@@ -539,7 +539,7 @@ function cursorTurn(s, prompt) {
   if (r.cx) { r.cx.on = null; r.cx.proc.kill('SIGTERM'); r.cx = null; } // the squiggle moved off Codex or Pi
   if (!r.cursorSession) prompt = `${systemPrompt(s)}\n\n---\n\n${prompt}`;
   const proc = spawn(process.env.CURSOR_BIN || 'cursor-agent', ['-p', '--output-format', 'stream-json', '--model', s.model, '--force', '--trust',
-    '--workspace', home(s.cwd), ...(r.cursorSession ? ['--resume', r.cursorSession] : []), prompt],
+    '--workspace', home(s.cwd), ...(r.cursorSession ? ['--resume', r.cursorSession] : []), '--', prompt],
   { cwd: home(s.cwd), stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, AGENTS_ID: s.id, AGENTS_NODE: process.execPath } });
   let lastText = '', ended = false, stopped = false, done = null, errText = '';
   const end = (text, err, subtype) => {

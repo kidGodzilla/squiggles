@@ -5,6 +5,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 ## 0.1.2 (unreleased)
 
 ### Security
+- A Cursor squiggle's prompt is never read as cursor-agent options.
 - Pi and Cursor squiggles can't run git push or touch ~/.ssh (same rough fence as Downloads, Desktop and Documents).
 - Pi squiggles start with `--no-approve`, so a repository's own pi files are never trusted.
 - The Pi and Cursor folder fence ignores case (~/downloads), follows symlinks, and catches shell forms like `cd ~ && cat Downloads/x`, `~/Down*`, `~/Down"loads"` and `cd; ls Docu*`. Still a rough fence, not a sandbox.
