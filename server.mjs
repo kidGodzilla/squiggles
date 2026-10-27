@@ -14,7 +14,7 @@ import { createFiles } from './files.mjs';
 import { holdGate } from './hold.mjs';
 import { createAsks, runAsk } from './asks.mjs';
 import { createPicks } from './picks.mjs';
-import { createWaits } from './waits.mjs';
+import { createWaits, bgStarted, bgEnded } from './waits.mjs';
 import { mimeFor } from './mime.mjs';
 import { trustLevel, trustOf, trustRules, updateRefusal, createRefusal, quitRefusal, slotsRefusal, shareRefusal, fileRmRefusal, fileBy, charterDiff, charterEdit, charterStart } from './trust.mjs';
 import { KEYS, DEFAULT_SLOTS, slotKey, rankOf, limitOf, enqueue, drain, leave, checkSlots } from './slots.mjs';
@@ -132,7 +132,7 @@ const R = (id) => {
 };
 function saveState() {
   const out = {};
-  for (const [id, { proc, caff, cx, cxThread, cxLast, sig, subs, ...r }] of rt) out[id] = r;
+  for (const [id, { proc, caff, cx, cxThread, cxLast, sig, subs, bg, ...r }] of rt) out[id] = r;
   for (const k of ['*meeting', '*started', '*held', '*warned', '*slots']) if (persisted[k]) out[k] = persisted[k];
   fs.writeFileSync(STATE, JSON.stringify(out, null, 2));
 }
@@ -302,6 +302,7 @@ function launch(s) {
       if (!line) continue;
       let ev;
       try { ev = JSON.parse(line); } catch { continue; }
+      { const b = bgStarted(ev), e = bgEnded(ev); if (b) (r.bg ||= {})[b] = Date.now(); if (e && r.bg) delete r.bg[e]; }
       if (ev.type === 'system' && ev.subtype === 'init') { r.sessionId = ev.session_id; saveState(); }
       else if (ev.type === 'system' && ev.subtype === 'task_started' && ev.task_type === 'local_agent') subStart(s.id, ev);
       else if (ev.type === 'system' && (ev.subtype === 'task_notification' || (ev.subtype === 'task_updated' && /^(completed|failed|killed|stopped)$/.test(ev.patch?.status || '')))) subEnd(s.id, ev.task_id, ev.status || ev.patch?.status);
@@ -337,6 +338,8 @@ function launch(s) {
     if (r.proc !== proc) return; // replaced by a relaunch
     r.proc = null;
     for (const t of Object.keys(r.subs || {})) subEnd(s.id, t, 'stopped');
+    if (r.bg && Object.keys(r.bg).length && r.status === 'waiting') setStatus(s.id, 'blocked', `background run ended with the process: ${r.note || ''}`);
+    delete r.bg;
     if (r.status === 'working') setStatus(s.id, code ? 'error' : 'idle', code ? `exited ${code}` : '');
   });
   return proc;
@@ -796,8 +799,8 @@ function turnEnded(s, text, isError, subtype) {
     : subtype === 'interrupted' ? { status: 'idle', note: 'stopped' }
     : subtype === 'error_max_turns' ? { status: 'error', note: `hit the turn cap (${s.maxTurns ?? 40}); ${lastSaved(s)}; fresh process next wake` }
     : isError ? { status: 'error', note: failNote(text) } : statusLine(text) || { status: 'idle', note: '' };
-  // WAITING needs a wait the harness checks; without one nothing would ever wake it.
-  if (st.status === 'waiting' && subtype !== 'capacity') { let open = []; try { open = waits.list({ by: s.id }); } catch {} if (!open.length) Object.assign(st, { status: 'blocked', note: `said WAITING but filed no wait: ${st.note}` }); }
+  // WAITING needs a wait the harness checks, or a background run of its own the CLI wakes it from.
+  if (st.status === 'waiting' && subtype !== 'capacity') { let open = []; try { open = waits.list({ by: s.id }); } catch {} if (!open.length && !Object.keys(R(s.id).bg || {}).length) Object.assign(st, { status: 'blocked', note: `said WAITING but filed no wait: ${st.note}` }); }
   R(s.id).lastEnd = now();
   charterAtEnd(s);
   { const r = R(s.id), u = r.usage || {}, m = r.usageMark || {};

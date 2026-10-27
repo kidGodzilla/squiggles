@@ -115,3 +115,16 @@ test('a file outside /tmp runs a valid script in a real shell', async () => {
   assert.equal((await probe({ file: f })).result, `${f} appeared:\n0`);
   fs.rmSync(t, { recursive: true });
 });
+
+test('bgStarted and bgEnded read a background Bash run from the stream', async () => {
+  const { bgStarted, bgEnded } = await import('../waits.mjs');
+  const reply = (text) => ({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'x', content: text }] } });
+  assert.equal(bgStarted(reply('Command running in background with ID: b64sgxmk6. Output is being written to: /tmp/x')), 'b64sgxmk6');
+  assert.equal(bgStarted({ type: 'user', message: { content: [{ type: 'tool_result', content: [{ type: 'text', text: 'Command running in background with ID: b1' }] }] } }), 'b1');
+  assert.equal(bgStarted(reply('it said Command running in background with ID: b2')), '');
+  assert.equal(bgStarted({ type: 'system', subtype: 'task_started', task_type: 'local_bash', task_id: 'b3' }), 'b3');
+  assert.equal(bgStarted({ type: 'system', subtype: 'task_started', task_type: 'local_agent', task_id: 'a1' }), '');
+  assert.equal(bgEnded({ type: 'system', subtype: 'task_notification', task_id: 'b3' }), 'b3');
+  assert.equal(bgEnded({ type: 'system', subtype: 'task_updated', task_id: 'b3', patch: { status: 'running' } }), '');
+  assert.equal(bgEnded({ type: 'system', subtype: 'task_updated', task_id: 'b3', patch: { status: 'killed' } }), 'b3');
+});
