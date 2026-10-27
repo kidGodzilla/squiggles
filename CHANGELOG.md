@@ -5,6 +5,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 ## 0.1.2 (unreleased)
 
 ### Security
+- A squiggle rewrites its own charter only in a turn you or the lead asked for, so instructions planted in mail, pages or files can't. Unasked `charter` calls are refused and charter.md edits are put back; the lead sees every self-rewrite as a diff.
 - A Cursor squiggle's prompt is never read as cursor-agent options.
 - Pi and Cursor squiggles can't run git push or touch ~/.ssh (same rough fence as Downloads, Desktop and Documents).
 - Pi squiggles start with `--no-approve`, so a repository's own pi files are never trusted.

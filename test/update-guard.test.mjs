@@ -39,7 +39,7 @@ test('no caller (a double-forked child) needs the unlocked page for lead-only fi
 test('a non-lead squiggle changes only itself, charter included', () => {
   assert.equal(updateRefusal({}, { ...s, id: 'lead' }, { caller: 'security', charter: true })?.status, 403);
   assert.equal(updateRefusal({ paused: true }, { ...s, id: 'ops' }, { caller: 'security' })?.status, 403);
-  assert.equal(updateRefusal({ paused: true }, s, { caller: 'security', charter: true }), null);
+  assert.equal(updateRefusal({ paused: true }, s, { caller: 'security', charter: true, askers: ['owner'] }), null); // own charter needs the user or the lead asking
   assert.equal(updateRefusal({ paused: true }, { ...s, id: 'ops' }, { caller: 'lead', callerLead: true, charter: true }), null);
 });
 

@@ -16,7 +16,7 @@ import { createAsks, runAsk } from './asks.mjs';
 import { createPicks } from './picks.mjs';
 import { createWaits } from './waits.mjs';
 import { mimeFor } from './mime.mjs';
-import { trustLevel, trustOf, trustRules, updateRefusal, createRefusal, quitRefusal, slotsRefusal, shareRefusal, fileRmRefusal, fileBy } from './trust.mjs';
+import { trustLevel, trustOf, trustRules, updateRefusal, createRefusal, quitRefusal, slotsRefusal, shareRefusal, fileRmRefusal, fileBy, charterDiff, charterEdit } from './trust.mjs';
 import { KEYS, DEFAULT_SLOTS, slotKey, rankOf, limitOf, enqueue, drain, leave, checkSlots } from './slots.mjs';
 import { dropStale } from './stale.mjs';
 import { createLedger } from './cost.mjs';
@@ -597,7 +597,7 @@ function send(id, text, from = 'owner', { replay = false, human, images = [], as
   // A wake keeps its ⟨wake due⟩ token through the slot and restart queues; what's shown or sent is stamped now.
   const raw = text; text = stampWake(text);
   // Who asked this turn (Proactive): the user, a person, the lead, or a non-scheduled wake. Tasks filed while it runs are theirs, not the squiggle's own idea.
-  if (!replay && r.status !== 'working') r.asked = [];
+  if (!replay && r.status !== 'working') { r.asked = []; r.charterAt = readText(path.join(sqDir(id), 'charter.md')); } // checked at turn end
   asker ||= from === 'harness' ? '' : from === 'owner' ? human || 'owner' : from;
   if (asker && !(r.asked ||= []).includes(asker)) r.asked.push(asker);
   // A pending restart waits for everyone to be idle; new turns would starve it (a report wakes the lead, the lead wakes someone).
@@ -754,6 +754,18 @@ function lastSaved(s) {
 
 // Reports that need the lead's attention, delivered together whenever the lead is free.
 const inbox = [];
+// A charter.md the squiggle rewrote with file tools gets the update route's rule: kept and shown to the lead when the
+// user or the lead asked this turn, otherwise put back.
+function charterAtEnd(s) {
+  const r = R(s.id), f = path.join(sqDir(s.id), 'charter.md'), after = readText(f), before = r.charterAt;
+  const leadId = listSquiggles().find((x) => x.lead)?.id || '', act = charterEdit({ before, after, askers: r.asked || [], leadId, lead: !!s.lead });
+  r.charterAt = after;
+  if (act === 'keep') return;
+  const diff = charterDiff(before, after);
+  if (act === 'revert') { fs.writeFileSync(f, before); r.charterAt = before; emit(s.id, { k: 'log', text: `charter edit put back: ${USER} or the lead didn't ask for it this turn` }); }
+  inbox.push(act === 'revert' ? `[${s.name} · CHARTER] edited its own charter.md unasked; put back:\n${diff}` : `[${s.name} · CHARTER] rewrote its own charter.md (asked by ${r.asked.join(', ')}):\n${diff}`);
+  flushInbox();
+}
 function turnEnded(s, text, isError, subtype) {
   const p = providerOf(s), reset = !p && parseReset(text); if (reset) limitHit(reset);
   const limited = !p && limit.until && (reset || isError);
@@ -767,6 +779,7 @@ function turnEnded(s, text, isError, subtype) {
   // WAITING needs a wait the harness checks; without one nothing would ever wake it.
   if (st.status === 'waiting' && subtype !== 'capacity') { let open = []; try { open = waits.list({ by: s.id }); } catch {} if (!open.length) Object.assign(st, { status: 'blocked', note: `said WAITING but filed no wait: ${st.note}` }); }
   R(s.id).lastEnd = now();
+  charterAtEnd(s);
   { const r = R(s.id), u = r.usage || {}, m = r.usageMark || {};
     const sp = r.spent || (r.usageMark ? { in: (u.in || 0) - (m.in || 0), out: (u.out || 0) - (m.out || 0) } : {}); // no mark yet: tokens so far are all-time
     r.usageMark = { ...u }; delete r.spent;
@@ -1654,11 +1667,17 @@ const server = http.createServer(async (req, res) => {
           checkModelEffort(meta, EXTRA_MODELS); // t905: only allowed models and efforts reach squiggle.json and the launch args
           if ('trust' in meta) meta.trust = trustLevel(meta.trust) ?? undefined; // the user or the lead sets it, never the squiggle itself
           const c = await callerSquiggle(req), owner = () => { try { return pass.session(req); } catch { return false; } };
-          const no = updateRefusal(meta, s, { caller: c, callerLead: !!(c && loadSquiggle(c)?.lead), charter: charter != null, owner, passcode: !!roomCfg().passcode?.hash, user: USER });
+          const leadId = listSquiggles().find((x) => x.lead)?.id || '';
+          const no = updateRefusal(meta, s, { caller: c, callerLead: !!(c && loadSquiggle(c)?.lead), askers: (c && R(c).asked) || [], leadId, charter: charter != null, owner, passcode: !!roomCfg().passcode?.hash, user: USER });
           if (no) return json(res, { error: no.error, ...(no.unlock && { unlock: true }) }, no.status);
           saveSquiggle({ ...s, ...meta, id });
           if (s.lead && ('look' in meta || 'lookSeed' in meta)) drawIcons();
-          if (charter != null) fs.writeFileSync(path.join(sqDir(id), 'charter.md'), charter.trim() + '\n');
+          if (charter != null) {
+            const f = path.join(sqDir(id), 'charter.md'), before = readText(f);
+            fs.writeFileSync(f, charter.trim() + '\n'); R(id).charterAt = charter.trim() + '\n';
+            // The lead sees every charter a squiggle rewrote for itself, and who asked.
+            if (c === id && id !== leadId && before.trim() !== charter.trim()) { inbox.push(`[${s.name} · CHARTER] rewrote its own charter (asked by ${R(c).asked.join(', ')}):\n${charterDiff(before, charter)}`); flushInbox(); }
+          }
           emit(id, { k: 'meta' });
           return json(res, view(loadSquiggle(id)));
         }

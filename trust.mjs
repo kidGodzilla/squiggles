@@ -53,7 +53,10 @@ export function shareRefusal({ caller = '', owner = () => false, user = 'the use
   if (caller) return { status: 403, error: `${caller} can't share the room on the internet: ${user} does, in Settings > Sharing` };
   return owner() ? null : { status: 403, error: `Unlock with the room passcode first: sharing on the internet is ${user}'s`, unlock: true };
 }
-export function updateRefusal(meta, s, { caller = '', callerLead = false, charter = false, owner = () => false, passcode = true, user = 'the user' } = {}) {
+// Own charter (a guard against instructions planted in mail, web pages or files): a non-lead squiggle rewrites it only in
+// a turn the user or the lead asked for. `askers` is who asked this turn (R(caller).asked): 'owner', 'lead' or the lead's id.
+const CHARTER_ASKERS = (leadId) => ['owner', 'lead', leadId].filter(Boolean);
+export function updateRefusal(meta, s, { caller = '', callerLead = false, charter = false, askers = [], leadId = '', owner = () => false, passcode = true, user = 'the user' } = {}) {
   const bad = Object.keys(meta).filter((k) => !UPDATE_FIELDS.includes(k));
   if (bad.length) return { status: 400, error: `can't update ${bad.join(', ')}` };
   if (badMode(meta)) return badMode(meta);
@@ -67,8 +70,23 @@ export function updateRefusal(meta, s, { caller = '', callerLead = false, charte
     return !owner() ? { status: 403, error: `Unlock with the room passcode first: ${what} is set by ${by}`, unlock: true } : null;
   }
   if (changed('lead')) return { status: 403, error: `lead is set by ${user}, not ${caller}` };
+  if (charter && !callerLead && !askers.some((a) => CHARTER_ASKERS(leadId).includes(a)))
+    return { status: 403, error: `${caller} changes its charter only when ${user} or the lead asks for it this turn` };
   const k = !callerLead && LEAD_ONLY.find(changed);
   return k ? { status: 403, error: `${k} is set by ${user} or the lead, not ${caller}` } : null;
+}
+
+// What a charter change looks like to the lead: lines gone (-) and added (+), capped.
+export function charterDiff(before, after, max = 1500) {
+  const a = String(before || '').trim().split('\n'), b = String(after || '').trim().split('\n');
+  const out = [...a.filter((l) => !b.includes(l)).map((l) => `- ${l}`), ...b.filter((l) => !a.includes(l)).map((l) => `+ ${l}`)].join('\n');
+  return out.length > max ? `${out.slice(0, max)}…` : out;
+}
+// The same rule for a charter.md edited with file tools, checked at the end of the squiggle's turn against the copy
+// taken when the turn started: 'keep' (unchanged, or the lead), 'report' (allowed: tell the lead) or 'revert'.
+export function charterEdit({ before, after, askers = [], leadId = '', lead = false }) {
+  if (before == null || String(before).trim() === String(after ?? '').trim() || lead) return 'keep';
+  return askers.some((a) => CHARTER_ASKERS(leadId).includes(a)) ? 'report' : 'revert';
 }
 
 // Shared files: a squiggle deletes only what it added; the rest needs the user (an unlocked page once a passcode is set).
