@@ -151,6 +151,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - The lead's "Handled." replies fold with the reports they answer into one line that opens to list them.
 
 ### Fixed
+- A fresh install no longer crashes on first start.
 - Toasts show on every view, not only the Room.
 - Tasks with filters that match nothing show one line with a Clear button, and the search box is full width on phones.
 - Popovers (meeting, goal, note, person, task link) are wider, never taller than the window, scroll inside with the action row pinned, and open beside, opposite or below what you clicked. Meeting attendees sit in an even grid, 44px rows on touch.

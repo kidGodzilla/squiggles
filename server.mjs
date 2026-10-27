@@ -253,11 +253,6 @@ const fillPrompt = (t) => t.replace(/\{\{(user|User|cli|data)\}\}/g, (_, k) => (
 // Prompt seams: <data>/prompts/<name>.md replaces the shipped one (frozen; upgrade warns), <name>.append.md is added after it.
 const prompt = (name) => fillPrompt([readText(path.join(DATA, 'prompts', name)) || readText(path.join(ROOT, 'prompts', name)),
   readText(path.join(DATA, 'prompts', name.replace(/\.md$/, '.append.md')))].filter((t) => t.trim()).join('\n\n'));
-// First run: the room starts with only the lead, whose charter onboards the user.
-if (!listSquiggles().length) {
-  createSquiggle({ id: 'lead', name: 'Lead', role: 'Runs the team', cwd: '~', every: 0, charter: prompt('lead-charter.md') });
-  saveSquiggle({ ...loadSquiggle('lead'), lead: true, look: 'avataaars:eyes=default', lookSeed: 858327934 }); // the face on the shipped app icon
-}
 function systemPrompt(s) {
   const dir = sqDir(s.id);
   const base = prompt(s.lead ? 'lead.md' : 'squiggle.md').replace('{{trust}}', () => fillPrompt(trustRules(s)));
@@ -355,6 +350,11 @@ const PI_MODELS = Array.isArray(CONFIG.pi) ? CONFIG.pi.map(String).filter(Boolea
 // config.cursor: Cursor models (cursor-agent names) a squiggle may run on; needs the fence from cursor/install.mjs.
 const CURSOR_MODELS = Array.isArray(CONFIG.cursor) ? CONFIG.cursor.map(String).filter(Boolean) : [];
 const EXTRA_MODELS = [...PI_MODELS, ...CURSOR_MODELS];
+// First run (after the model lists createSquiggle checks): the room starts with only the lead, whose charter onboards the user.
+if (!listSquiggles().length) {
+  createSquiggle({ id: 'lead', name: 'Lead', role: 'Runs the team', cwd: '~', every: 0, charter: prompt('lead-charter.md') });
+  saveSquiggle({ ...loadSquiggle('lead'), lead: true, look: 'avataaars:eyes=default', lookSeed: 858327934 }); // the face on the shipped app icon
+}
 const providerOf = (s) => (CONFIG.codex && Object.keys(PROVIDERS).find((p) => PROVIDERS[p].includes(s.model))) || (PI_MODELS.includes(s.model) ? 'pi' : CURSOR_MODELS.includes(s.model) ? 'cursor' : '');
 // A provider usage limit holds nothing (t971): the turn just ends and the next wake tries again; limits often reset early.
 // Codex: one `codex app-server` per squiggle, kept between turns, so MCP servers live on (computer use
