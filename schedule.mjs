@@ -12,3 +12,14 @@ export function createSchedule({ now = Date.now, rand = Math.random } = {}) {
     return Math.max(first.get(id), lastWake + period + j.ms);
   };
 }
+
+// Late wakes say so. A wake's text carries ⟨wake <due ms>⟩ until its turn really starts, which may be after a
+// provider slot queue or a restart hold; then it becomes the start time, and when that is 15+ minutes past due, how late it is.
+export const wakeToken = (due = 0) => `⟨wake ${Math.round(due) || 0}⟩`;
+export function stampWake(text, t = Date.now()) {
+  return String(text).replace(/⟨wake (\d+)⟩/, (_, d) => {
+    const due = Number(d), late = due ? Math.round((t - due) / 60000) : 0;
+    const at = new Date(t).toLocaleString();
+    return late >= 15 ? `${at}, ${late} min late (due ${new Date(due).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })})` : at;
+  });
+}

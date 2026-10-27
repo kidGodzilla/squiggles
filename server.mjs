@@ -28,7 +28,7 @@ import { createInbox } from './inbox.mjs';
 import { createHumans } from './humans.mjs';
 import { dataDir, loadConfig } from './config.mjs';
 import { migrate } from './migrate.mjs';
-import { createSchedule } from './schedule.mjs';
+import { createSchedule, wakeToken, stampWake } from './schedule.mjs';
 import { makeGuard, tailnetName } from './guard.mjs';
 import { makePasscode } from './passcode.mjs';
 import { createTunnel, killStale, MIN_CODE, TUNNEL_HOST } from './tunnel.mjs';
@@ -594,6 +594,8 @@ function send(id, text, from = 'owner', { replay = false, human, images = [], as
   const s = loadSquiggle(id);
   if (!s) throw new Error(`no squiggle ${id}`);
   const r = R(id);
+  // A wake keeps its ⟨wake due⟩ token through the slot and restart queues; what's shown or sent is stamped now.
+  const raw = text; text = stampWake(text);
   // Who asked this turn (Proactive): the user, a person, the lead, or a non-scheduled wake. Tasks filed while it runs are theirs, not the squiggle's own idea.
   if (!replay && r.status !== 'working') r.asked = [];
   asker ||= from === 'harness' ? '' : from === 'owner' ? human || 'owner' : from;
@@ -601,7 +603,7 @@ function send(id, text, from = 'owner', { replay = false, human, images = [], as
   // A pending restart waits for everyone to be idle; new turns would starve it (a report wakes the lead, the lead wakes someone).
   // So a turn that would start now is held in state and sent after the restart. Messages to a squiggle mid-turn still go through.
   if (restartPending && r.status !== 'working' && hold.holding()) {
-    r.lastWake = now(); (persisted['*held'] ||= []).push({ id, text, from, human, images }); saveState();
+    r.lastWake = now(); (persisted['*held'] ||= []).push({ id, text: raw, from, human, images }); saveState();
     if (from === 'owner') { clearTimeout(hold.t); hold.t = setTimeout(capHold, hold.held()); }
     emit(id, { k: 'user', text, from, ...(human && { human }), ...(images.length && { imgs: images.map((f) => `/files/${f}`) }) }); emit(id, { k: 'log', text: 'held until the restart' });
     setTimeout(maybeRestart, 500); return;
@@ -610,7 +612,7 @@ function send(id, text, from = 'owner', { replay = false, human, images = [], as
   if (!slot && r.status !== 'working' && !s.lead && from !== 'owner') {
     const key = slotKey(providerOf(s)), max = limitOf(roomCfg(), key), busy = slotsBusy(key);
     if (max && busy >= max) {
-      enqueue(persisted['*slots'] ||= [], { id, key, rank: rankOf(from, listSquiggles().find((x) => x.lead)?.id), at: Date.now(), text, from, human, images, asker });
+      enqueue(persisted['*slots'] ||= [], { id, key, rank: rankOf(from, listSquiggles().find((x) => x.lead)?.id), at: Date.now(), text: raw, from, human, images, asker });
       if (!replay) emit(id, { k: 'user', text, from, ...(human && { human }), ...(images.length && { imgs: images.map((f) => `/files/${f}`) }) });
       emit(id, { k: 'log', text: `waiting for a ${key} slot (${busy} of ${max} busy)` });
       setStatus(id, r.status, `waiting for a ${key} slot`); broadcast('*room', { k: 'room', action: 'slots' });
@@ -727,11 +729,11 @@ function serveMedia(req, res, f) {
   fs.createReadStream(f, { start: a, end: z }).pipe(res);
 }
 
-function wake(id, why = 'scheduled', asker = '') {
+function wake(id, why = 'scheduled', asker = '', due = 0) {
   const s = loadSquiggle(id);
   if (!s || R(id).status === 'working') return false;
   let news = []; try { news = board.suggestionNews(id); } catch {}
-  send(id, `Wake (${why}), ${new Date().toLocaleString()}. Read your charter and the end of your journal, decide the single most valuable thing to do now, do it, verify it, append a dated journal entry, then end with a status line. You have ${s.maxTurns ?? 40} turns this wake; journal findings as you confirm them.${limitOf(roomCfg(), slotKey(providerOf(s))) ? ' Your provider runs a few turns at a time, so your next turn may start much later: leave work resumable, and file a wait rather than checking back.' : ''}${news.length ? `\n\nYour suggestions, decided by the lead:\n${news.map((x) => `- ${x}`).join('\n')}` : ''}`, 'harness', { asker });
+  send(id, `Wake (${why}), ${wakeToken(due)}. Read your charter and the end of your journal, decide the single most valuable thing to do now, do it, verify it, append a dated journal entry, then end with a status line. You have ${s.maxTurns ?? 40} turns this wake; journal findings as you confirm them.${limitOf(roomCfg(), slotKey(providerOf(s))) ? ' Your provider runs a few turns at a time, so your next turn may start much later: leave work resumable, and file a wait rather than checking back.' : ''}${news.length ? `\n\nYour suggestions, decided by the lead:\n${news.map((x) => `- ${x}`).join('\n')}` : ''}`, 'harness', { asker });
   return true;
 }
 
@@ -956,7 +958,8 @@ setInterval(() => {
     if (started.has(p) || Date.now() - (newest[p] || 0) < 2 * 60000) continue;
     const r = R(s.id);
     const last = Date.parse(r.lastWake || 0) || 0;
-    if (r.status !== 'working' && Date.now() >= dueAt(s.id, s.every, last) && timed(`wake ${s.id}`, () => wake(s.id))) started.add(p);
+    const due = dueAt(s.id, s.every, last);
+    if (r.status !== 'working' && Date.now() >= due && timed(`wake ${s.id}`, () => wake(s.id, 'scheduled', '', due))) started.add(p);
   }
 }, 30000);
 
