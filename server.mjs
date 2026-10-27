@@ -404,7 +404,8 @@ function codexServer(s) {
   cx.ready = cx.req('initialize', { clientInfo: { name: 'squiggles', version: '1' } })
     .then(() => proc.stdin.write(JSON.stringify({ method: 'initialized' }) + '\n'));
   // Codex skips an untrusted hook without a word, so turns are refused until it's trusted (fails closed if hooks/list fails).
-  cx.guard = cx.ready.then(() => cx.req('hooks/list', { cwds: [home(s.cwd)] })).then((l) => codexHook.hookTrusted(l)).catch(() => false);
+  // Checked every turn: another install trusting its own session-flag hook under the same key replaces ours.
+  cx.guard = () => cx.ready.then(() => cx.req('hooks/list', { cwds: [home(s.cwd)] })).then((l) => codexHook.hookTrusted(l)).catch(() => false);
   return cx;
 }
 async function codexTurn(s, prompt, images = []) {
@@ -420,7 +421,7 @@ async function codexTurn(s, prompt, images = []) {
   r.proc = { pid: cx.proc.pid, kill: () => { stopAsked = true; interrupt(); }, removeAllListeners() {}, steer: (text) => (turnId ? cx.req('turn/steer', { threadId: r.codexThread, expectedTurnId: turnId, input: [{ type: 'text', text }] }) : Promise.reject(new Error('no turn yet'))) };
   cx.on = (method, p) => {
     const it = p.item || {};
-    if (method === 'exit') return end(lastText || 'codex stopped', true);
+    if (method === 'exit') { emit(s.id, { k: 'log', text: 'codex app-server exited mid-turn' }); return end('codex app-server exited mid-turn', true); }
     if (method === 'item/started' && it.type === 'commandExecution') emit(s.id, { k: 'tool', tid: it.id, name: 'Bash', kind: 'cmd', text: shortEv(it.command) });
     else if (method === 'item/completed') {
       if (it.type === 'agentMessage' && it.text?.trim()) { lastText = it.text; emit(s.id, { k: 'say', text: it.text }); }
@@ -450,7 +451,7 @@ async function codexTurn(s, prompt, images = []) {
   };
   try {
     await cx.ready;
-    if (!(await cx.guard)) { const why = `Codex guard is not trusted, so this turn is refused: ${USER} runs node ~/squiggles/bin/codex-trust-guard.mjs once`; emit(s.id, { k: 'log', text: why }); return end(why, true); }
+    if (!(await cx.guard())) { const why = `Codex guard is not trusted, so this turn is refused: ${USER} runs node ~/squiggles/bin/codex-trust-guard.mjs once`; emit(s.id, { k: 'log', text: why }); return end(why, true); }
     if (!r.cxThread || r.cxThread !== cx) {
       // First turn on this server: resume the saved thread, or start one with the squiggle's instructions leading the prompt.
       const thread = r.codexThread || s.resume, opts = { cwd: home(s.cwd), model: s.model, sandbox: 'workspace-write', approvalPolicy: 'never' };
@@ -783,6 +784,8 @@ function charterAtEnd(s) {
   inbox.push(act === 'revert' ? `[${s.name} · CHARTER] edited its own charter.md unasked; put back:\n${diff}` : `[${s.name} · CHARTER] rewrote its own charter.md (asked by ${r.asked.join(', ')}):\n${diff}`);
   flushInbox();
 }
+// The failure's first line rides on the note, so the board says why without opening the run log.
+const failNote = (text) => { const l = String(text || '').split('\n').map((x) => x.trim()).find(Boolean); return l ? `turn failed: ${l.slice(0, 200)}` : 'turn failed'; };
 function turnEnded(s, text, isError, subtype) {
   const p = providerOf(s), reset = !p && parseReset(text); if (reset) limitHit(reset);
   const limited = !p && limit.until && (reset || isError);
@@ -792,7 +795,7 @@ function turnEnded(s, text, isError, subtype) {
     : limited ? { status: 'idle', note: `session limit (stated reset ${hhmm(limit.until)}); next wake tries again` }
     : subtype === 'interrupted' ? { status: 'idle', note: 'stopped' }
     : subtype === 'error_max_turns' ? { status: 'error', note: `hit the turn cap (${s.maxTurns ?? 40}); ${lastSaved(s)}; fresh process next wake` }
-    : isError ? { status: 'error', note: 'turn failed' } : statusLine(text) || { status: 'idle', note: '' };
+    : isError ? { status: 'error', note: failNote(text) } : statusLine(text) || { status: 'idle', note: '' };
   // WAITING needs a wait the harness checks; without one nothing would ever wake it.
   if (st.status === 'waiting' && subtype !== 'capacity') { let open = []; try { open = waits.list({ by: s.id }); } catch {} if (!open.length) Object.assign(st, { status: 'blocked', note: `said WAITING but filed no wait: ${st.note}` }); }
   R(s.id).lastEnd = now();

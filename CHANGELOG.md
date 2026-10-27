@@ -5,7 +5,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 ## 0.1.2 (unreleased)
 
 ### Security
-- Codex squiggles can't run git push or touch ~/.ssh, Downloads, Desktop or Documents: a Codex hook blocks them, patches included. Until you trust it, Codex turns are refused.
+- Codex squiggles can't run git push or touch ~/.ssh, Downloads, Desktop or Documents: a Codex hook blocks them, patches included. Until you trust it, Codex turns are refused; trust is checked every turn.
 - A squiggle rewrites its own charter only in a turn you or the lead asked for, so instructions planted in mail, pages or files can't. Unasked `charter` calls are refused and charter.md edits are put back; the lead sees every self-rewrite as a diff. A charter.md changed between turns (a job left running, or while the room was down) is put back at the next turn and the lead is told: change charters on the squiggle sheet.
 - A Cursor squiggle's prompt is never read as cursor-agent options.
 - Pi and Cursor squiggles can't run git push or touch ~/.ssh (same rough fence as Downloads, Desktop and Documents).
@@ -111,6 +111,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Picks: `pick ask "<question>" "<option>" "<option>" [--images a,b] [--task <id>]` files a choice for the user; open picks collect on one card above the lead chat composer, options as buttons (images shown when they live in files/ or research/). A tap answers and the asker is told; the lead relays a spoken answer with `pick <id> <option>`. `picks [all]`, `pick drop <id>`. Answering needs the room passcode.
 - Settings > Defaults > Turns at once, and `slots`, set how many turns each provider runs at once.
 ### Changed
+- A failed turn's status says why (its first line), not just "turn failed".
 - A wake's time is when its turn really starts (after a slot queue or restart hold), and a wake 15+ minutes late says how late and when it was due.
 - The calendar reader runs as its own small app, so one Allow covers the terminal and every squiggle; the allow prompt waits 5 minutes, and a reader that exits before macOS can track it no longer reads as a failure.
 - The tab icon has a deeper tile and a faint edge, so it holds at 16px on a white tab bar.
