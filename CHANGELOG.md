@@ -149,6 +149,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Screenshots and shared pages stay on screen 90 seconds over terminal output.
 - More > Share shows Copy link only, not the URL text.
 - The lead's "Handled." replies fold with the reports they answer into one line that opens to list them.
+- Settings number inputs show an accent border on focus and are 44px tall on touch screens.
 
 ### Fixed
 - A fresh install no longer crashes on first start.

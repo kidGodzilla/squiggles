@@ -768,6 +768,7 @@ body.v-one.screen:not(.v-meet) #chats .cw.office { left: auto !important; width:
 .setform[hidden], .sethint[hidden] { display: none } #shareCf > span { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px } .sharest { flex-basis: 100%; color: var(--dim); font-size: 13px } .sharest:empty { display: none }
 .setform select, .setform input[type=number] { height: 34px; border-radius: 9px; background: var(--panel2); border: 1px solid var(--line); padding: 0 8px; color: inherit; font: inherit }
 #setSlots span { display: flex; align-items: center; gap: 10px } #setSlots input { width: 140px }
+.setform input[type=number] { outline: 0 } .setform input[type=number]:focus { border-color: var(--accent) }
 .setform input[type=range] { width: 100%; accent-color: var(--accent) } .setform input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent) }
 @media (max-width: 760px) { .setform { grid-template-columns: 1fr; gap: 4px } .setform > label { margin-top: 8px } .setform select, .setform input[type=number] { height: 44px } }
 .sqtable { width: 100%; border-collapse: collapse; font-size: 13.5px } /* Squiggles card (t897) */
@@ -792,7 +793,7 @@ body.v-one.screen:not(.v-meet) #chats .cw.office { left: auto !important; width:
 #passNew { min-height: 32px; width: 180px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--text); font: inherit }
 @media (pointer: coarse) { #passNew, #passSet, #passClear { min-height: 44px } }
 #passNew { flex: 1; min-width: 0 } #setPass .setform > span { min-width: 0 } #setPass .setform > span > .chip { flex: none; white-space: nowrap } /* Turn off stays one line (t913) */
-@media (pointer: coarse) { .setform select, .setrow select { height: 44px } } /* t898 */
+@media (pointer: coarse) { .setform select, .setform input[type=number], .setrow select { height: 44px } } /* t898 */
 @media (pointer: coarse) { .setform > span:has(> input[type=checkbox]) > label { display: flex; align-items: center; min-height: 44px } } /* checkbox rows are 44px targets (t1174) */
 /* Settings tabs (t917) */
 .settabs { display: flex; gap: 4px; margin: 0 0 16px; padding: 4px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); overflow-x: auto; scrollbar-width: none; width: max-content; max-width: 100% }
