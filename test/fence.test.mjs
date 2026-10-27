@@ -46,3 +46,14 @@ test('fence: quotes, backslashes and a bare cd', () => {
   for (const c of ['cd; cat .ssh/id_rsa', 'cat ~/".ssh"/config', 'g"it" push', 'git pu\\sh']) assert.ok(commandReason(c, '/tmp/w'), c);
   for (const c of ['cd src && ls *.js', 'cd; ls *.md', 'echo "push it"', 'cd ~/code; git status']) assert.equal(commandReason(c, '/tmp/w'), '', c);
 });
+
+test('fence: relative cd to home, and push by alias, variable or send-pack', () => {
+  const sub = path.join(H, 'code');
+  for (const c of ['cd ..; ls Docu*', 'pushd ~ >/dev/null; ls D*', 'cd ../.. && cd ~ 2>/dev/null && ls De*', 'cd -; ls D*', 'cd $DIR; ls Do*'])
+    assert.ok(fencedCommand(c, sub), c);
+  assert.ok(commandReason('cd ..; cat .ssh/config', sub), 'relative cd then .ssh');
+  for (const c of ['git config alias.p push && git p', 'git -c alias.up=push up', 'c=push; git $c', 'g=git; $g push origin', 'git send-pack origin main', 'eval "git push"'])
+    assert.equal(commandReason(c, '/tmp/w'), REASONS.push, c);
+  for (const c of ['cd src && ls *.js', 'cd ../lib; ls D*.md', 'git commit -m "push $x"'.replace('$x', 'fix')])
+    assert.equal(commandReason(c, sub), '', c);
+});

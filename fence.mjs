@@ -29,8 +29,19 @@ export const mentionsSsh = (text, home = os.homedir()) => mentionsHome(text, hom
 // Shell commands are matched after dropping quotes and backslashes (~/Down"loads", D\ocuments), and a bare cd
 // (or cd ~, cd $HOME) counts as running from home.
 const unquote = (cmd) => String(cmd).replace(/\\\n/g, '').replace(/["'\\]/g, '');
-const startsHome = (cmd, cwd, home) => path.resolve(cwd).toLowerCase() === home.toLowerCase()
-  || new RegExp(`(^|[;&|(\`]|\\$\\()\\s*(cd|pushd)(\\s+(~|\\$HOME|\\$\\{HOME\\}|${esc(home)})/?)?\\s*($|[;&|)])`, 'im').test(cmd);
+// Each cd or pushd is followed from cwd (cd .., pushd ~ >/dev/null); a target it can't read (cd -, cd $DIR) counts as home.
+const startsHome = (cmd, cwd, home) => {
+  const h = home.toLowerCase(), homeArg = new RegExp(`^(~|\\$HOME|\\$\\{HOME\\}|${esc(home)})(?=/|$)`, 'i');
+  let cur = path.resolve(cwd);
+  if (cur.toLowerCase() === h) return true;
+  for (const m of String(cmd).matchAll(/(?:^|[;&|(`\n]|\$\()\s*(?:cd|pushd)\b(?:[ \t]+([^\s;&|)<>`]+))?/gi)) {
+    const t = m[1] ? m[1].replace(homeArg, home) : home;
+    if (/^-|\$/.test(t)) return true;
+    cur = path.resolve(cur, t);
+    if (cur.toLowerCase() === h) return true;
+  }
+  return false;
+};
 // A shell command, also: any word naming one of the folders (cd ~ && cat Downloads/x), and, run from home, a bare glob (D*).
 export function fencedCommand(cmd, cwd = process.cwd(), home = os.homedir()) {
   cmd = unquote(cmd);
@@ -41,7 +52,9 @@ export function fencedCommand(cmd, cwd = process.cwd(), home = os.homedir()) {
 // Any text (file contents, a patch): a home path to a fenced folder or ~/.ssh.
 export const mentionReason = (text, home = os.homedir()) => mentionsHome(text, home) ? REASONS.dirs : mentionsSsh(text, home) ? REASONS.ssh : '';
 // git [-C dir] [-c k=v] [--flags] push, anywhere in a chain or subshell.
-export const pushes = (cmd) => /\bgit\b(\s+(-[Cc]\s+\S+|--?[\w-]+(=\S+)?))*\s+push\b/.test(cmd);
+// Also git send-pack, an alias set to push, and push reached through a variable or eval (c=push; git $c).
+export const pushes = (cmd) => /\bgit\b(\s+(-[Cc]\s+\S+|--?[\w-]+(=\S+)?))*\s+push\b/.test(cmd) || /\bgit\b.*\bsend-pack\b/.test(cmd)
+  || /\balias\.[\w-]+[\s=]+!?(git\s+)?push\b/.test(cmd) || (/\bpush\b/.test(cmd) && /\$\{?\w|\beval\b/.test(cmd) && /\bgit\b/.test(cmd));
 // The reason a path or shell command is refused, or ''.
 export function pathReason(p, cwd = process.cwd(), home = os.homedir()) {
   return fencedPath(p, cwd, home) ? REASONS.dirs : sshPath(p, cwd, home) ? REASONS.ssh : '';
