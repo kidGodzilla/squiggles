@@ -73,7 +73,7 @@ export const mentionReason = (text, home = os.homedir()) => mentionsHome(text, h
 export const pushes = (cmd) => /\bgit\b(\s+(-[Cc]\s+\S+|--?[\w-]+(=\S+)?))*\s+push\b/.test(cmd) || /\bgit\b.*\bsend-pack\b/.test(cmd) || /\bgit\b[^;&|\n]*\b(subtree|lfs)\b[^;&|\n]*\bpush\b/.test(cmd)
   || /\balias\.[\w-]+[\s=]+!?(git\s+)?push\b/.test(cmd) || (/\bpush\b/.test(cmd) && (/\$\{?\w|\beval\b/.test(cmd) || /\bxargs\b[^;&|\n]*\bgit\b/.test(cmd)) && /\bgit\b/.test(cmd));
 // Recursive reads and copies (grep -r, rg, find, cp -r, tar, du, ls -R, rsync -a, zip -r, tree) rooted at home or above reach
-// every fenced folder at once. Each simple command is checked from the folder it runs in, following cd; no path means that folder.
+// every fenced folder at once. Each simple command is checked from the folder it runs in, following cd and env -C; no path means that folder.
 const RECURSE = { grep: /^-[a-zA-Z]*[rR]|^--(dereference-)?recursive$/, cp: /^-[a-zA-Z]*[rRa]|^--(recursive|archive)$/, ls: /^-[a-zA-Z]*R|^--recursive$/,
   rsync: /^-[a-zA-Z]*[ra]|^--(recursive|archive)$/, zip: /^-[a-zA-Z]*r|^--recurse-paths$/, rg: true, find: true, du: true, tar: true, tree: true };
 const NEEDS_PATH = new Set(['cp', 'tar', 'rsync', 'zip']), PATTERN_FIRST = new Set(['grep', 'rg']);
@@ -82,7 +82,11 @@ function treeReason(cmd, cwd, home) {
   let cur = path.resolve(cwd);
   for (const seg of cmd.split(/[;&|\n()`]|\$\(/)) {
     const w = seg.trim().split(/\s+/).filter(Boolean);
-    while (w.length && /^(sudo|command|builtin|exec|nice|time|nohup|xargs|env|\w+=\S*)$/.test(w[0])) w.shift();
+    while (w.length && /^(sudo|command|builtin|exec|nice|time|nohup|xargs|env|\w+=\S*)$/.test(w[0])) {
+      if (w.shift() !== 'env') continue;
+      while (/^-|^\w+=/.test(w[0] || '')) { const f = w.shift(), m = f.match(/^(?:-C|--chdir=?)(.*)$/); if (!m) continue;
+        const t = (m[1] || w.shift() || '').replace(homeArg(home), home); cur = !t || /^[-~]|\$/.test(t) ? home : path.resolve(cur, t); }
+    }
     const [c, ...args] = w; if (!c) continue;
     const name = path.basename(c);
     if (name === 'cd' || name === 'pushd') { const t = args[0] ? args[0].replace(homeArg(home), home) : home; cur = /^[-~]|\$/.test(t) ? home : path.resolve(cur, t); continue; }

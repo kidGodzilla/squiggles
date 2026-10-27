@@ -95,3 +95,11 @@ test('fence: push through xargs', () => {
   assert.equal(commandReason('printf "push origin" | xargs -n2 git', path.join(H, 'proj')), REASONS.push);
   assert.equal(commandReason('git ls-files | xargs grep push', path.join(H, 'proj')), '');
 });
+
+test('fence: recursive reads run from home through env -C', () => {
+  const P = path.join(H, 'proj');
+  for (const c of ['env -C ~ grep -r x .', 'env -C .. rg x', 'env --chdir=.. rg x', 'env --chdir .. du -sh', 'env -i FOO=1 -C ~ find'])
+    assert.equal(commandReason(c, P), REASONS.tree, c);
+  for (const c of ['env -C src rg x', 'env FOO=1 rg x', 'env -C .. ls'])
+    assert.equal(commandReason(c, P), '', c);
+});
