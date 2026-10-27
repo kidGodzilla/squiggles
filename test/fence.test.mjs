@@ -67,3 +67,14 @@ test('fence: relative paths and globs to home folders, cd spelled other ways, su
   for (const c of ['ls ../*.md', 'cat ../code/D*.txt', 'cat ./notes/.sshrc', 'git subtree pull --prefix=d origin main', 'cd ../lib && ls'])
     assert.equal(commandReason(c, sub), '', c);
 });
+
+test('fence: fenced names in prose pass outside home, still block at home', () => {
+  const P = path.join(H, 'proj');
+  assert.equal(commandReason('node bin/agents.mjs task ship x1 "docs match; documents retirement"', P), '');
+  assert.equal(commandReason('echo keeps desktop parity >> j.md', P), '');
+  assert.equal(commandReason('echo .ssh is fenced', P), '');
+  assert.equal(commandReason('ls Desktop', H), REASONS.dirs);
+  assert.equal(commandReason('cd ~ && ls documents', P), REASONS.dirs);
+  assert.equal(commandReason('cd .. && cat Downloads/x', P), REASONS.dirs);
+  assert.equal(commandReason('cd; cat .ssh/config', P), REASONS.ssh);
+});

@@ -153,6 +153,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 
 ### Fixed
 - A fresh install no longer crashes on first start.
+- The fence no longer refuses prose that names Downloads, Desktop or Documents (a commit message, a note) outside home; it walks each word as a path.
 - Toasts show on every view, not only the Room.
 - Tasks with filters that match nothing show one line with a Clear button, and the search box is full width on phones.
 - Popovers (meeting, goal, note, person, task link) are wider, never taller than the window, scroll inside with the action row pinned, and open beside, opposite or below what you clicked. Meeting attendees sit in an even grid, 44px rows on touch.

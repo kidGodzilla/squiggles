@@ -43,9 +43,9 @@ function places(cmd, cwd, home) {
   return out;
 }
 const startsHome = (cmd, cwd, home) => places(cmd, cwd, home).some((d) => d.toLowerCase() === home.toLowerCase());
-// A path-like word (../.ssh/config, ../D*) resolved from each folder the command may run in.
+// Each word (Desktop, ../.ssh/config, ../D*) resolved from each folder the command may run in.
 function relReason(cmd, cwd, home) {
-  const h = home.toLowerCase(), words = cmd.split(/[\s;|&()<>=`]+/).filter((w) => w.includes('/'));
+  const h = home.toLowerCase(), words = cmd.split(/[\s;|&()<>=`]+/).filter(Boolean);
   for (const d of places(cmd, cwd, home)) for (const w of words) {
     const abs = path.resolve(d, w.replace(homeArg(home), home)), parts = abs.split('/');
     if (fencedPath(abs, d, home)) return REASONS.dirs;
@@ -57,10 +57,11 @@ function relReason(cmd, cwd, home) {
   }
   return '';
 }
-// A shell command, also: any word naming one of the folders (cd ~ && cat Downloads/x), and, run from home, a bare glob (D*).
+// A shell command, also: each word walked as a path from every folder the command runs in (cd ~ && cat Downloads/x), so prose
+// like 'documents retirement' outside home passes, and, run from home, a bare glob (D*).
 export function fencedCommand(cmd, cwd = process.cwd(), home = os.homedir()) {
   cmd = unquote(cmd);
-  if (mentionsHome(cmd, home) || /(^|[^a-z0-9_.-])(downloads|desktop|documents)([^a-z0-9_.-]|$)/i.test(cmd)) return true;
+  if (mentionsHome(cmd, home)) return true;
   if (startsHome(cmd, cwd, home)) for (const t of cmd.split(/[\s;|&()<>=`]+/)) if (globHits(t.split('/')[0])) return true;
   return relReason(cmd, cwd, home) === REASONS.dirs;
 }
