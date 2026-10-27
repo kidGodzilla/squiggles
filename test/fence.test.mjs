@@ -78,3 +78,20 @@ test('fence: fenced names in prose pass outside home, still block at home', () =
   assert.equal(commandReason('cd .. && cat Downloads/x', P), REASONS.dirs);
   assert.equal(commandReason('cd; cat .ssh/config', P), REASONS.ssh);
 });
+
+test('fence: recursive reads and copies rooted at home or above', () => {
+  const P = path.join(H, 'proj'), up = path.dirname(H);
+  for (const [c, d] of [['grep -r token ..', P], ['cd ~ && grep -r token .', P], ['cp -r .. /tmp/x', P], ['rg token ~', P], [`grep -R token ${up}`, P],
+    ['find / -name id_rsa', P], ['find -L ~ -type f', P], ['tar -czf /tmp/a.tgz ..', P], ['du -sh ~', P], ['ls -R ..', P], ['rg token', H], ['cd; find -name x', P],
+    ['rsync -a ~ /tmp/b', P], ['zip -r /tmp/a.zip ..', P], ['sudo grep -rn token $HOME', P], ['echo x; grep --recursive token ~/', P]])
+    assert.equal(commandReason(c, d), REASONS.tree, c);
+  for (const [c, d] of [['grep -r token .', P], ['grep -r token src', H], ['rg token', P], ['find . -name x', P], ['cp -r .. /tmp/x', path.join(P, 'a')],
+    ['grep token ..', P], ['cp ../a.txt .', P], ['ls ..', P], ['tar -xf ../a.tar', P], ['du -sh .', P], ['cd ~/proj && rg token', H]])
+    assert.equal(commandReason(c, d), '', c);
+});
+
+test('fence: push through xargs', () => {
+  assert.equal(commandReason('echo push | xargs git', path.join(H, 'proj')), REASONS.push);
+  assert.equal(commandReason('printf "push origin" | xargs -n2 git', path.join(H, 'proj')), REASONS.push);
+  assert.equal(commandReason('git ls-files | xargs grep push', path.join(H, 'proj')), '');
+});

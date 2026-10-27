@@ -6,7 +6,8 @@ import os from 'node:os';
 import path from 'node:path';
 
 export const DIRS = ['downloads', 'desktop', 'documents'];
-export const REASONS = { dirs: 'Downloads, Desktop and Documents are off limits', ssh: '~/.ssh is off limits', push: 'git push is off limits: squiggles commit, you push' };
+export const REASONS = { dirs: 'Downloads, Desktop and Documents are off limits', ssh: '~/.ssh is off limits', push: 'git push is off limits: squiggles commit, you push',
+  tree: 'a recursive read or copy from home or above reaches Downloads, Desktop, Documents and ~/.ssh: name a folder inside home' };
 export const REASON = REASONS.dirs;
 const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 // Follows symlinks through the part of the path that exists, and compares without case (APFS ignores it by default).
@@ -70,7 +71,31 @@ export const mentionReason = (text, home = os.homedir()) => mentionsHome(text, h
 // git [-C dir] [-c k=v] [--flags] push, anywhere in a chain or subshell.
 // Also git send-pack, subtree or lfs push, an alias set to push, and push reached through a variable or eval (c=push; git $c).
 export const pushes = (cmd) => /\bgit\b(\s+(-[Cc]\s+\S+|--?[\w-]+(=\S+)?))*\s+push\b/.test(cmd) || /\bgit\b.*\bsend-pack\b/.test(cmd) || /\bgit\b[^;&|\n]*\b(subtree|lfs)\b[^;&|\n]*\bpush\b/.test(cmd)
-  || /\balias\.[\w-]+[\s=]+!?(git\s+)?push\b/.test(cmd) || (/\bpush\b/.test(cmd) && /\$\{?\w|\beval\b/.test(cmd) && /\bgit\b/.test(cmd));
+  || /\balias\.[\w-]+[\s=]+!?(git\s+)?push\b/.test(cmd) || (/\bpush\b/.test(cmd) && (/\$\{?\w|\beval\b/.test(cmd) || /\bxargs\b[^;&|\n]*\bgit\b/.test(cmd)) && /\bgit\b/.test(cmd));
+// Recursive reads and copies (grep -r, rg, find, cp -r, tar, du, ls -R, rsync -a, zip -r, tree) rooted at home or above reach
+// every fenced folder at once. Each simple command is checked from the folder it runs in, following cd; no path means that folder.
+const RECURSE = { grep: /^-[a-zA-Z]*[rR]|^--(dereference-)?recursive$/, cp: /^-[a-zA-Z]*[rRa]|^--(recursive|archive)$/, ls: /^-[a-zA-Z]*R|^--recursive$/,
+  rsync: /^-[a-zA-Z]*[ra]|^--(recursive|archive)$/, zip: /^-[a-zA-Z]*r|^--recurse-paths$/, rg: true, find: true, du: true, tar: true, tree: true };
+const NEEDS_PATH = new Set(['cp', 'tar', 'rsync', 'zip']), PATTERN_FIRST = new Set(['grep', 'rg']);
+const aboveHome = (abs, home) => { const a = abs.toLowerCase(), h = home.toLowerCase(); return a === h || a === '/' || h.startsWith(a.replace(/\/$/, '') + '/'); };
+function treeReason(cmd, cwd, home) {
+  let cur = path.resolve(cwd);
+  for (const seg of cmd.split(/[;&|\n()`]|\$\(/)) {
+    const w = seg.trim().split(/\s+/).filter(Boolean);
+    while (w.length && /^(sudo|command|builtin|exec|nice|time|nohup|xargs|env|\w+=\S*)$/.test(w[0])) w.shift();
+    const [c, ...args] = w; if (!c) continue;
+    const name = path.basename(c);
+    if (name === 'cd' || name === 'pushd') { const t = args[0] ? args[0].replace(homeArg(home), home) : home; cur = /^[-~]|\$/.test(t) ? home : path.resolve(cur, t); continue; }
+    const rx = RECURSE[name];
+    if (!rx || (rx !== true && !args.some((a) => rx.test(a)))) continue;
+    if (name === 'find') while (/^-[HLPEXdsx]+$/.test(args[0] || '')) args.shift();
+    let ops = name === 'find' ? args.slice(0, (args.findIndex((a) => /^[-!(]/.test(a)) + 1 || args.length + 1) - 1) : args.filter((a) => !a.startsWith('-'));
+    if (PATTERN_FIRST.has(name) && !args.some((a) => /^-[a-zA-Z]*[ef]|^--(regexp|file)\b/.test(a))) ops = ops.slice(1);
+    if (!ops.length && !NEEDS_PATH.has(name)) ops = ['.'];
+    for (const o of ops) { const t = o.replace(homeArg(home), home); if (/^\$|^~/.test(t) || aboveHome(path.resolve(cur, t), home)) return REASONS.tree; }
+  }
+  return '';
+}
 // The reason a path or shell command is refused, or ''.
 export function pathReason(p, cwd = process.cwd(), home = os.homedir()) {
   return fencedPath(p, cwd, home) ? REASONS.dirs : sshPath(p, cwd, home) ? REASONS.ssh : '';
@@ -79,5 +104,5 @@ export function commandReason(cmd, cwd = process.cwd(), home = os.homedir()) {
   if (fencedCommand(cmd, cwd, home)) return REASONS.dirs;
   cmd = unquote(cmd);
   if (mentionsSsh(cmd, home) || (startsHome(cmd, cwd, home) && /(^|[\s=;&|(`])\.ssh\b/i.test(cmd)) || relReason(cmd, cwd, home) === REASONS.ssh) return REASONS.ssh;
-  return pushes(cmd) ? REASONS.push : '';
+  return treeReason(cmd, cwd, home) || (pushes(cmd) ? REASONS.push : '');
 }
