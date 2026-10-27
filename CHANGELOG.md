@@ -5,6 +5,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 ## 0.1.2 (unreleased)
 
 ### Security
+- Codex squiggles can't run git push or touch ~/.ssh, Downloads, Desktop or Documents: a Codex hook blocks them, patches included. Until you trust it, Codex turns are refused.
 - A squiggle rewrites its own charter only in a turn you or the lead asked for, so instructions planted in mail, pages or files can't. Unasked `charter` calls are refused and charter.md edits are put back; the lead sees every self-rewrite as a diff.
 - A Cursor squiggle's prompt is never read as cursor-agent options.
 - Pi and Cursor squiggles can't run git push or touch ~/.ssh (same rough fence as Downloads, Desktop and Documents).
@@ -190,6 +191,9 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Merge tab shows a listing error without waiting on the worktree list.
 - Inbox button tooltip no longer names a fixed folder; the Inbox panel shows the real path.
 - Merge detail centers the GitHub links; the After merging card heading stays on one line.
+
+### Migrations
+- Codex squiggles: run `node ~/squiggles/bin/codex-trust-guard.mjs` once, so Codex trusts the room's hook. Until then their turns are refused.
 
 ## 0.1.1
 

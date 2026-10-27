@@ -34,6 +34,7 @@ import { makePasscode } from './passcode.mjs';
 import { createTunnel, killStale, MIN_CODE, TUNNEL_HOST } from './tunnel.mjs';
 import { createPeers, fence, checkName } from './peers.mjs';
 import { callerChain } from './caller.mjs';
+import * as codexHook from './codex/guard.mjs';
 import { codeStamp, codeChanged } from './codestamp.mjs';
 
 const home = (p) => String(p || '').replace(/^~(?=\/|$)/, os.homedir());
@@ -374,10 +375,11 @@ function codexServer(s) {
   const roots = [sqDir(s.id)];
   // workspace-write keeps .git read-only; the repo's git dir must be a writable root or the squiggle can't commit.
   try { roots.push(timed(`git common-dir ${s.id}`, () => execFileSync('git', ['-C', home(s.cwd), 'rev-parse', '--path-format=absolute', '--git-common-dir'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })).trim()); } catch {}
-  const proc = spawn(codexBin(), ['app-server', '-c', 'sandbox_mode="workspace-write"', '-c', 'approval_policy="never"',
+  // codex/guard.mjs as a PreToolUse hook: the workspace-write sandbox reads everywhere and has network.
+  const proc = spawn(codexBin(), ['app-server', '-c', codexHook.hookConfig(), '-c', 'sandbox_mode="workspace-write"', '-c', 'approval_policy="never"',
     // The agents CLI talks to this server over HTTP; the journal lives in the squiggle's folder.
     '-c', 'sandbox_workspace_write.network_access=true', '-c', `sandbox_workspace_write.writable_roots=${JSON.stringify(roots)}`],
-  { cwd: home(s.cwd), stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, AGENTS_ID: s.id } });
+  { cwd: home(s.cwd), stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, AGENTS_ID: s.id, AGENTS_NODE: process.execPath } });
   lowPriority(s, proc);
   const cx = r.cx = { proc, n: 0, wait: new Map(), on: null };
   cx.req = (method, params) => new Promise((res, rej) => { const id = ++cx.n; cx.wait.set(id, { res, rej }); proc.stdin.write(JSON.stringify({ id, method, params }) + '\n'); });
@@ -400,6 +402,8 @@ function codexServer(s) {
   });
   cx.ready = cx.req('initialize', { clientInfo: { name: 'squiggles', version: '1' } })
     .then(() => proc.stdin.write(JSON.stringify({ method: 'initialized' }) + '\n'));
+  // Codex skips an untrusted hook without a word, so turns are refused until it's trusted (fails closed if hooks/list fails).
+  cx.guard = cx.ready.then(() => cx.req('hooks/list', { cwds: [home(s.cwd)] })).then((l) => codexHook.hookTrusted(l)).catch(() => false);
   return cx;
 }
 async function codexTurn(s, prompt, images = []) {
@@ -445,6 +449,7 @@ async function codexTurn(s, prompt, images = []) {
   };
   try {
     await cx.ready;
+    if (!(await cx.guard)) { const why = `Codex guard is not trusted, so this turn is refused: ${USER} runs node ~/squiggles/bin/codex-trust-guard.mjs once`; emit(s.id, { k: 'log', text: why }); return end(why, true); }
     if (!r.cxThread || r.cxThread !== cx) {
       // First turn on this server: resume the saved thread, or start one with the squiggle's instructions leading the prompt.
       const thread = r.codexThread || s.resume, opts = { cwd: home(s.cwd), model: s.model, sandbox: 'workspace-write', approvalPolicy: 'never' };

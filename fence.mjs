@@ -1,4 +1,4 @@
-// The fence shared by pi/guard.ts and cursor/guard.mjs (claude uses --disallowedTools): Downloads, Desktop and Documents,
+// The fence shared by pi/guard.ts, cursor/guard.mjs and codex/guard.mjs (claude uses --disallowedTools): Downloads, Desktop and Documents,
 // ~/.ssh, and git push (squiggles commit; pushing is yours). Pi and Cursor have no approval step, so this is all that stops them.
 // A rough fence, not a sandbox: shell commands are read as text, so a determined command can still get past it.
 import fs from 'node:fs';
@@ -38,6 +38,8 @@ export function fencedCommand(cmd, cwd = process.cwd(), home = os.homedir()) {
   if (startsHome(cmd, cwd, home)) for (const t of cmd.split(/[\s;|&()<>=`]+/)) if (globHits(t.split('/')[0])) return true;
   return false;
 }
+// Any text (file contents, a patch): a home path to a fenced folder or ~/.ssh.
+export const mentionReason = (text, home = os.homedir()) => mentionsHome(text, home) ? REASONS.dirs : mentionsSsh(text, home) ? REASONS.ssh : '';
 // git [-C dir] [-c k=v] [--flags] push, anywhere in a chain or subshell.
 export const pushes = (cmd) => /\bgit\b(\s+(-[Cc]\s+\S+|--?[\w-]+(=\S+)?))*\s+push\b/.test(cmd);
 // The reason a path or shell command is refused, or ''.
