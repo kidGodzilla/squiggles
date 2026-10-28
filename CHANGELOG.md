@@ -40,6 +40,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - An ask cut off by a server restart is marked interrupted at boot and its filer is told; its output is lost.
 
 ### Added
+- Keyboard shortcuts: `?` lists them (also `room keys`), ⌘K jumps to a squiggle, 1–9 switch tabs, `j k` move through Tasks, Merge and Team, `[ ]` and Alt ↑ ↓ step between 1:1s, `n` adds a note, goal or meeting. Tooltips name each key.
 - Squiggles can run on Cursor models (`cursor` in config.json): one `cursor-agent` run per turn, resuming its chat, with its own slot. Like Pi, Cursor runs every tool call without asking; a hook keeps it out of Downloads, Desktop and Documents, and Cursor turns are refused until it's installed.
 - Squiggles can run on Pi: list the models in config `pi` and pick one per squiggle (Settings > Squiggles or `set <id> model`). Each keeps one pi process and session between turns, can be steered mid-turn, and has its own Turns at once row. Pi has no approval step: every tool call runs as you, and Permissions doesn't apply. A hook keeps it out of Downloads, Desktop and Documents, but not reliably.
 - Share without Tailscale: Settings > Sharing > Cloudflare and `share cloudflare on|off|status` open a public Cloudflare quick tunnel link (`"cloudflare": true` in config.json; needs `cloudflared`). Reopens after a restart at a new link.

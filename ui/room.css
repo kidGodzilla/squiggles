@@ -1083,3 +1083,20 @@ html[data-theme=clean] .note textarea:focus-visible { box-shadow: none !importan
 html[data-theme=clean] .note:focus-within { box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 50%, transparent) }
 
 .permnote { display: block; margin-top: 6px; font-size: 12px; line-height: 1.4; color: var(--dim) } .permnote:empty { display: none }
+/* Keyboard shortcuts overlay. Keys in the body font, not monospace. */
+dl.keys { display: grid; grid-template-columns: 7.5em 1fr; gap: 6px 16px; margin: 0 0 8px; align-items: baseline }
+dl.keys dt { white-space: nowrap } dl.keys dd { margin: 0; color: var(--dim) }
+kbd { font: inherit; font-size: .85em; padding: 1px 7px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 6px; background: var(--bg, transparent) }
+/* ⌘K jump */
+#jumpBox .panel { width: min(480px, 92vw); align-self: flex-start; margin-top: 12vh }
+#jumpBox input { width: 100%; box-sizing: border-box; font: inherit; font-size: 16px; padding: 10px 12px; min-height: 44px }
+#jumpBox ul { list-style: none; margin: 8px 0 0; padding: 0; max-height: 50vh; overflow: auto }
+#jumpBox li { padding: 10px 12px; border-radius: 8px; cursor: pointer; min-height: 24px } #jumpBox li span { color: var(--dim) }
+#jumpBox li.on, #jumpBox li:hover { background: var(--panel2) } #jumpBox li.none { color: var(--dim); cursor: default; background: none }
+/* j/k list highlight: 2px inset ring plus the row's hover look. Accent in Flat, black/white in Clean. */
+.ksel { outline: 2px solid var(--accent); outline-offset: -2px }
+.mrow.ksel td { background: rgba(255,255,255,.025) } .note.ksel { transform: rotate(0deg) scale(1.03); z-index: 2 } .tm.ksel { border-color: var(--accent) }
+html[data-theme=clean] .ksel { outline-color: #fff } html[data-theme=clean] .note.ksel { transform: none; box-shadow: var(--sh-md) }
+@media (prefers-color-scheme: light) { html[data-theme=clean] .ksel { outline-color: #000 } html[data-theme=clean] .mrow.ksel td { background: rgba(0,0,0,.03) } }
+/* Shortcuts in More on touch screens only once a hardware keyboard is used */
+@media (pointer: coarse) { body:not(.kb) #keysBtn { display: none } }
