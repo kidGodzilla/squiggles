@@ -148,6 +148,15 @@ test('fence: wrapped and recursive tools given ~ itself; a script given ~ or a f
     assert.equal(commandReason(c, P), '', c);
 });
 
+test('fence: braces holding the home path, globs above home', () => {
+  const P = path.join(H, 'proj'), U = path.dirname(H), me = path.basename(H);
+  for (const c of [`cat {${H},/x}/.ssh/id_ed25519`, 'cat {~,/x}/.ssh/config', `ls {${U},/x}/${me}/Downloads`, `cat ${U}/*/.ssh/id_ed25519`,
+    `ls /${U.split('/')[1][0]}*/${me[0]}*/.s*`, 'ls /*/*/Downloads', `ls ${U}/*/*`, `cat /tmp/*/../..${U}/${me[0]}*/.ssh/x`, `ls ${U}/**/id_ed25519`, 'cd /; ls */*/Desktop'])
+    assert.notEqual(commandReason(c, P), '', c);
+  for (const c of [`ls ${U}/*`, `ls ${U}/*/Agents`, 'ls /tmp/*', 'ls /*', `ls {${H}/proj,/tmp}/a`, 'ls ~/proj/{a,b}/*.js', 'find . -exec echo {} +', `ls ${U}/*/proj/*.md`])
+    assert.equal(commandReason(c, P), '', c);
+});
+
 test('fence: a brace or class spelling a fenced folder is caught; one that does not passes', () => {
   const P = path.join(H, 'proj');
   for (const c of ['ls ~/{Down,x}loads', 'cat ~/[D]ownloads/x']) assert.equal(commandReason(c, P), REASONS.dirs, c);

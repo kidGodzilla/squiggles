@@ -59,10 +59,58 @@ function places(cmd, cwd, home) {
   return out;
 }
 const startsHome = (cmd, cwd, home) => places(cmd, cwd, home).some((d) => d.toLowerCase() === home.toLowerCase());
+// {a,b} spelled out, so a brace can hold the home path or a folder above it ({~,x}/.ssh, {/home/me,/x}/Downloads).
+// {} and {x} stay literal, as in the shell. Capped: past the cap a word keeps its braces and globSrc reads them.
+const braces = (w, n = 64) => {
+  for (let i = w.indexOf('{'); i >= 0; i = w.indexOf('{', i + 1)) {
+    const j = braceEnd(w, i), alts = j > 0 ? topSplit(w.slice(i + 1, j)) : [];
+    if (alts.length < 2) continue;
+    const out = [];
+    for (const a of alts) for (const x of braces(w.slice(0, i) + a + w.slice(j + 1), n)) { out.push(x); if (out.length >= n) return out; }
+    return out;
+  }
+  return [w];
+};
+// Glob segments against a path's segments; ** spans any number. Reaching the end of the path means the glob gets to it or inside.
+const segsMatch = (g, t) => {
+  if (!t.length) return true;
+  if (!g.length) return false;
+  if (g[0] === '**') return segsMatch(g.slice(1), t) || segsMatch(g, t.slice(1));
+  let ok; try { ok = globRe(g[0]).test(t[0]); } catch { ok = true; }
+  return ok && segsMatch(g.slice(1), t.slice(1));
+};
+const FENCES = [['dirs', DIRS], ['ssh', ['.ssh']]];
+// A glob met at home or above it, matched against every fenced folder (ls ~/D*, ls /home/*/.ssh, ls /h*/m*/Downloads).
+const globReason = (cur, g, home) => {
+  for (const h of new Set([home, real(home)].map((x) => x.toLowerCase()))) for (const c of new Set([cur, real(cur)])) {
+    if (!aboveHome(c, h)) continue;
+    const base = h.slice(c.replace(/\/$/, '').length).split('/').filter(Boolean);
+    for (const [why, dirs] of FENCES) if (dirs.some((d) => segsMatch(g, [...base, d]))) return REASONS[why];
+  }
+  return '';
+};
+// A word walked as a path from dir, braces spelled out. Once a glob segment appears, the rest is matched against the fenced
+// folders; a .. after it cancels the segment before it (/tmp/*/../../home/m*/.ssh).
+const wordReason = (w, dir, home) => {
+  for (const x of braces(w)) {
+    const segs = x.replace(/^~([\w.-]+)(?=\/|$)/, (_, u) => path.join(path.dirname(home), u)).replace(homeArg(home), home).split('/'), g = [];
+    let cur = segs[0] === '' ? '/' : dir;
+    for (const seg of segs) {
+      if (!seg || seg === '.') continue;
+      if (seg === '..') { if (g.length) g.pop(); else cur = path.dirname(cur); }
+      else if (g.length || /[*?[{]/.test(seg)) g.push(seg);
+      else cur = path.resolve(cur, seg);
+    }
+    const r = g.length ? globReason(cur, g, home) : pathReason(cur, cur, home);
+    if (r) return r;
+  }
+  return '';
+};
 // Each word (Desktop, ../.ssh/config, ../D*) resolved from each folder the command may run in.
 function relReason(cmd, cwd, home) {
   const h = home.toLowerCase(), words = cmd.split(/[\s;|&()<>=`]+/).filter(Boolean);
   for (const d of places(cmd, cwd, home)) for (const w of words) {
+    const r = wordReason(w, d, home); if (r) return r;
     const abs = path.resolve(d, w.replace(homeArg(home), home)), parts = abs.split('/');
     if (fencedPath(abs, d, home)) return REASONS.dirs;
     if (sshPath(abs, d, home)) return REASONS.ssh;
