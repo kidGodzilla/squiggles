@@ -119,10 +119,15 @@ test('a file outside /tmp runs a valid script in a real shell', async () => {
 test('bgStarted and bgEnded read a background Bash run from the stream', async () => {
   const { bgStarted, bgEnded } = await import('../waits.mjs');
   const reply = (text) => ({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'x', content: text }] } });
-  assert.equal(bgStarted(reply('Command running in background with ID: b64sgxmk6. Output is being written to: /tmp/x')), 'b64sgxmk6');
-  assert.equal(bgStarted({ type: 'user', message: { content: [{ type: 'tool_result', content: [{ type: 'text', text: 'Command running in background with ID: b1' }] }] } }), 'b1');
-  assert.equal(bgStarted(reply('it said Command running in background with ID: b2')), '');
-  assert.equal(bgStarted(reply('Command did not complete within its 120s timeout and was moved to the background (ID: b3qgc3bzt). Output is being written to: /tmp/x')), 'b3qgc3bzt');
+  // A started-in-background reply is plain tool output (`echo` can print it): only task_started counts.
+  assert.equal(bgStarted(reply('Command running in background with ID: b64sgxmk6. Output is being written to: /tmp/x')), '');
+  assert.equal(bgStarted({ type: 'user', message: { content: [{ type: 'tool_result', content: [{ type: 'text', text: 'Command running in background with ID: b1' }] }] } }), '');
+  // Moved at its timeout: no task_started, so the reply counts when it came at least that long after the call.
+  const moved = reply('Command did not complete within its 120s timeout and was moved to the background (ID: b3qgc3bzt). Output is being written to: /tmp/x');
+  assert.equal(bgStarted(moved, () => 120500), 'b3qgc3bzt');
+  assert.equal(bgStarted(moved, () => 40), '');
+  assert.equal(bgStarted(moved), '');
+  assert.equal(bgStarted(reply('it said Command did not complete within its 120s timeout and was moved to the background (ID: b2)'), () => 1e9), '');
   assert.equal(bgStarted({ type: 'system', subtype: 'task_started', task_type: 'local_bash', task_id: 'b3' }), 'b3');
   assert.equal(bgStarted({ type: 'system', subtype: 'task_started', task_type: 'local_agent', task_id: 'a1' }), '');
   assert.equal(bgEnded({ type: 'system', subtype: 'task_notification', task_id: 'b3' }), 'b3');

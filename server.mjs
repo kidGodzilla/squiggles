@@ -132,7 +132,7 @@ const R = (id) => {
 };
 function saveState() {
   const out = {};
-  for (const [id, { proc, caff, cx, cxThread, cxLast, sig, subs, bg, ...r }] of rt) out[id] = r;
+  for (const [id, { proc, caff, cx, cxThread, cxLast, sig, subs, bg, bgUse, ...r }] of rt) out[id] = r;
   for (const k of ['*meeting', '*started', '*held', '*warned', '*slots']) if (persisted[k]) out[k] = persisted[k];
   fs.writeFileSync(STATE, JSON.stringify(out, null, 2));
 }
@@ -302,7 +302,9 @@ function launch(s) {
       if (!line) continue;
       let ev;
       try { ev = JSON.parse(line); } catch { continue; }
-      { const b = bgStarted(ev), e = bgEnded(ev); if (b) (r.bg ||= {})[b] = Date.now(); if (e && r.bg) delete r.bg[e]; }
+      if (ev.type === 'assistant') for (const c of ev.message?.content || []) if (c.type === 'tool_use' && c.name === 'Bash') (r.bgUse ||= {})[c.id] = Date.now();
+      { const b = bgStarted(ev, (id) => Date.now() - (r.bgUse?.[id] ?? Infinity)), e = bgEnded(ev); if (b) (r.bg ||= {})[b] = Date.now(); if (e && r.bg) delete r.bg[e];
+        if (ev.type === 'user') for (const c of ev.message?.content || []) if (c.type === 'tool_result') delete r.bgUse?.[c.tool_use_id]; }
       if (ev.type === 'system' && ev.subtype === 'init') { r.sessionId = ev.session_id; saveState(); }
       else if (ev.type === 'system' && ev.subtype === 'task_started' && ev.task_type === 'local_agent') subStart(s.id, ev);
       else if (ev.type === 'system' && (ev.subtype === 'task_notification' || (ev.subtype === 'task_updated' && /^(completed|failed|killed|stopped)$/.test(ev.patch?.status || '')))) subEnd(s.id, ev.task_id, ev.status || ev.patch?.status);
@@ -339,7 +341,7 @@ function launch(s) {
     r.proc = null;
     for (const t of Object.keys(r.subs || {})) subEnd(s.id, t, 'stopped');
     if (r.bg && Object.keys(r.bg).length && r.status === 'waiting') setStatus(s.id, 'blocked', `background run ended with the process: ${r.note || ''}`);
-    delete r.bg;
+    delete r.bg; delete r.bgUse;
     if (r.status === 'working') setStatus(s.id, code ? 'error' : 'idle', code ? `exited ${code}` : '');
   });
   return proc;
