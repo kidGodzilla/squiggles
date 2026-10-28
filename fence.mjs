@@ -19,12 +19,17 @@ const under = (names, p, cwd, home) => {
 export const fencedPath = (p, cwd = process.cwd(), home = os.homedir()) => under(DIRS, p, cwd, home);
 export const sshPath = (p, cwd = process.cwd(), home = os.homedir()) => under(['.ssh'], p, cwd, home);
 // A shell glob as a regex source: * ? [abc] [!a] [^a] {a,b}.
+// Braces nest ({s{s,}h,x}); a ] first in a class is literal ([]s], [!]x]).
+const braceEnd = (g, i) => { for (let d = 0; i < g.length; i++) { if (g[i] === '{') d++; else if (g[i] === '}' && !--d) return i; } return -1; };
+const topSplit = (s) => { const out = ['']; let d = 0;
+  for (const ch of s) { if (ch === ',' && !d) { out.push(''); continue; } if (ch === '{') d++; else if (ch === '}') d--; out[out.length - 1] += ch; }
+  return out; };
 const globSrc = (g) => { let r = '';
   for (let i = 0; i < g.length; i++) {
-    const ch = g[i], j = ch === '[' ? g.indexOf(']', i + 2) : ch === '{' ? g.indexOf('}', i) : -1;
+    const ch = g[i], neg = ch === '[' && /[!^]/.test(g[i + 1] || ''), j = ch === '[' ? g.indexOf(']', i + (neg ? 3 : 2)) : ch === '{' ? braceEnd(g, i) : -1;
     if (ch === '*') r += '.*'; else if (ch === '?') r += '.';
-    else if (ch === '[' && j > 0) { const b = g.slice(i + 1, j).replace(/\\/g, '\\\\'); r += `[${/^[!^]/.test(b) ? '^' + b.slice(1) : b}]`; i = j; }
-    else if (ch === '{' && j > 0) { r += `(?:${g.slice(i + 1, j).split(',').map(globSrc).join('|')})`; i = j; }
+    else if (ch === '[' && j > 0) { r += `[${neg ? '^' : ''}${g.slice(i + (neg ? 2 : 1), j).replace(/[\\\]]/g, '\\$&')}]`; i = j; }
+    else if (ch === '{' && j > 0) { r += `(?:${topSplit(g.slice(i + 1, j)).map(globSrc).join('|')})`; i = j; }
     else r += ch.replace(/[.+^$(){}|[\]\\]/g, '\\$&');
   }
   return r; };
@@ -95,7 +100,9 @@ const VAL = { grep: /^-[a-zA-Z]*[efmABCD]$|^--(regexp|file|max-count|context|aft
   ag: /^-[a-zA-Z]*[GgABCm]$|^--(file-search-regex|ignore|context|after|before|max-count)$/, du: /^-[dB]$/ };
 const PATTERN_FLAG = /^-[a-zA-Z]*[ef]$|^--(regexp|file)\b/;
 // Wrapper flags that take a value (sudo -u root, xargs -I {}, bash -O extglob).
-const WRAP_VAL = { sudo: /^-[ugCDhpRrT]$/, xargs: /^-[IndELPs]$/, nice: /^-n$/, timeout: /^-[sk]$/, exec: /^-a$/ };
+const WRAP_VAL = { sudo: /^-[a-zA-Z]*[ugCDhpRrT]$|^--(user|group|other-user|chdir|close-from|host|prompt|role|type|command-timeout)$/,
+  xargs: /^-[a-zA-Z0-9]*[IndELPs]$|^--(max-args|max-procs|max-chars|max-lines|delimiter|eof|replace|arg-file)$/,
+  nice: /^-n$|^--adjustment$/, timeout: /^-[sk]$|^--(signal|kill-after)$/, exec: /^-a$/, time: /^-[a-zA-Z]*[fo]$|^--(format|output)$/ };
 // Words that run the command after them: sudo, env [-C dir], nice [-n N], timeout [-s SIG] N, bash/sh/zsh -c, and so on.
 const WRAP = /^(sudo|command|builtin|exec|nice|time|nohup|xargs|env|timeout|bash|sh|zsh|dash|\w+=\S*)$/;
 const aboveHome = (abs, home) => { const a = abs.toLowerCase(), h = home.toLowerCase(); return a === h || a === '/' || h.startsWith(a.replace(/\/$/, '') + '/'); };
@@ -105,7 +112,7 @@ function treeReason(cmd, cwd, home) {
     const w = seg.trim().split(/\s+/).filter(Boolean);
     while (w.length && WRAP.test(path.basename(w[0]))) {
       const c0 = path.basename(w.shift()), flags = (arg) => { while (/^[-+]/.test(w[0] || '')) if (arg.test(w.shift())) w.shift(); };
-      if (/^(bash|sh|zsh|dash)$/.test(c0)) { if (!w.some((a) => /^-[a-zA-Z]*c[a-zA-Z]*$/.test(a))) { w.unshift(c0); break; } flags(/^[-+][oO]$/); continue; }
+      if (/^(bash|sh|zsh|dash)$/.test(c0)) { if (!w.some((a) => /^-[a-zA-Z]*c[a-zA-Z]*$/.test(a))) { w.unshift(c0); break; } flags(/^[-+][oO]$|^--(rcfile|init-file)$/); continue; }
       if (c0 !== 'env') { flags(WRAP_VAL[c0] || /^$/); if (c0 === 'timeout') w.shift(); continue; }
       while (/^-|^\w+=/.test(w[0] || '')) { const f = w.shift(), m = f.match(/^(?:-C|--chdir=?)(.*)$/); if (!m) continue;
         const t = (m[1] || w.shift() || '').replace(homeArg(home), home); cur = !t || /^[-~]|\$/.test(t) ? home : path.resolve(cur, t); }

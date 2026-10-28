@@ -127,3 +127,14 @@ test('fence: [^.] and brace globs, wrapper paths and flags, -e patterns, 7z with
   for (const c of ['rg -e x', 'grep -r -e x src', 'fd -e md x', 'sudo -u root make', '/bin/bash -c "rg x src"', '7z a /tmp/a.7z', 'rg -g "*.md" x src', 'cat {a,b}.txt'])
     assert.equal(commandReason(c, P), '', c);
 });
+
+test('fence: nested braces, a leading ] in a class, long wrapper flags with a separate value', () => {
+  const P = path.join(H, 'proj');
+  for (const c of ['cat ~/.{s{s,}h,x}/config', 'cat ~/.[]s]sh/config', 'cat ~/.[!]x]sh/config'])
+    assert.equal(commandReason(c, P), REASONS.ssh, c);
+  for (const c of ['sudo -iu root rg x ~', 'sudo --user root rg x ~', 'nice --adjustment 10 rg x ~', 'timeout --signal KILL 5 rg x ~',
+    'time -f %e rg x ~', 'bash --rcfile y -c "rg x ~"', 'xargs --max-args 1 grep -r x ..'])
+    assert.equal(commandReason(c, P), REASONS.tree, c);
+  for (const c of ['sudo -iu root make', 'timeout --signal KILL 5 rg x src', 'cat {a,{b,c}}.txt', 'ls [ab]*'])
+    assert.equal(commandReason(c, P), '', c);
+});
