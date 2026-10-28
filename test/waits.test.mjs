@@ -124,10 +124,16 @@ test('bgStarted and bgEnded read a background Bash run from the stream', async (
   assert.equal(bgStarted({ type: 'user', message: { content: [{ type: 'tool_result', content: [{ type: 'text', text: 'Command running in background with ID: b1' }] }] } }), '');
   // Moved at its timeout: no task_started, so the reply counts when it came at least that long after the call.
   const moved = reply('Command did not complete within its 120s timeout and was moved to the background (ID: b3qgc3bzt). Output is being written to: /tmp/x');
-  assert.equal(bgStarted(moved, () => 120500), 'b3qgc3bzt');
-  assert.equal(bgStarted(moved, () => 40), '');
+  const call = (ago, timeout = 120000) => () => ({ at: Date.now() - ago, timeout });
+  assert.equal(bgStarted(moved, call(120500)), 'b3qgc3bzt');
+  assert.equal(bgStarted(moved, call(40)), '');
   assert.equal(bgStarted(moved), '');
-  assert.equal(bgStarted(reply('it said Command did not complete within its 120s timeout and was moved to the background (ID: b2)'), () => 1e9), '');
+  assert.equal(bgStarted(reply('it said Command did not complete within its 120s timeout and was moved to the background (ID: b2)'), call(1e9)), '');
+  // The reply's own number is not trusted: an echoed "1ms timeout" still needs the call's real timeout to pass.
+  const fake = reply('Command did not complete within its 1ms timeout and was moved to the background (ID: bx)');
+  assert.equal(bgStarted(fake, call(50)), '');
+  assert.equal(bgStarted(fake, call(50, 600000)), '');
+  assert.equal(bgStarted(moved, call(5000, 5000)), 'b3qgc3bzt');
   assert.equal(bgStarted({ type: 'system', subtype: 'task_started', task_type: 'local_bash', task_id: 'b3' }), 'b3');
   assert.equal(bgStarted({ type: 'system', subtype: 'task_started', task_type: 'local_agent', task_id: 'a1' }), '');
   assert.equal(bgEnded({ type: 'system', subtype: 'task_notification', task_id: 'b3' }), 'b3');

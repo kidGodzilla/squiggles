@@ -302,8 +302,8 @@ function launch(s) {
       if (!line) continue;
       let ev;
       try { ev = JSON.parse(line); } catch { continue; }
-      if (ev.type === 'assistant') for (const c of ev.message?.content || []) if (c.type === 'tool_use' && c.name === 'Bash') (r.bgUse ||= {})[c.id] = Date.now();
-      { const b = bgStarted(ev, (id) => Date.now() - (r.bgUse?.[id] ?? Infinity)), e = bgEnded(ev); if (b) (r.bg ||= {})[b] = Date.now(); if (e && r.bg) delete r.bg[e];
+      if (ev.type === 'assistant') for (const c of ev.message?.content || []) if (c.type === 'tool_use' && c.name === 'Bash') (r.bgUse ||= {})[c.id] = { at: Date.now(), timeout: Number(c.input?.timeout) || 120000 };
+      { const b = bgStarted(ev, (id) => r.bgUse?.[id]), e = bgEnded(ev); if (b) (r.bg ||= {})[b] = Date.now(); if (e && r.bg) delete r.bg[e];
         if (ev.type === 'user') for (const c of ev.message?.content || []) if (c.type === 'tool_result') delete r.bgUse?.[c.tool_use_id]; }
       if (ev.type === 'system' && ev.subtype === 'init') { r.sessionId = ev.session_id; saveState(); }
       else if (ev.type === 'system' && ev.subtype === 'task_started' && ev.task_type === 'local_agent') subStart(s.id, ev);

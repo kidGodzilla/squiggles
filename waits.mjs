@@ -107,15 +107,16 @@ export function createWaits({ file, now = () => Date.now() }) {
 // A squiggle's own background run (Bash run_in_background): the CLI wakes the same session when it ends,
 // so WAITING on it is a real wait while the process lives. A run started in the background counts from task_started only:
 // its reply is plain tool output, which `echo` can fake. One moved there at its timeout sends no task_started, so its reply
-// counts when the result came at least that long after the call (`elapsed(tool_use_id)` in ms).
-export function bgStarted(ev, elapsed = () => 0) {
+// counts when the result came at least that long after the call. The timeout is the call's own (`call(tool_use_id)` →
+// { at, timeout } from the tool_use, default 120s), never the number in the reply, which output could claim is 1ms.
+export function bgStarted(ev, call = () => null, now = Date.now()) {
   if (ev?.type === 'system' && ev.subtype === 'task_started' && ev.task_type === 'local_bash') return ev.task_id || '';
   if (ev?.type !== 'user' || !Array.isArray(ev.message?.content)) return '';
   for (const c of ev.message.content) {
     if (c.type !== 'tool_result') continue;
     const t = Array.isArray(c.content) ? c.content.map((p) => p.text || '').join('\n') : String(c.content ?? '');
-    const m = t.match(/^Command did not complete within its (\d+)(ms|s|m)? timeout and was moved to the background \(ID: ([\w-]+)\)/);
-    if (m && elapsed(c.tool_use_id) >= 0.9 * m[1] * ({ ms: 1, m: 60000 }[m[2]] ?? 1000)) return m[3];
+    const m = t.match(/^Command did not complete within its \d+\w* timeout and was moved to the background \(ID: ([\w-]+)\)/), u = m && call(c.tool_use_id);
+    if (u && now - u.at >= 0.9 * u.timeout) return m[1];
   }
   return '';
 }
