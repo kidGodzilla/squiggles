@@ -7,11 +7,13 @@ import { fileURLToPath } from 'node:url';
 import { commandReason } from '../fence.mjs';
 
 const q = (s) => String(s).replace(/\s/g, '?');
+// A pattern that is absolute or starts at ~ stands alone; path.join would drop its root.
+const under = (base, p) => (/^[/~]/.test(p) ? p : path.join(base, p));
 export function check(ev) {
   const i = ev.tool_input || {}, cwd = ev.cwd || process.cwd();
   if (ev.tool_name === 'Bash') return commandReason(String(i.command ?? ''), cwd);
-  if (ev.tool_name === 'Grep') return commandReason(`grep -r x ${q(i.path || '.')}${i.glob ? ` ${q(path.join(i.path || '.', i.glob))}` : ''}`, cwd);
-  if (ev.tool_name === 'Glob') return commandReason(`ls ${q(path.join(i.path || '.', String(i.pattern ?? '')))}`, cwd) || (i.path ? commandReason(`ls ${q(i.path)}`, cwd) : '');
+  if (ev.tool_name === 'Grep') return commandReason(`grep -r x ${q(i.path || '.')}${i.glob ? ` ${q(under(i.path || '.', String(i.glob)))}` : ''}`, cwd);
+  if (ev.tool_name === 'Glob') return commandReason(`ls ${q(under(i.path || '.', String(i.pattern ?? '')))}`, cwd) || (i.path ? commandReason(`ls ${q(i.path)}`, cwd) : '');
   return '';
 }
 export const MATCHER = 'Bash|Grep|Glob';

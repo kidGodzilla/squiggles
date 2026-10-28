@@ -19,6 +19,11 @@ test('claude guard: Bash, Grep and Glob fenced from ~/.ssh and the three folders
   assert.match(check(ev('Glob', { pattern: '.s*/*', path: H })), /\.ssh/);
   assert.match(check(ev('Glob', { pattern: '*', path: '~/Desktop' })), /Desktop/);
   assert.match(check(ev('Bash', { command: 'git push origin main' })), /push/);
+  // An absolute or ~ pattern with no path keeps its root.
+  assert.match(check(ev('Glob', { pattern: path.join(SSH, '*') })), /\.ssh/);
+  assert.match(check(ev('Glob', { pattern: path.join(H, 'Downloads', '**', '*') })), /Downloads/);
+  assert.match(check(ev('Glob', { pattern: '~/.ssh/*' })), /\.ssh/);
+  assert.match(check(ev('Grep', { pattern: 'x', path: W, glob: path.join(SSH, '*') })), /\.ssh/);
 });
 
 test('claude guard: ordinary work passes', () => {
@@ -36,5 +41,7 @@ test('claude guard: merged into own settings; the hook script blocks with exit 2
   assert.equal(run(JSON.stringify(ev('Bash', { command: `ls ${SSH}` }))), 2);
   assert.equal(run(JSON.stringify(ev('Bash', { command: 'ls' }))), 0);
   assert.equal(run('not json'), 2);
+  // A guard that can't even start blocks too: Claude treats any exit but 2 as allow.
+  try { execFileSync(HOOK_CMD, { input: '{}', stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, AGENTS_NODE: '/nonexistent/node' } }); assert.fail('allowed'); } catch (e) { assert.equal(e.status, 2); assert.match(String(e.stderr), /refused/); }
   fs.rmSync(W, { recursive: true, force: true });
 });
