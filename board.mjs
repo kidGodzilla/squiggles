@@ -477,7 +477,9 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
     }
     return r;
   }
-  const inQueue = () => tasks().filter((t) => t.status === 'review' && (goalOf(t.goal)?.merge || 'gated') === 'gated');
+  // The user merges every review branch: a gated goal's, and an open goal's when the work sits on a branch, not main.
+  const needsUser = (t) => (goalOf(t.goal)?.merge || 'gated') === 'gated' || (!!t.branch && !/^(main|master)$/.test(t.branch));
+  const inQueue = () => tasks().filter((t) => t.status === 'review' && needsUser(t));
   // Why a review branch no longer needs the Merge tab, or '' if it still does. Never touches the branch.
   async function mergedOutside(task, q) {
     if (!task.repo || !task.branch || !fs.existsSync(expand(task.repo))) return '';
@@ -534,7 +536,7 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
     return list.filter((r) => !sent.includes(r.id));
   }
   // Merging this task needs the user or the lead (t1384). No task: board.merge says so.
-  const gated = (id) => { const t = tasks().find((x) => x.id === id); return !!t && (goalOf(t.goal)?.merge || 'gated') === 'gated'; };
+  const gated = (id) => { const t = tasks().find((x) => x.id === id); return !!t && needsUser(t); };
   function mergeTask(id) {
     const t = tasks().find((x) => x.id === id);
     if (!t) throw new Error(`no task ${id}`);

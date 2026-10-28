@@ -155,6 +155,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Settings number inputs show an accent border on focus and are 44px tall on touch screens.
 
 ### Fixed
+- Review tasks in an open goal that sit on a branch (not main) now show in the Merge tab; before, nobody could merge them.
 - A fresh install no longer crashes on first start.
 - The fence no longer refuses prose that names Downloads, Desktop or Documents (a commit message, a note) outside home; it walks each word as a path.
 - Toasts show on every view, not only the Room.
@@ -215,6 +216,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - The scheduler staggers wakes per provider, 2 minutes apart (was 10 minutes across all).
 
 ### Fixed
+- Review tasks in an open goal that sit on a branch (not main) now show in the Merge tab; before, nobody could merge them.
 - A dropped task's id is never handed out again; tasks.json keeps the highest id issued.
 - Merge tab between 760 and 1100px wide: opening a row no longer squeezes the titles.
 - Installed on iPhone, the header is no longer blurred under the status bar.

@@ -92,9 +92,9 @@ test('merge of a task committed straight on the base closes it, no git merge (t1
 test('gated: review tasks in gated goals (and goal-less ones) need the user or the lead (t1384)', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'merges-'));
   fs.writeFileSync(path.join(dir, 'goals.json'), JSON.stringify({ active: [{ id: 'g', title: 'G', merge: 'gated' }, { id: 'o', title: 'O', merge: 'open' }, { id: 'd', title: 'D' }] }));
-  fs.writeFileSync(path.join(dir, 'tasks.json'), JSON.stringify({ tasks: [{ id: 't1', goal: 'g' }, { id: 't2', goal: 'o' }, { id: 't3', goal: 'd' }, { id: 't4' }] }));
+  fs.writeFileSync(path.join(dir, 'tasks.json'), JSON.stringify({ tasks: [{ id: 't1', goal: 'g' }, { id: 't2', goal: 'o' }, { id: 't3', goal: 'd' }, { id: 't4' }, { id: 't5', goal: 'o', branch: 't5-fix' }, { id: 't6', goal: 'o', branch: 'main' }] }));
   const b = createBoard(dir, () => {});
-  assert.deepEqual(['t1', 't2', 't3', 't4', 'nope'].map(b.gated), [true, false, true, true, false]);
+  assert.deepEqual(['t1', 't2', 't3', 't4', 't5', 't6', 'nope'].map(b.gated), [true, false, true, true, true, false, false]); // an open goal's review branch is the user's too
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
@@ -171,5 +171,21 @@ test('merge takes the reviewed commit: a branch moved since review is refused un
   const m = await b.merge('t1', 'owner');
   assert.equal(m.task.status, 'done');
   assert.equal(fs.readFileSync(path.join(repo, 'c'), 'utf8'), 'after review');
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('an open goal\'s review branch shows in the Merge tab; one on main does not', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'merges-')), repo = path.join(dir, 'repo');
+  const g = (...a) => execFileSync('git', ['-C', repo, ...a], { stdio: 'pipe', env: { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' } });
+  const commit = (f, m) => { fs.writeFileSync(path.join(repo, f), m); g('add', f); g('commit', '-q', '-m', m); };
+  fs.mkdirSync(repo); g('init', '-q', '-b', 'main'); commit('a', 'base');
+  g('checkout', '-q', '-b', 'fix-login'); commit('b', 'work'); g('checkout', '-q', 'main');
+  fs.writeFileSync(path.join(dir, 'goals.json'), JSON.stringify({ active: [{ id: 'o', title: 'O', merge: 'open' }] }));
+  fs.writeFileSync(path.join(dir, 'tasks.json'), JSON.stringify({ tasks: [
+    { id: 't1', title: 'branch', goal: 'o', status: 'review', repo, branch: 'fix-login' },
+    { id: 't2', title: 'on main', goal: 'o', status: 'review', repo, branch: 'main' },
+    { id: 't3', title: 'no branch', goal: 'o', status: 'review' } ] }));
+  const b = createBoard(dir, () => {});
+  assert.deepEqual((await b.merges()).map((x) => x.id), ['t1']);
   fs.rmSync(dir, { recursive: true, force: true });
 });
