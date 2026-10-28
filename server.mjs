@@ -35,6 +35,7 @@ import { createTunnel, killStale, MIN_CODE, TUNNEL_HOST } from './tunnel.mjs';
 import { createPeers, fence, checkName } from './peers.mjs';
 import { callerChain } from './caller.mjs';
 import * as codexHook from './codex/guard.mjs';
+import { withHook as claudeFence } from './claude/guard.mjs';
 import { codeStamp, codeChanged } from './codestamp.mjs';
 
 const home = (p) => String(p || '').replace(/^~(?=\/|$)/, os.homedir());
@@ -263,7 +264,7 @@ function systemPrompt(s) {
 const modelFor = (s) => pickModel(s, CONFIG.model);
 // Settings baked into a process's flags. A change ends the idle process before the next turn; --resume keeps the session.
 // The squiggle's settings.json (allow rules) is in it too: an edit relaunches the idle process on its next message. So is the system prompt (t1307).
-const launchSig = (s) => JSON.stringify([!!s.chrome, modelFor(s), s.permissionMode, s.autocompact, s.maxTurns, s.effort, s.cwd, readText(path.join(sqDir(s.id), 'settings.json'), ''), systemPrompt(s)]);
+const launchSig = (s) => JSON.stringify([!!s.chrome, modelFor(s), s.permissionMode, s.autocompact, s.maxTurns, s.effort, s.cwd, readText(path.join(sqDir(s.id), 'settings.json'), ''), 'fence:claude-hook', systemPrompt(s)]);
 // Busy Mac: every squiggle but the lead runs at nice 10 and its builds and tests inherit it, so the lead and the page stay quick.
 const lowPriority = (s, proc) => { if (!s.lead && proc.pid) try { os.setPriority(proc.pid, 10); } catch {} };
 function launch(s) {
@@ -271,8 +272,8 @@ function launch(s) {
   const args = ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose',
     '--append-system-prompt', systemPrompt(s), '--permission-mode', s.permissionMode || 'auto', '--permission-prompts', 'none',
     '--add-dir', sqDir(s.id), '--add-dir', DATA, '--add-dir', os.homedir(),
-    // Squiggles roam the home folder freely, except these.
-    '--disallowedTools', ...['Downloads', 'Desktop', 'Documents'].flatMap((d) => [`Read(~/${d}/**)`, `Edit(~/${d}/**)`, `Write(~/${d}/**)`])];
+    // Squiggles roam the home folder freely, except these. Bash, Grep and Glob go through claude/guard.mjs.
+    '--disallowedTools', ...['Downloads', 'Desktop', 'Documents', '.ssh'].flatMap((d) => [`Read(~/${d}/**)`, `Edit(~/${d}/**)`, `Write(~/${d}/**)`])];
   if (s.chrome) args.push('--chrome');
   if (modelFor(s)) args.push('--model', modelFor(s));
   // Usage controls (per squiggle, see handoff): context window cap, effort, and a turn cap per wake.
@@ -284,12 +285,14 @@ function launch(s) {
   else args.push('--allowedTools', `Bash(${cli} list)`, `Bash(${cli} charter ${s.id} *)`, `Bash(${cli} charter ${s.id})`, `Edit(${sqDir(s.id)}/journal.md)`,
     `Bash(${cli} tasks*)`, `Bash(${cli} task *)`, `Bash(${cli} goals)`, `Bash(${cli} wait *)`, `Bash(${cli} waits*)`, `Bash(${cli} restart)`, `Bash(${cli} room reload)`);
   const settings = path.join(sqDir(s.id), 'settings.json');
-  if (fs.existsSync(settings)) args.push('--settings', settings);
+  // The squiggle's own settings plus the fence hook, as one JSON. Unreadable settings still get the hook.
+  let own = {}; if (fs.existsSync(settings)) try { own = JSON.parse(readText(settings, '{}')); } catch {}
+  args.push('--settings', JSON.stringify(claudeFence(own)));
   if (r.sessionId) args.push('--resume', r.sessionId);
   r.resumedFrom = r.sessionId || null;
 
   // CLAUDE_ENV_FILE runs before each Bash command: nvm's Node, not Homebrew's.
-  const proc = spawn('claude', args, { cwd: home(s.cwd), stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, AGENTS_ID: s.id, CLAUDE_ENV_FILE: path.join(ROOT, 'bin', 'squiggle-env.sh') } });
+  const proc = spawn('claude', args, { cwd: home(s.cwd), stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, AGENTS_ID: s.id, AGENTS_NODE: process.execPath, CLAUDE_ENV_FILE: path.join(ROOT, 'bin', 'squiggle-env.sh') } });
   lowPriority(s, proc);
   r.proc = proc;
   let buf = '', lastText = '';

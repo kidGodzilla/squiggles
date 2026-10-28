@@ -5,6 +5,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 ## 0.1.2 (unreleased)
 
 ### Security
+- Claude squiggles are fenced like the others: ~/.ssh joins the blocked folders for Read, Edit and Write, and a hook runs every Bash, Grep and Glob through the fence (git push, the three folders, ~/.ssh, recursive reads from home). Your own settings.json hooks still run.
 - Codex squiggles can't run git push or touch ~/.ssh, Downloads, Desktop or Documents: a Codex hook blocks them, patches included. Until you trust it, Codex turns are refused; trust is checked every turn.
 - A squiggle rewrites its own charter only in a turn you or the lead asked for, so instructions planted in mail, pages or files can't. Unasked `charter` calls are refused and charter.md edits are put back; the lead sees every self-rewrite as a diff. A charter.md changed between turns (a job left running, or while the room was down) is put back at the next turn and the lead is told: change charters on the squiggle sheet.
 - A Cursor squiggle's prompt is never read as cursor-agent options.
