@@ -105,14 +105,14 @@ export function createWaits({ file, now = () => Date.now() }) {
 }
 
 // A squiggle's own background run (Bash run_in_background): the CLI wakes the same session when it ends,
-// so WAITING on it is a real wait while the process lives. Ids come from task_started or the tool's reply.
+// so WAITING on it is a real wait while the process lives. Ids come from task_started or the tool's reply (started in the background, or moved there at its timeout).
 export function bgStarted(ev) {
   if (ev?.type === 'system' && ev.subtype === 'task_started' && ev.task_type === 'local_bash') return ev.task_id || '';
   if (ev?.type !== 'user' || !Array.isArray(ev.message?.content)) return '';
   for (const c of ev.message.content) {
     if (c.type !== 'tool_result') continue;
     const t = Array.isArray(c.content) ? c.content.map((p) => p.text || '').join('\n') : String(c.content ?? '');
-    const m = t.match(/^Command running in background with ID: ([\w-]+)/);
+    const m = t.match(/^Command running in background with ID: ([\w-]+)/) || t.match(/^Command did not complete within its \d+\w* timeout and was moved to the background \(ID: ([\w-]+)\)/);
     if (m) return m[1];
   }
   return '';

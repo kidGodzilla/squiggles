@@ -122,6 +122,7 @@ test('bgStarted and bgEnded read a background Bash run from the stream', async (
   assert.equal(bgStarted(reply('Command running in background with ID: b64sgxmk6. Output is being written to: /tmp/x')), 'b64sgxmk6');
   assert.equal(bgStarted({ type: 'user', message: { content: [{ type: 'tool_result', content: [{ type: 'text', text: 'Command running in background with ID: b1' }] }] } }), 'b1');
   assert.equal(bgStarted(reply('it said Command running in background with ID: b2')), '');
+  assert.equal(bgStarted(reply('Command did not complete within its 120s timeout and was moved to the background (ID: b3qgc3bzt). Output is being written to: /tmp/x')), 'b3qgc3bzt');
   assert.equal(bgStarted({ type: 'system', subtype: 'task_started', task_type: 'local_bash', task_id: 'b3' }), 'b3');
   assert.equal(bgStarted({ type: 'system', subtype: 'task_started', task_type: 'local_agent', task_id: 'a1' }), '');
   assert.equal(bgEnded({ type: 'system', subtype: 'task_notification', task_id: 'b3' }), 'b3');
