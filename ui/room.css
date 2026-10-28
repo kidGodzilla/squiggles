@@ -1105,7 +1105,7 @@ html[data-theme=clean] .ksel { outline-color: #fff } html[data-theme=clean] .not
 @media (max-width: 760px) {
   .cw.lead > .needs { display: block; flex: none; max-height: 45%; overflow: auto; margin: 6px 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel) }
   .cw.lead.hasneeds > .picks { display: none }
-  .needs .ndh { display: flex; width: 100%; align-items: center; justify-content: space-between; min-height: 44px; padding: 0 14px; border: 0; background: var(--panel); color: var(--text); font: inherit; font-weight: 600; cursor: pointer; position: sticky; top: 0; z-index: 1 }
+  .needs .ndh { display: flex; width: 100%; align-items: center; justify-content: space-between; min-height: 44px; padding: 0 14px; border: 0; background: var(--panel); color: var(--text); font: inherit; font-weight: 600; cursor: pointer; position: sticky; top: 0; z-index: 1; box-shadow: 0 1px 0 var(--line) }
   .needs .ndh b { display: flex; gap: 12px; align-items: center; font-weight: 500; color: var(--dim) }
   .needs .ndh em { font-style: normal; color: var(--accent) }
   .needs .nd { padding: 10px 14px 12px; border-top: 1px solid var(--line) }
