@@ -632,6 +632,7 @@ body.v-lead #callBar { display: flex; flex-wrap: wrap; align-items: center; gap:
 .wkgrid { position: relative; display: grid; grid-template-columns: 52px repeat(7, minmax(0, 1fr)); background: repeating-linear-gradient(to bottom, transparent 0 47px, var(--line) 47px 48px) }
 .wkhours { position: relative } .wkhours span { position: absolute; right: 8px; transform: translateY(-50%); font-size: 11px; color: var(--dim) }
 .wkcol { position: relative; border-left: 1px solid var(--line) } .wkcol.past { background: rgba(0,0,0,.12) }
+html[data-theme=clean] .wkcol.past { background: color-mix(in srgb, var(--panel2) 50%, transparent) }
 .wknow { position: absolute; left: 0; right: 0; z-index: 2; height: 2px; background: var(--accent); pointer-events: none }
 .calm.wkm { position: absolute; z-index: 1; display: block; padding: 3px 6px; overflow: hidden; border-radius: 7px; background: var(--panel2); font-size: 12px; line-height: 1.35 } .calm.wkm b { font-size: 12px } .calm.wkm .calt { font-size: 11px }
 .mogrid { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)) }

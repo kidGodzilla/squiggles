@@ -160,6 +160,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Settings number inputs show an accent border on focus and are 44px tall on touch screens.
 
 ### Fixed
+- Calendar: the first hour label is no longer clipped when the day view scrolls to now, and past columns in the Clean theme are lighter.
 - Review tasks in an open goal that sit on a branch (not main) now show in the Merge tab; before, nobody could merge them.
 - A fresh install no longer crashes on first start.
 - The fence no longer refuses prose that names Downloads, Desktop or Documents (a commit message, a note) outside home; it walks each word as a path.

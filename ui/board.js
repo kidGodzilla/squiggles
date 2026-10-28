@@ -633,7 +633,7 @@ function renderWeekGrid(box, days, today, on, fmt) {
     </div></div>`;
   // Opens at 8:00, or an hour before now if that's later, then keeps the user's scroll. Re-applied whenever the grid comes back on screen: hiding it resets the scroll.
   const body = box.querySelector('.wkbody');
-  const place = () => { if (!body.clientHeight) return; if (B.calScrolled) body.scrollTop = B.calTop || 0; else { body.scrollTop = Math.max(8, now.getHours() - 1) * H; B.calScrolled = true; B.calTop = body.scrollTop; } };
+  const place = () => { if (!body.clientHeight) return; if (B.calScrolled) body.scrollTop = B.calTop || 0; else { body.scrollTop = Math.max(8, now.getHours() - 1) * H - 12; B.calScrolled = true; B.calTop = body.scrollTop; } };
   const ro = new ResizeObserver(place); ro.observe(body); place();
   body.onscroll = () => { if (B.calScrolled) B.calTop = body.scrollTop; };
 }
