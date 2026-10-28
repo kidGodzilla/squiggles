@@ -9,7 +9,8 @@ import { promisify } from 'node:util';
 
 const today = () => new Date(Date.now()).toISOString().slice(0, 10); // Date.now, so tests can set the clock
 const TIERS = ['active', 'hold', 'todo', 'done'];
-const STATUSES = ['todo', 'doing', 'review', 'blocked', 'done'];
+// waiting: on someone outside the team (customer, vendor), said in the note; blocked is for the user or the team.
+const STATUSES = ['todo', 'doing', 'review', 'waiting', 'blocked', 'done'];
 // Merge policy per goal. gated: a branch per task, merged from the Merge tab. open: commit to main. Missing means gated.
 const MERGE = ['gated', 'open'];
 const expand = (p) => String(p || '').replace(/^~(?=$|\/)/, os.homedir());
@@ -293,6 +294,7 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
     if (op === 'drop') { retire(task, true); t.splice(t.indexOf(task), 1); for (const k of t) if (k.parent === task.id) delete k.parent; }
     else if (op === 'move') {
       if (!STATUSES.includes(status)) throw new Error(`status must be one of ${STATUSES.join(', ')}`);
+      if (status === 'waiting' && !String(note ?? (task.status === 'waiting' ? task.note : '') ?? '').trim()) throw new Error('waiting needs a note saying who or what it waits on (customer, vendor)');
       if (status === 'review') {
         const spec = branch || (task.repo ? `${task.repo}:${task.branch}` : task.branch);
         const goal = task.goal ? TIERS.flatMap((x) => goals()[x]).find((g) => g.id === task.goal) : null;

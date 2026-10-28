@@ -10,7 +10,7 @@ import { execFile } from 'node:child_process';
 import { mask } from './asks.mjs';
 
 const MIN = 6e4, HOUR = 36e5;
-const STATES = ['todo', 'doing', 'blocked', 'review', 'done'];
+const STATES = ['todo', 'doing', 'waiting', 'blocked', 'review', 'done'];
 const MAX_OPEN = 5, MAX_FAILS = 10, SHOW = 2048;
 // A host reached through a relay (such as a VPN mesh) can take over 10s to answer the first connect after idle, and a session can stall
 // after connecting: 25s to connect, keepalives drop a stall after 15s, inside the 45s the check gets.

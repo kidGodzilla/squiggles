@@ -3,7 +3,7 @@ const B = { goals: { active: [], hold: [], todo: [], done: [] }, tasks: [], fres
   gfold: (() => { try { return new Set(JSON.parse(localStorage.agentsGoalFold || '[]')); } catch { return new Set(); } })(),
   gq: '', tq: '', tgoal: '', towner: '', tshow: 'open', tidy: (() => { try { return localStorage.agentsTidy !== '0'; } catch { return true; } })() };
 const TIER_NAMES = { active: 'Active', hold: 'On hold', todo: 'Next up', done: 'Done' };
-const COLS = [['todo', 'To do'], ['doing', 'Doing'], ['review', 'Review'], ['blocked', 'Blocked'], ['done', 'Done']];
+const COLS = [['todo', 'To do'], ['doing', 'Doing'], ['review', 'Review'], ['waiting', 'Waiting'], ['blocked', 'Blocked'], ['done', 'Done']];
 const STALE_DAYS = 7;
 
 // Dates are UTC days (toISOString): count from that day's UTC midnight, never below 0.
@@ -17,7 +17,7 @@ const face = (id, uid) => (S.sq[id] ? `<span class="face" title="${esc(S.sq[id].
 const ownerName = (id) => S.sq[id]?.name || id || 'Nobody';
 const hit = (q, ...fields) => !q || fields.some((f) => String(f || '').toLowerCase().includes(q));
 const hl = (text, q) => { const t = esc(text); if (!q) return t; const i = t.toLowerCase().indexOf(esc(q)); return i < 0 ? t : t.slice(0, i) + '<mark>' + t.slice(i, i + esc(q).length) + '</mark>' + t.slice(i + esc(q).length); };
-const taskStale = (t) => (t.status === 'todo' || t.status === 'blocked' || t.status === 'review') && daysSince(t.confirmed) >= STALE_DAYS;
+const taskStale = (t) => (t.status === 'todo' || t.status === 'blocked' || t.status === 'review' || t.status === 'waiting') && daysSince(t.confirmed) >= STALE_DAYS;
 const branchOf = (t) => (t.branch ? `${t.repo ? t.repo + ':' : ''}${t.branch}` : '');
 
 async function loadBoard() {
@@ -179,6 +179,8 @@ for (const v of ['#goalsView', '#tasksView']) {
     const d = drag; drag = null; if (!d) return;
     if (d.task) {
       const col = e.target.closest('.ccol'); if (!col) return; e.preventDefault();
+      // Waiting needs who or what it waits on: the sheet opens with that field instead of moving it bare.
+      if (col.dataset.status === 'waiting') { const n = document.querySelector(`[data-task="${d.task}"]`); if (n) editTask(n, true); return; }
       const t = B.tasks.find((x) => x.id === d.task); if (t) t.status = col.dataset.status; renderTasks();
       const r = await api('/tasks', { op: 'move', id: d.task, status: col.dataset.status }); if (r?.error) { toast(r.error); loadBoard(); } else AUD.click();
     } else {
@@ -276,13 +278,14 @@ function editGoal(el) {
     pop.querySelector('#pgT').onkeydown = (e) => { if (e.key === 'Enter') pop.querySelector('[data-a=save]').click(); };
   }, { title: area ? 'Edit area' : 'Edit goal' });
 }
-function editTask(el) {
+function editTask(el, wait = false) {
   const t = B.tasks.find((x) => x.id === el.dataset.task); if (!t) return;
   showPop(el, `<label>Note</label><textarea id="ptT">${esc(t.title)}</textarea>
     <label>Goal</label><select id="ptG">${goalOptions(t.goal)}</select>
     <label>Claimed by</label><select id="ptO">${ownerOptions(t.owner)}</select>
     <label>Branch (repo:branch when the goal has several repos)</label><input id="ptB" value="${esc(branchOf(t))}" placeholder="feature/thing">
     <div class="row">${COLS.map(([st, n]) => `<button data-st="${st}" class="${t.status === st ? 'cur' : ''}">${n}</button>`).join('')}</div>
+    <div id="ptWr"${t.status === 'waiting' || wait ? '' : ' hidden'}><label for="ptWn">Waiting on (customer, vendor)</label><input id="ptWn" value="${t.status === 'waiting' ? esc(t.note || '') : ''}" placeholder="Who or what, then press Waiting"></div>
     ${kidsOf(t).length ? `<label>Subtasks</label><div class="subs">${kidsOf(t).map((k) => `<div class="sub ${k.status}" data-sub="${esc(k.id)}">${k.status === 'done' ? '<s>' + esc(k.title) + '</s>' : esc(k.title)} <em>${esc(COLS.find(([s]) => s === k.status)[1])}</em></div>`).join('')}</div>` : ''}
     ${t.kind === 'suggestion' && !t.decision ? `<label>Suggestion from ${esc(ownerName(t.by))}: accept with the goal and owner above, or decline with a reason</label><textarea id="ptW" placeholder="Why not (sent to ${esc(ownerName(t.by))})"></textarea>
     <div class="row"><button class="go" data-a="accept">Accept</button><button class="bad" data-a="decline">Decline</button></div>` : ''}
@@ -291,11 +294,14 @@ function editTask(el) {
     <div class="row"><button data-a="confirm">Still needed</button>${t.owner ? '<button data-a="release">Release</button><button data-a="chat">Chat with owner</button>' : ''}</div>
     <div class="mft"><button class="bad" data-a="drop">Tear off</button><button class="go" data-a="save">Save</button></div>
     <div class="mmeta">Added ${esc(t.created)}${t.by ? ` by ${esc(ownerName(t.by))}` : ''} · confirmed ${esc(t.confirmed)}</div>`, (pop) => {
+    if (wait) setTimeout(() => pop.querySelector('#ptWn').focus());
     pop.onclick = async (e) => {
       const sub = e.target.closest('[data-sub]'); if (sub) { closePop(); const n = document.querySelector(`[data-task="${sub.dataset.sub}"]`); if (n) { n.scrollIntoView({ block: 'center', behavior: 'smooth' }); editTask(n); } return; }
       const st = e.target.dataset.st, a = e.target.dataset.a; if (!st && !a) return;
       const branch = pop.querySelector('#ptB').value.trim();
-      if (st) { const r = await api('/tasks', { op: 'move', id: t.id, status: st, ...(st === 'review' ? { branch } : {}) }); if (r?.error) { toast(r.error); pop.querySelector('#ptB').focus(); return; } }
+      const wr = pop.querySelector('#ptWr'), wn = pop.querySelector('#ptWn'), why = wn.value.trim();
+      if (st === 'waiting' && (wr.hidden || !why)) { if (!wr.hidden) toast('Say who or what it waits on'); wr.hidden = false; wn.focus(); return; }
+      if (st) { const r = await api('/tasks', { op: 'move', id: t.id, status: st, ...(st === 'review' ? { branch } : {}), ...(st === 'waiting' ? { note: why } : {}) }); if (r?.error) { toast(r.error); pop.querySelector('#ptB').focus(); return; } }
       if (a === 'save') { const r = await api('/tasks', { op: 'edit', id: t.id, title: pop.querySelector('#ptT').value.trim() || t.title, goal: pop.querySelector('#ptG').value, owner: pop.querySelector('#ptO').value, ...(branch !== branchOf(t) ? { branch } : {}) }); if (r?.error) { toast(r.error); return; } }
       if (a === 'accept' || a === 'decline') {
         const w = pop.querySelector('#ptW'), body = a === 'accept' ? { goal: pop.querySelector('#ptG').value, owner: pop.querySelector('#ptO').value } : { why: w.value.trim() };

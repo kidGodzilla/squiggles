@@ -297,7 +297,7 @@ mark { background: rgba(245,192,74,.45); color: inherit; border-radius: 3px; pad
 .corkhead { display: flex; align-items: center; gap: 12px; padding: 4px 10px 8px }
 .corkhead h2 { margin: 0; font: 26px var(--marker); color: #fff7e8; text-shadow: 0 2px 3px rgba(0,0,0,.4) }
 #filterNote button { font: 12.5px var(--sans); color: #2a1d0d; background: #fff3c4; padding: 3px 11px; border-radius: 99px; box-shadow: 0 2px 4px rgba(0,0,0,.3) }
-.corkcols { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); grid-template-rows: minmax(0, 1fr); gap: 14px }
+.corkcols { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); grid-template-rows: minmax(0, 1fr); gap: 14px }
 .corkcols.none { display: flex } .corkcols.none .empty { max-width: 420px; display: flex; flex-direction: column; align-items: center; gap: 12px; font-size: 13.5px; background: var(--panel); color: var(--dim); padding: 20px 28px; border-radius: 12px; border: 1px solid var(--line) }
 .ccol { min-height: 0; display: flex; flex-direction: column; padding: 10px 8px 6px; border-radius: 10px; transition: background .15s }
 .ccol .notes { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 4px 6px 14px; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.3) transparent }
@@ -596,7 +596,7 @@ body.v-lead #callBar { display: flex; flex-wrap: wrap; align-items: center; gap:
   body.v-one.v-lead:not(.v-meet):not(.screen) #chats .cw.office { top: calc(var(--hh, 89px) + var(--bh, 0px) + 60px) !important }
   body.v-one:not(.v-meet):not(.screen) .cw.office .cback { display: block; min-width: 44px; min-height: 44px; margin: -6px 0 -6px -6px; padding: 0 8px; border-radius: 10px; font-weight: 600; color: var(--accent) }
 }
-@media (max-width: 760px) { .corkcols { grid-template-columns: repeat(5, 220px); overflow-x: auto; scroll-snap-type: x mandatory } .corkcols .ccol { scroll-snap-align: start } #tq { width: 100% } }
+@media (max-width: 760px) { .corkcols { grid-template-columns: repeat(6, 220px); overflow-x: auto; scroll-snap-type: x mandatory } .corkcols .ccol { scroll-snap-align: start } #tq { width: 100% } }
 @media (pointer: coarse) { .corkcols.none .chip, #tq { min-height: 44px } }
 /* Goals on phone (t115): same one-scroll 220px columns as Tasks. */
 @media (max-width: 760px) { .areas { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 -18px 12px; padding: 2px 18px 10px } .areas { padding-left: 0 } .areas h3 { position: sticky; left: 0; z-index: 1; align-self: stretch; display: flex; align-items: center; margin: 0; padding: 0 10px 0 22px; background: #fbfbf9 } .area { height: 44px }
