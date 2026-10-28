@@ -101,7 +101,8 @@ const wordReason = (w, dir, home) => {
       else if (g.length || /[*?[{]/.test(seg)) g.push(seg);
       else cur = path.resolve(cur, seg);
     }
-    const r = g.length ? globReason(cur, g, home) : pathReason(cur, cur, home);
+    // Literal segments may already be inside a fenced folder before the glob ({~/.ssh,/x}/*).
+    const r = pathReason(cur, cur, home) || (g.length ? globReason(cur, g, home) : '');
     if (r) return r;
   }
   return '';
