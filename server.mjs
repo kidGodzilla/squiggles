@@ -14,7 +14,7 @@ import { createFiles } from './files.mjs';
 import { holdGate } from './hold.mjs';
 import { createAsks, runAsk } from './asks.mjs';
 import { createPicks } from './picks.mjs';
-import { createWaits, bgStarted, bgEnded } from './waits.mjs';
+import { createWaits, bgStarted, bgEnded, ownRuns } from './waits.mjs';
 import { mimeFor } from './mime.mjs';
 import { trustLevel, trustOf, trustRules, updateRefusal, createRefusal, quitRefusal, slotsRefusal, shareRefusal, fileRmRefusal, fileBy, charterDiff, charterEdit, charterStart } from './trust.mjs';
 import { KEYS, DEFAULT_SLOTS, slotKey, rankOf, limitOf, enqueue, drain, leave, checkSlots } from './slots.mjs';
@@ -342,8 +342,8 @@ function launch(s) {
   proc.on('exit', (code) => {
     if (r.proc !== proc) return; // replaced by a relaunch
     r.proc = null;
+    if (ownRuns(r) && r.status === 'waiting') setStatus(s.id, 'blocked', `background run ended with the process: ${r.note || ''}`);
     for (const t of Object.keys(r.subs || {})) subEnd(s.id, t, 'stopped');
-    if (r.bg && Object.keys(r.bg).length && r.status === 'waiting') setStatus(s.id, 'blocked', `background run ended with the process: ${r.note || ''}`);
     delete r.bg; delete r.bgUse;
     if (r.status === 'working') setStatus(s.id, code ? 'error' : 'idle', code ? `exited ${code}` : '');
   });
@@ -804,8 +804,8 @@ function turnEnded(s, text, isError, subtype) {
     : subtype === 'interrupted' ? { status: 'idle', note: 'stopped' }
     : subtype === 'error_max_turns' ? { status: 'error', note: `hit the turn cap (${s.maxTurns ?? 40}); ${lastSaved(s)}; fresh process next wake` }
     : isError ? { status: 'error', note: failNote(text) } : statusLine(text) || { status: 'idle', note: '' };
-  // WAITING needs a wait the harness checks, or a background run of its own the CLI wakes it from.
-  if (st.status === 'waiting' && subtype !== 'capacity') { let open = []; try { open = waits.list({ by: s.id }); } catch {} if (!open.length && !Object.keys(R(s.id).bg || {}).length) Object.assign(st, { status: 'blocked', note: `said WAITING but filed no wait: ${st.note}` }); }
+  // WAITING needs a wait the harness checks, or a background run or subagent of its own the CLI wakes it from.
+  if (st.status === 'waiting' && subtype !== 'capacity') { let open = []; try { open = waits.list({ by: s.id }); } catch {} if (!open.length && !ownRuns(R(s.id))) Object.assign(st, { status: 'blocked', note: `said WAITING but filed no wait: ${st.note}` }); }
   R(s.id).lastEnd = now();
   charterAtEnd(s);
   { const r = R(s.id), u = r.usage || {}, m = r.usageMark || {};

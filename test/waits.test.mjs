@@ -140,3 +140,11 @@ test('bgStarted and bgEnded read a background Bash run from the stream', async (
   assert.equal(bgEnded({ type: 'system', subtype: 'task_updated', task_id: 'b3', patch: { status: 'running' } }), '');
   assert.equal(bgEnded({ type: 'system', subtype: 'task_updated', task_id: 'b3', patch: { status: 'killed' } }), 'b3');
 });
+
+test('ownRuns counts background Bash and live subagents as a wait', async () => {
+  const { ownRuns } = await import('../waits.mjs');
+  assert.equal(ownRuns({}), 0);
+  assert.equal(ownRuns({ bg: { b1: 1 } }), 1);
+  assert.equal(ownRuns({ subs: { a1: { desc: 'x' }, a2: { desc: 'y' } } }), 2);
+  assert.equal(ownRuns({ bg: {}, subs: {} }), 0);
+});

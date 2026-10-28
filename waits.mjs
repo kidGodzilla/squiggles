@@ -125,3 +125,6 @@ export function bgEnded(ev) {
   if (ev.subtype === 'task_notification' || (ev.subtype === 'task_updated' && /^(completed|failed|killed|stopped)$/.test(ev.patch?.status || ''))) return ev.task_id || '';
   return '';
 }
+// Runs of its own the CLI wakes the agent from: background Bash and subagents still going when the turn ends
+// (a background Agent; a foreground one has finished by then).
+export const ownRuns = (r = {}) => Object.keys(r.bg || {}).length + Object.keys(r.subs || {}).length;

@@ -116,6 +116,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Settings > Defaults > Turns at once, and `slots`, set how many turns each provider runs at once.
 ### Changed
 - A squiggle that says WAITING on a background run of its own (started there, or moved there at its timeout) stays waiting instead of blocked; if its process ends first, it's blocked. Command output can't fake one: a run started in the background counts from the CLI's event, and one moved at its timeout only if the reply came after the call's own timeout.
+- A squiggle that says WAITING on a background subagent of its own stays waiting instead of blocked, like a background run.
 - A failed turn's status says why (its first line), not just "turn failed".
 - A wake's time is when its turn really starts (after a slot queue or restart hold), and a wake 15+ minutes late says how late and when it was due.
 - The calendar reader runs as its own small app, so one Allow covers the terminal and every squiggle; the allow prompt waits 5 minutes, and a reader that exits before macOS can track it no longer reads as a failure.
