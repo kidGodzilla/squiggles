@@ -18,7 +18,7 @@
     const ok = Array.isArray(N.list); cw.classList.toggle('hasneeds', ok);
     if (!ok || !N.list.length) return el?.remove();
     if (!el) { el = document.createElement('div'); el.className = 'needs'; cw.querySelector(':scope > .msgs')?.before(el); }
-    const html = `<button class="ndh" type="button" aria-expanded="${N.open}"><span>Needs you</span><b>${N.list.length}</b></button>${N.open ? `<div class="ndl">${N.list.map((n) => {
+    const html = `<button class="ndh" type="button" aria-expanded="${N.open}"><span>Needs you</span><b>${N.list.length}<em>${N.open ? 'Hide' : 'Show'}</em></b></button>${N.open ? `<div class="ndl">${N.list.map((n) => {
       const [k, t, b] = item(n);
       return `<div class="nd" data-kind="${n.kind}" data-id="${esc(n.id)}"><small>${esc(k)}</small><p>${esc(t)}</p><div class="ndb">${b}</div></div>`;
     }).join('')}</div>` : ''}`;
