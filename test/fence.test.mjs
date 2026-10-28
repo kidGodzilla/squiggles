@@ -139,6 +139,15 @@ test('fence: nested braces, a leading ] in a class, long wrapper flags with a se
     assert.equal(commandReason(c, P), '', c);
 });
 
+test('fence: wrapped and recursive tools given ~ itself; a script given ~ or a file under it passes', () => {
+  const P = path.join(H, 'proj');
+  for (const c of ['bash -c "grep -r key ~"', 'sh -lc "find ~ -name x"', 'timeout 5 grep -r x ~', 'nice -n 5 du ~', 'nice tree ~',
+    'scp -r ~ host:/tmp', 'ditto ~ /tmp/x', 'fd key ~', 'ag key ~', '7z a /tmp/x.7z ~', 'cd ~ && fd key'])
+    assert.equal(commandReason(c, P), REASONS.tree, c);
+  for (const c of ['bash -c "grep -r x ."', 'timeout 5 rg x src', 'scp ~/proj/a host:/tmp', 'fd key', '7z x a.7z', 'bash script.sh ~'])
+    assert.equal(commandReason(c, P), '', c);
+});
+
 test('fence: a brace or class spelling a fenced folder is caught; one that does not passes', () => {
   const P = path.join(H, 'proj');
   for (const c of ['ls ~/{Down,x}loads', 'cat ~/[D]ownloads/x']) assert.equal(commandReason(c, P), REASONS.dirs, c);
