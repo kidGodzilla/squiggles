@@ -14,6 +14,7 @@ import { createFiles } from './files.mjs';
 import { holdGate } from './hold.mjs';
 import { createAsks, runAsk } from './asks.mjs';
 import { createPicks } from './picks.mjs';
+import { needsList } from './needs.mjs';
 import { createWaits, bgStarted, bgEnded, ownRuns } from './waits.mjs';
 import { mimeFor } from './mime.mjs';
 import { trustLevel, trustOf, trustRules, updateRefusal, createRefusal, quitRefusal, slotsRefusal, shareRefusal, fileRmRefusal, fileBy, charterDiff, charterEdit, charterStart } from './trust.mjs';
@@ -1600,6 +1601,7 @@ const server = http.createServer(async (req, res) => {
         return json(res, { error: 'op must be add or drop' }, 400);
       } catch (e) { return json(res, { error: e.message }, e.code || 400); }
     }
+    if (url.pathname === '/api/needs' && req.method === 'GET') return json(res, needsList({ asks: asks.list({}), picks: picks.list({}), merges: await board.merges().catch(() => []), squiggles: listSquiggles().map(view) }));
     if (url.pathname === '/api/picks' && req.method === 'GET') return json(res, picks.list({ all: url.searchParams.get('all') === '1' }));
     if (url.pathname === '/api/picks' && req.method === 'POST') {
       const b = await body(req, res), who = await callerSquiggle(req), lead = !!(who && loadSquiggle(who)?.lead);

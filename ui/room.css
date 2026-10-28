@@ -1100,3 +1100,16 @@ html[data-theme=clean] .ksel { outline-color: #fff } html[data-theme=clean] .not
 @media (prefers-color-scheme: light) { html[data-theme=clean] .ksel { outline-color: #000 } html[data-theme=clean] .mrow.ksel td { background: rgba(0,0,0,.03) } }
 /* Shortcuts in More on touch screens only once a hardware keyboard is used */
 @media (pointer: coarse) { body:not(.kb) #keysBtn { display: none } }
+/* Needs you: phone only, top of the Lead chat; the composer's picks card hides while it shows */
+.needs { display: none }
+@media (max-width: 760px) {
+  .cw.lead > .needs { display: block; flex: none; max-height: 45%; overflow: auto; margin: 6px 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel) }
+  .cw.lead.hasneeds > .picks { display: none }
+  .needs .ndh { display: flex; width: 100%; align-items: center; justify-content: space-between; min-height: 44px; padding: 0 14px; border: 0; background: none; color: var(--text); font: inherit; font-weight: 600; cursor: pointer }
+  .needs .ndh b { font-weight: 500; color: var(--dim) }
+  .needs .nd { padding: 10px 14px 12px; border-top: 1px solid var(--line) }
+  .needs .nd small { display: block; color: var(--dim); font-size: 13px }
+  .needs .nd p { margin: 2px 0 8px; font-size: 15px; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden }
+  .needs .ndb { display: flex; flex-wrap: wrap; gap: 8px }
+  .needs .ndb .chip { min-height: 44px; font-size: 15px }
+}
