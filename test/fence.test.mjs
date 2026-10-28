@@ -138,3 +138,9 @@ test('fence: nested braces, a leading ] in a class, long wrapper flags with a se
   for (const c of ['sudo -iu root make', 'timeout --signal KILL 5 rg x src', 'cat {a,{b,c}}.txt', 'ls [ab]*'])
     assert.equal(commandReason(c, P), '', c);
 });
+
+test('fence: a brace or class spelling a fenced folder is caught; one that does not passes', () => {
+  const P = path.join(H, 'proj');
+  for (const c of ['ls ~/{Down,x}loads', 'cat ~/[D]ownloads/x']) assert.equal(commandReason(c, P), REASONS.dirs, c);
+  for (const c of ['ls ~/{Agents,proj}', 'ls ~/.[!s]*', 'git log --format={x}']) assert.equal(commandReason(c, P), '', c);
+});
