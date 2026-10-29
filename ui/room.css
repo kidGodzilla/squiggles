@@ -466,6 +466,7 @@ body.v-one.v-meet #chats .cw.office { left: var(--mx) !important; top: var(--my)
 .mrow { cursor: pointer } .mrow:hover td { background: rgba(255,255,255,.025) } .mrow.open td { background: rgba(255,255,255,.04); border-bottom-color: transparent }
 .mrow .mid { color: var(--dim) } .mrow .mtt { font-weight: 600 } .mrow .mbr, .mrow .mrepo, .mrow .mab, .mrow .mage { color: var(--dim) }
 .mrow .mres { color: #c9cedd } .mrow .mres.none { color: #d9a24a } .mrow .mres.bad { color: #e07a72 }
+html[data-theme=clean] .mrow .mres { color: var(--dim) } html[data-theme=clean] .mrow .mres.none { color: var(--warn) } html[data-theme=clean] .mrow .mres.bad { color: var(--red) }
 .mtag { margin-left: 4px; padding: 0 6px; border-radius: 6px; font-size: 11px; font-weight: 600; color: #d9a24a; border: 1.5px solid currentColor }
 .mrow .mown .face { display: inline-block; width: 30px; height: 24px; border-radius: 6px; vertical-align: middle }
 .mrow .macts { text-align: right; overflow: visible }

@@ -160,6 +160,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Settings number inputs show an accent border on focus and are 44px tall on touch screens.
 
 ### Fixed
+- Merge tab in the Clean theme: test results are readable in light mode (they were pale grey on white).
 - Files on a phone: rows no longer shrink, so each file's source, date and size stay inside its row.
 - Calendar: the first hour label is no longer clipped when the day view scrolls to now, and past columns in the Clean theme are lighter.
 - Review tasks in an open goal that sit on a branch (not main) now show in the Merge tab; before, nobody could merge them.
