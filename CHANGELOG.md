@@ -160,6 +160,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Settings number inputs show an accent border on focus and are 44px tall on touch screens.
 
 ### Fixed
+- Clean theme: text boxes in forms (meeting agenda, notes) match the other inputs instead of showing as a dark well.
 - Phone: the tab bar no longer shows behind the join screen.
 - Merge tab in the Clean theme: test results are readable in light mode (they were pale grey on white).
 - Files on a phone: rows no longer shrink, so each file's source, date and size stay inside its row.

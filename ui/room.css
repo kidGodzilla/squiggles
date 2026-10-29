@@ -948,6 +948,8 @@ html[data-theme=clean] .btn.danger.arm { background: var(--red); color: #fff }
 /* Input / Select */
 html[data-theme=clean] main :is(input:not([type=checkbox]):not([type=radio]):not([type=range]), select) { border-radius: var(--rmd); border: 1px solid var(--input); background: transparent; box-shadow: var(--sh-xs); color: var(--text) }
 @media (prefers-color-scheme: dark) { html[data-theme=clean] main :is(input:not([type=checkbox]):not([type=radio]):not([type=range]), select) { background: rgba(255,255,255,.045) } }
+html[data-theme=clean] main textarea:not(:is(.cw, #meetThread, .note) textarea) { border-radius: var(--rmd); border: 1px solid var(--input); background: transparent; box-shadow: var(--sh-xs); color: var(--text) }
+@media (prefers-color-scheme: dark) { html[data-theme=clean] main textarea:not(:is(.cw, #meetThread, .note) textarea) { background: rgba(255,255,255,.045) } }
 
 /* ---------- Card: tiles ---------- */
 html[data-theme=clean] .tile { border-color: var(--line); box-shadow: var(--sh-sm) }
