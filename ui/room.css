@@ -406,7 +406,7 @@ body:not(.v-goals):not(.v-tasks):not(.v-merge):not(.v-files):not(.v-team):not(.v
 #ttidy.on { color: var(--text); border-color: var(--accent) }
 #lockBtn { display: flex; align-items: center; gap: 6px } #lockBtn svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round }
 .joinbox .locked { margin: -12px 0 18px; color: var(--dim); font-size: 13px } .joinbox .locked:empty { display: none }
-body.locked #chats { display: none }
+body.locked #chats, body.locked header > nav.tabs { display: none }
 .m.lead .tbl, .fprev .fmd .tbl { overflow-x: auto; margin: 4px 0 10px; border: 1px solid var(--line); border-radius: 10px }
 .m.lead table, .fprev .fmd table { border-collapse: collapse; width: 100%; font-size: 12.5px }
 .m.lead th, .m.lead td, .fprev .fmd th, .fprev .fmd td { padding: 6px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top }
