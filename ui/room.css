@@ -1123,3 +1123,5 @@ html[data-theme=clean] .ksel { outline-color: #fff } html[data-theme=clean] .not
 @media (max-width: 480px) { #calAdd .wd { display: none } }
 /* On a phone the Who list grows with the sheet (no 3-row box inside a scroll); 44px rows need no row gap. */
 @media (pointer: coarse) { .pop.modal .calwho { max-height: none; row-gap: 0 } }
+/* Note status buttons in even thirds on a phone, not a ragged 4 + 2. */
+@media (max-width: 760px) { .pop .row.sts { display: grid; grid-template-columns: repeat(3, 1fr) } .pop .row.sts button { margin: 0 } }

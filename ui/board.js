@@ -280,11 +280,11 @@ function editGoal(el) {
 }
 function editTask(el, wait = false) {
   const t = B.tasks.find((x) => x.id === el.dataset.task); if (!t) return;
-  showPop(el, `<label>Note</label><textarea id="ptT">${esc(t.title)}</textarea>
+  showPop(el, `<label>Note</label><textarea id="ptT" class="grow">${esc(t.title)}</textarea>
     <label>Goal</label><select id="ptG">${goalOptions(t.goal)}</select>
     <label>Claimed by</label><select id="ptO">${ownerOptions(t.owner)}</select>
     <label>Branch (repo:branch when the goal has several repos)</label><input id="ptB" value="${esc(branchOf(t))}" placeholder="feature/thing">
-    <div class="row">${COLS.map(([st, n]) => `<button data-st="${st}" class="${t.status === st ? 'cur' : ''}">${n}</button>`).join('')}</div>
+    <div class="row sts">${COLS.map(([st, n]) => `<button data-st="${st}" class="${t.status === st ? 'cur' : ''}">${n}</button>`).join('')}</div>
     <div id="ptWr"${t.status === 'waiting' || wait ? '' : ' hidden'}><label for="ptWn">Waiting on (customer, vendor)</label><input id="ptWn" value="${t.status === 'waiting' ? esc(t.note || '') : ''}" placeholder="Who or what, then press Waiting"></div>
     ${kidsOf(t).length ? `<label>Subtasks</label><div class="subs">${kidsOf(t).map((k) => `<div class="sub ${k.status}" data-sub="${esc(k.id)}">${k.status === 'done' ? '<s>' + esc(k.title) + '</s>' : esc(k.title)} <em>${esc(COLS.find(([s]) => s === k.status)[1])}</em></div>`).join('')}</div>` : ''}
     ${t.kind === 'suggestion' && !t.decision ? `<label>Suggestion from ${esc(ownerName(t.by))}: accept with the goal and owner above, or decline with a reason</label><textarea id="ptW" placeholder="Why not (sent to ${esc(ownerName(t.by))})"></textarea>

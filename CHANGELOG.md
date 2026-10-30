@@ -117,6 +117,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Picks: `pick ask "<question>" "<option>" "<option>" [--images a,b] [--task <id>]` files a choice for the user; open picks collect on one card above the lead chat composer, options as buttons (images shown when they live in files/ or research/). A tap answers and the asker is told; the lead relays a spoken answer with `pick <id> <option>`. `picks [all]`, `pick drop <id>`. Answering needs the room passcode.
 - Settings > Defaults > Turns at once, and `slots`, set how many turns each provider runs at once.
 ### Changed
+- Note sheet: the note box grows with its text, and on a phone the status buttons sit in even thirds.
 - Meeting sheet on a phone: the Who list grows with the sheet instead of scrolling in a small box; the presenters hint is shorter.
 - Calendar: the buttons read "Start now" and "Schedule meeting" (primary; "Schedule" on a phone), and the sheets match.
 - Phone header: when someone is blocked or needs a rethink, those pills take the row; blocked and rethink together show as one "N stuck" pill that opens Team.
