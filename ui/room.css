@@ -1038,7 +1038,7 @@ html[data-theme=clean] .g { background: var(--panel); border: 1px solid var(--li
 html[data-theme=clean] .g::before { display: none }
 html[data-theme=clean] :is(.g:hover, .g.sel) { background: var(--panel); border-color: var(--input); box-shadow: var(--sh-md) }
 html[data-theme=clean] .g.sel { border-color: var(--ring) }
-html[data-theme=clean] .g .gm { color: var(--dim) }
+html[data-theme=clean] .g .gm { color: var(--dim) } @media (max-width: 760px) { html[data-theme=clean] .g .gm { margin-left: 0 } } /* no gutter in Clean */
 html[data-theme=clean] .g .gn { color: var(--dim) }
 html[data-theme=clean] .g .gn.over { color: var(--red) }
 html[data-theme=clean] .wbcol.done .gt { color: var(--dim); text-decoration: none }
