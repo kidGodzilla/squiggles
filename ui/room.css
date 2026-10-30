@@ -1120,3 +1120,4 @@ html[data-theme=clean] .ksel { outline-color: #fff } html[data-theme=clean] .not
   .needs .ndb { display: flex; flex-wrap: wrap; gap: 8px }
   .needs .ndb .chip { min-height: 44px; font-size: 15px }
 }
+@media (max-width: 480px) { #calAdd .wd { display: none } }

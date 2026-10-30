@@ -687,7 +687,7 @@ function editMeeting(anchor, id, date, start) {
       if (r?.error) return toast(r.error);
       closePop(); loadCal();
     };
-  }, { title: m ? 'Edit meeting' : 'New meeting' });
+  }, { title: m ? 'Edit meeting' : 'Schedule meeting' });
 }
 const calStep = (n) => { if (calMonth()) B.month = new Date(B.month.getFullYear(), B.month.getMonth() + n, 1); else B.week.setDate(B.week.getDate() + 7 * n); loadCal(); syncUrl(); };
 $('#calPrev').onclick = () => calStep(-1);
@@ -713,7 +713,7 @@ function meetNowPop(anchor, id) {
       if (r?.error) return toast(r.error);
       closePop(); toast(`Meeting on: ${r.title}`);
     };
-  }, { title: 'New meeting now', sm: true });
+  }, { title: 'Start now', sm: true });
 }
 $('#calNow').onclick = (e) => meetNowPop(e.currentTarget);
 $('#teamMeet').onclick = (e) => meetNowPop(e.currentTarget);
