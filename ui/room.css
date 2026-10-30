@@ -807,6 +807,8 @@ body.v-one.screen:not(.v-meet) #chats .cw.office { left: auto !important; width:
 .settabs button[aria-selected=true] { background: var(--bg); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.3) }
 .setcard[hidden] { display: none }
 @media (pointer: coarse) { .settabs button { min-height: 44px } }
+/* On a phone all settings tabs show (the last ones hid past the edge with no cue). */
+@media (max-width: 760px) { .settabs { flex-wrap: wrap; width: auto } }
 /* Touch targets on Merge, header pills and top tabs (t1128): 44px under a finger. Pills keep their look; an invisible 44px box takes the touch. */
 @media (pointer: coarse) {
   .macts button, .tabs button, #mergeView .btool .chip { min-height: 44px } .mdbox .mlinks a { display: inline-flex; align-items: center; min-height: 44px } /* t1150 */

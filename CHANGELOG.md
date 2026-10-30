@@ -160,6 +160,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Squiggles prove a branch is merged before deleting it, and end review talk with `merge <id>`.
 - Screenshots and shared pages stay on screen 90 seconds over terminal output.
 - More > Share shows Copy link only, not the URL text.
+- Settings on a phone: every tab shows, wrapped onto a second row, instead of the last ones hiding past the edge.
 - The lead's "Handled." replies fold with the reports they answer into one line that opens to list them.
 - Settings number inputs show an accent border on focus and are 44px tall on touch screens.
 
