@@ -5,6 +5,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 ## 0.1.2 (unreleased)
 
 ### Security
+- Squiggles can't send or receive Claude Code cross-session messages: each wake refuses inbound peer messages and denies SendMessage and ListAgents, so nothing steers a session outside the board.
 - The fence catches a fenced folder reached through a brace holding the home path or the folder itself ({~,/x}/.ssh, {~/.ssh,/x}/*) or a glob above home (/home/*/.ssh, /*/*/Downloads), for every provider.
 - Claude squiggles are fenced like the others: ~/.ssh joins the blocked folders for Read, Edit and Write, and a hook runs every Bash, Grep and Glob through the fence (git push, the three folders, ~/.ssh, recursive reads from home), absolute Glob and Grep patterns included. If the hook can't start, the call is refused. Your own settings.json hooks still run.
 - Codex squiggles can't run git push or touch ~/.ssh, Downloads, Desktop or Documents: a Codex hook blocks them, patches included. Until you trust it, Codex turns are refused; trust is checked every turn.
@@ -165,6 +166,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Settings number inputs show an accent border on focus and are 44px tall on touch screens.
 
 ### Fixed
+- Changing a guard module (claude/, cursor/, codex/) now counts as a server change, so restart picks it up.
 - Clean theme, Goals on a phone: a goal card's footer lines up with its title instead of sitting indented.
 - Clean theme, Goals on a phone: the Areas strip is an inset card lined up with the columns, and its label no longer shows a grey patch.
 - Clean theme: the "meeting is on now" banner and its Join button are readable in light and dark.

@@ -18,8 +18,13 @@ export function check(ev) {
 }
 export const MATCHER = 'Bash|Grep|Glob';
 export const HOOK_CMD = fileURLToPath(new URL('./guard.sh', import.meta.url));
+// Cross-session messaging off: a squiggle neither receives nor sends Claude Code peer messages, so nothing wakes or
+// steers a session outside the board, slots and turn caps. Squiggles talk through tell/wake.
+export const NO_PEERS = ['SendMessage', 'ListAgents'];
 // Merged into the squiggle's own settings.json and passed as --settings.
-export const withHook = (settings = {}) => ({ ...settings, hooks: { ...settings.hooks,
+export const withHook = (settings = {}) => ({ ...settings, crossSessionInbound: 'refuse',
+  permissions: { ...settings.permissions, deny: [...new Set([...(settings.permissions?.deny || []), ...NO_PEERS])] },
+  hooks: { ...settings.hooks,
   PreToolUse: [...(settings.hooks?.PreToolUse || []), { matcher: MATCHER, hooks: [{ type: 'command', command: JSON.stringify(HOOK_CMD) }] }] } });
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   let ev; try { ev = JSON.parse(fs.readFileSync(0, 'utf8')); } catch { process.stderr.write('guard could not read the tool call'); process.exit(2); }

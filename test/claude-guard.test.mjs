@@ -45,3 +45,11 @@ test('claude guard: merged into own settings; the hook script blocks with exit 2
   try { execFileSync(HOOK_CMD, { input: '{}', stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, AGENTS_NODE: '/nonexistent/node' } }); assert.fail('allowed'); } catch (e) { assert.equal(e.status, 2); assert.match(String(e.stderr), /refused/); }
   fs.rmSync(W, { recursive: true, force: true });
 });
+
+test('claude guard: cross-session messaging off both ways, own denies kept', () => {
+  const s = withHook({ permissions: { allow: ['Bash(ls)'], deny: ['WebFetch', 'ListAgents'] } });
+  assert.equal(s.crossSessionInbound, 'refuse');
+  assert.deepEqual(s.permissions.allow, ['Bash(ls)']);
+  assert.deepEqual(s.permissions.deny, ['WebFetch', 'ListAgents', 'SendMessage']);
+  assert.deepEqual(withHook().permissions.deny, ['SendMessage', 'ListAgents']);
+});
