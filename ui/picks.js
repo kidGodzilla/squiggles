@@ -3,7 +3,7 @@ const PICK = { list: [] };
 const pickWho = (id) => S.sq[id]?.name || id;
 function pickCard(list) {
   return `<div class="pickh">${list.length === 1 ? 'A pick waits on you' : `${list.length} picks wait on you`}</div>${list.map((p) => `
-    <div class="pick" data-id="${esc(p.id)}"><p class="pickq"><b>${esc(pickWho(p.by))}</b>: ${esc(p.question)}${p.task ? ` <small>${esc(p.task)}</small>` : ''}</p>
+    <div class="pick" data-id="${esc(p.id)}"><p class="pickq"><button class="rvwho" type="button" data-one="${esc(p.by)}" title="Open ${esc(pickWho(p.by))}'s 1:1">${esc(pickWho(p.by))}</button>: ${esc(p.question)}${p.task ? ` <small>${esc(p.task)}</small>` : ''}</p>${p.why ? `<p class="pickwhy">${esc(p.why)}</p>` : ''}
       <div class="picko${p.options.some((o) => o.image && fileUrl(o.image)) ? ' img' : ''}">${p.options.map((o, i) => {
         const u = o.image && fileUrl(o.image);
         return `<button class="chip" data-n="${i + 1}" title="${esc(o.label)}">${u ? `<img src="${esc(u)}" alt="" loading="lazy">` : ''}<span>${esc(o.label)}</span></button>`;

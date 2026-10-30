@@ -338,13 +338,14 @@ function renderMerges() {
     const acts = `<button data-a="diff" ${m.error ? 'disabled' : ''}>Diff</button><button data-a="back">Send back</button><button class="go" data-a="merge" ${why ? 'disabled' : ''} title="${esc(why || `Merge into ${m.base}, delete the branch, mark done`)}">Merge</button>`;
     return `<tr class="mrow ${open ? 'open' : ''} ${m.error ? 'err' : ''}" data-merge="${esc(m.id)}">
       <td class="mid">${esc(m.id)}${m.stale ? ` <span class="mtag" title="In review ${m.age} days">Stale</span>` : ''}</td>
-      <td class="mtt" title="${esc(m.title)}">${nc ? `<span class="mtag mneed mconf" title="${esc(m.conflicts.join('\n'))}">Conflicts</span>` : ''}${left ? `<span class="mtag mneed" title="${esc(m.needs.filter((x) => !x.done).map((x) => x.t).join('\n'))}">Needs ${left}</span>` : ''}<span>${esc(m.title)}</span></td>
+      <td class="mtt" title="${esc(m.ask || m.title)}">${nc ? `<span class="mtag mneed mconf" title="${esc(m.conflicts.join('\n'))}">Conflicts</span>` : ''}${left ? `<span class="mtag mneed" title="${esc(m.needs.filter((x) => !x.done).map((x) => x.t).join('\n'))}">Needs ${left}</span>` : ''}<span>${esc(m.ask || m.title)}</span></td>
       <td class="mrepo" title="${esc([m.repo, ...(m.others || []).map((o) => o.repo)].join('\n'))}">${esc([m.repo, ...(m.others || []).map((o) => o.repo)].map(repoName).join(' + '))}</td>
       <td class="mab">${ab}</td>
       <td class="mres ${m.error ? 'bad' : m.result ? '' : 'none'}" title="${esc(m.error || m.result)}">${m.error ? esc(m.error) : m.result ? esc(m.result) : 'No test result'}</td>
       <td class="mown">${m.owner ? `<button class="mowner" data-a="owner" title="Discuss with ${esc(ownerName(m.owner))}">${face(m.owner, 'mg' + m.id + '_')}</button>` : ''}</td>
       <td class="macts">${acts}</td>
     </tr>${open ? `<tr class="mdet"><td colspan="7"><div class="mdbox">
+      ${askLine(m)}
       <p class="mdt">${esc(m.title)}</p>
       ${stepsHtml(m.needs, 'need', 'Before merging')}${stepsHtml(m.after, 'after', 'After merging')}
       <dl><dt>Goal</dt><dd>${esc(g(m.goal))}</dd><dt>Branch</dt><dd><code>${esc(m.repo)}:${esc(m.branch)}</code></dd>
@@ -358,11 +359,17 @@ function renderMerges() {
       <div class="macts mdacts">${m.owner ? `<button data-a="owner">Discuss with ${esc(ownerName(m.owner))}</button>` : ''}${acts}</div></div></td></tr>` : ''}`;
   };
   $('#mq').innerHTML = `<table class="mtab"><thead><tr><th class="mid">Task</th><th>Title</th><th class="mrepo">Repo</th><th class="mab">Commits</th><th class="mres">Test result</th><th class="mown">Owner</th><th></th></tr></thead><tbody>${list.map(row).join('')}</tbody></table>` + afterHtml() + worktreesHtml();
-  fitDetail();
+  fitDetail(); linkTasks($('#mq')); linkTasks($('#rv'));
+}
+// The ask: what it is, why, and what the user decides, in the owner's words; the name opens their 1:1. The row shows it in
+// place of the title; the open row leads with it, the title below.
+function askLine(m) {
+  const who = m.owner ? `<button class="rvwho" type="button" data-one="${esc(m.owner)}" title="Open ${esc(ownerName(m.owner))}'s 1:1">${esc(ownerName(m.owner))}</button>` : '';
+  return `<p class="mask${m.ask ? '' : ' none'}">${m.ask ? `${who}${who ? ': ' : ''}${esc(m.ask)}` : `No ask yet${who ? `: ${who} writes one with task edit ${esc(m.id)} ask` : ''}`}</p>`;
 }
 // An open row spans only the visible columns: spanning hidden ones adds columns that squeeze Title.
 function fitDetail() {
-  const n = [...document.querySelectorAll('#mq .mtab thead th')].filter((th) => getComputedStyle(th).display !== 'none').length;
+  const n = [...document.querySelectorAll('#mq .mtab:not(.wtab) thead th')].filter((th) => getComputedStyle(th).display !== 'none').length;
   document.querySelectorAll('#mq .mdet > td').forEach((td) => { td.colSpan = n || 7; });
 }
 addEventListener('resize', fitDetail);

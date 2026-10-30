@@ -9,7 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import vm from 'node:vm';
-import { createBoard, ownIdeas } from './board.mjs';
+import { createBoard, ownIdeas, plainAsk, ASK_WORDS } from './board.mjs';
 import { createFiles } from './files.mjs';
 import { holdGate } from './hold.mjs';
 import { createAsks, runAsk } from './asks.mjs';
@@ -1545,6 +1545,8 @@ const server = http.createServer(async (req, res) => {
       // Filed in a turn the user or the lead started: their ask, not the squiggle's own idea (Proactive).
       // Low trust: that squiggle suggests, never files its own ideas (a note for the user's or the lead's ask is fine).
       if (b.op === 'add') { const c = await callerSquiggle(req), cs = c && loadSquiggle(c); if (cs && !b.asked && R(c).asked?.length) b.asked = R(c).asked[0]; if (cs && !b.asked) b.idea = true; else delete b.idea; if (cs && !cs.lead && !b.asked && trustOf(cs) === 'low') return json(res, { error: `${cs.name}'s trust is Low: suggest it instead` }, 403); }
+      // A squiggle's review needs an ask the user can read cold; the user and the UI aren't held to it.
+      b.needAsk = b.op === 'move' && b.status === 'review' && !!(await callerSquiggle(req));
       const r = await board.taskOp(b);
       // A new suggestion rides along with the next team report to the lead; it never wakes anyone on its own (t825).
       if (b.op === 'suggest' && !r.dup) inbox.push(`[${(r.by && loadSquiggle(r.by)?.name) || r.by || 'Someone'} · SUGGESTION] ${r.id} ${r.title}${r.evidence ? ` (evidence: ${r.evidence})` : ''}`);
@@ -1564,6 +1566,7 @@ const server = http.createServer(async (req, res) => {
       try {
         if (b.op === 'file') {
           const s = who && loadSquiggle(who);
+          if (who && !plainAsk(b.why)) return json(res, { error: `the why needs ${ASK_WORDS}+ plain words ${User} can read cold: what the command does and why you need it` }, 400);
           const a = asks.file({ by: who, cwd: b.cwd ? path.resolve(home(String(b.cwd))) : home(s?.cwd || '~'), cmd: b.cmd, why: b.why });
           broadcast('*room', { k: 'room', action: 'asks' }); return json(res, a);
         }
@@ -1609,14 +1612,15 @@ const server = http.createServer(async (req, res) => {
       try {
         if (b.op === 'ask') {
           if (!who) return json(res, { error: 'squiggles file picks: pick ask "<question>" "<option>" "<option>"' }, 403);
-          const p = picks.ask({ by: who, question: b.question, options: b.options, task: b.task });
+          if (!plainAsk(`${b.question || ''} ${b.why || ''}`)) return json(res, { error: `a pick needs ${ASK_WORDS}+ words ${User} can read cold: say what it is and why in the question, or add --why "<context>"` }, 400);
+          const p = picks.ask({ by: who, question: b.question, options: b.options, task: b.task, why: b.why });
           broadcast('*room', { k: 'room', action: 'picks' }); return json(res, p);
         }
         if (b.op === 'pick' || b.op === 'drop') {
           let by = who;
           if (!who) { try { by = owner(); } catch (e) { return json(res, { error: e.message, ...(e.unlock && { unlock: true }) }, e.code || 403); } }
           const cur = picks.list({ all: true }).find((x) => x.id === String(b.id || ''));
-          if (who && !lead && (b.op === 'pick' || cur?.by !== who)) return json(res, { error: b.op === 'pick' ? `${User} picks, on the card in the lead chat` : `${b.id} isn't yours to drop` }, 403);
+          if (who && !lead && (b.op === 'pick' || cur?.by !== who)) return json(res, { error: b.op === 'pick' ? `${User} picks, in the Review tab` : `${b.id} isn't yours to drop` }, 403);
           const p = b.op === 'pick' ? picks.pick(String(b.id || ''), b.option, { by }) : picks.drop(String(b.id || ''), { by });
           broadcast('*room', { k: 'room', action: 'picks' });
           if (p.status === 'picked') try { send(p.by, `${User} picked "${p.answer}" for ${p.id}${p.task ? ` (${p.task})` : ''}: ${p.question}`, 'harness'); } catch (e) { console.error('pick answer', p.id, e.message); }

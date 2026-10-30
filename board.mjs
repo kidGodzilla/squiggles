@@ -121,6 +121,10 @@ async function deleteMergedA(repo, branch, into) {
 }
 const STOP = new Set('the a an and or of to in on for with is are be no not it its this that from at by as has have'.split(' '));
 const words = (s) => new Set(String(s).toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').split(/\s+/).filter((w) => w.length > 2 && !STOP.has(w)));
+// Review items carry an ask the user can read cold.
+export const ASK_WORDS = 12;
+export const plainAsk = (s) => String(s || '').trim().split(/\s+/).filter(Boolean).length >= ASK_WORDS;
+export const ASK_RULE = `a review needs --ask "<plain words: what this is, why, and what the user decides>" (${ASK_WORDS}+ words, readable cold: no task ids or jargon without saying what they are)`;
 // Two titles name the same thing when most of their words overlap (Jaccard over content words).
 // Proactive: done tasks a squiggle filed for itself (by is its own id), finished at or after since.
 // Its own idea: `idea` is stamped by the server on a note a squiggle filed in a turn nobody asked for (a scheduled wake).
@@ -235,7 +239,7 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
     task.repo = repo; task.branch = have?.branch || br; task.worktrees = [...new Set([...(task.worktrees || []), p])]; task.confirmed = today();
     saveTasks(t); return { ...task, path: p, created: !have };
   }
-  function taskOp({ op, id, title, goal, owner, status, note, by, asked, idea, parent, split, titles, branch, act, text, n, who, repo: repoArg, evidence, why }) {
+  function taskOp({ op, id, title, goal, owner, status, note, by, asked, idea, parent, split, titles, branch, act, text, n, who, repo: repoArg, evidence, why, ask, needAsk }) {
     const t = tasks();
     // Suggestions (t825): a squiggle notices something outside its task and files it for the lead, unowned and off every goal.
     // Similar titles (open or declined) count as the same suggestion. accept turns it into a normal task; decline closes it.
@@ -303,6 +307,9 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
         if (task.shipped && JSON.stringify(task.tips || {}) !== was) delete task.shipped; // a sign-off covers the commit it saw
         try { const b = detectBase(task.repo, task.branch); if (b !== baseOf(task.repo)) task.base = b; else delete task.base; } catch {}
       } else if (branch) Object.assign(task, resolveBranch(branch, task.goal ? TIERS.flatMap((x) => goals()[x]).find((g) => g.id === task.goal) : null));
+      // The ask: what this is, why, and what the user decides, readable cold. Squiggles can't put a branch in review without one.
+      if (ask !== undefined) { if (String(ask).trim()) task.ask = String(ask).trim(); else delete task.ask; }
+      if (status === 'review' && needAsk && !plainAsk(task.ask)) throw new Error(ASK_RULE);
       if (status === 'review' && task.status !== 'review') tellSteps(task, 'needs');
       task.status = status; task.confirmed = today(); if (status === 'done') Object.assign(task, { finished: today(), finishedAt: Date.now() }); else { delete task.finished; delete task.finishedAt; }
       if (note !== undefined) task.note = note;
@@ -354,7 +361,7 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
       if (list.length) task[op] = list; else delete task[op];
     }
     else if (op === 'edit') {
-      for (const [k, v] of Object.entries({ title, goal, owner, note, asked })) if (v !== undefined) { if (v) task[k] = v; else delete task[k]; }
+      for (const [k, v] of Object.entries({ title, goal, owner, note, asked, ask })) if (v !== undefined) { if (v) task[k] = v; else delete task[k]; }
       if (branch !== undefined) { if (branch) Object.assign(task, resolveBranch(branch, task.goal ? TIERS.flatMap((x) => goals()[x]).find((g) => g.id === task.goal) : null)); else { delete task.branch; delete task.repo; } }
       if (parent !== undefined) { if (parent && parent !== task.id) task.parent = parent; else delete task.parent; }
       if (split !== undefined) { if (split === true || split === 'true') task.split = true; else delete task.split; }
@@ -456,7 +463,7 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
   async function mergeInfo(task, q) {
     const goal = goalOf(task.goal), reviewed = task.reviewed || task.confirmed, age = daysSince(reviewed);
     const r = { id: task.id, title: task.title, goal: task.goal, goalTitle: goal?.title || '', owner: task.owner || '', repo: task.repo || '', branch: task.branch || '',
-      result: task.note || '', ...(task.base ? { into: task.base } : {}), needs: task.needs || [], after: task.after || [], reviewed, age, stale: age >= 7 };
+      result: task.note || '', ask: task.ask || '', ...(task.base ? { into: task.base } : {}), needs: task.needs || [], after: task.after || [], reviewed, age, stale: age >= 7 };
     if (!task.branch) return { ...r, error: 'no branch on the task' };
     if (!task.repo) return { ...r, error: 'no repo on the task: set it with task edit <id> branch repo:branch' };
     const { repo: _r, branch: _b, ...one } = await repoInfo(task.repo, task.branch, q, task.base);

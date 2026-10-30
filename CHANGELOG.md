@@ -43,6 +43,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 
 ### Added
 - Review tab (was Merge): picks, asks to run and blocked squiggles sit at the top, branches below, with a count on the tab. Chats no longer fill with approval cards; they show one line, how many wait and a Review button. Also `needs` on the CLI, `GET /api/needs` and `room view review`.
+- Every Review item carries a plain ask the user can read cold: `task move <id> review ... --ask "<words>"`, an ask's why and a pick's question plus `--why` need 12+ words, or the server refuses a squiggle's item. A merge row shows the ask in place of its title; `task edit <id> ask` fixes one. Names on Review items open that squiggle's 1:1 and task ids link.
 - Tasks: a Waiting status for work held up by someone outside the team (a customer, a vendor). It needs a note saying who or what; the sheet asks for it, and dragging a note to Waiting opens the sheet. `wait add --until waiting` works too.
 - Keyboard shortcuts: `?` lists them (also `room keys`), ⌘K jumps to a squiggle, 1–9 switch tabs, `j k` move through Tasks, Merge and Team, `[ ]` and Alt ↑ ↓ step between 1:1s, `n` adds a note, goal or meeting. Tooltips name each key.
 - Squiggles can run on Cursor models (`cursor` in config.json): one `cursor-agent` run per turn, resuming its chat, with its own slot. Like Pi, Cursor runs every tool call without asking; a hook keeps it out of Downloads, Desktop and Documents, and Cursor turns are refused until it's installed.

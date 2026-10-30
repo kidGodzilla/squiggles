@@ -499,7 +499,7 @@ html[data-theme=clean] .mrow .mres { color: var(--dim) } html[data-theme=clean] 
   .mtab, .mtab tbody, .mtab tr, .mtab td { display: block } .mtab thead { display: none }
   .mtab tr.mrow { display: flex; align-items: center; border-bottom: 1px solid var(--line) } .mtab tr.mrow.open { border-bottom-color: transparent }
   .mtab td { border: 0 } .mrow .mtt { flex: 1; min-width: 0 }
-  .mrow.open .mtt { white-space: normal } .mdbox .mdt { display: none }
+  .mrow.open .mtt > span:last-child { display: none } .mdbox .mdt { display: none }
   .mtab .mid, .mtab .mrepo, .mtab .mab, .mtab .mres, .mtab .mown, .mrow .macts { display: none }
   .mdacts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px } .mdacts button { margin: 0; white-space: nowrap } .mdacts button.go { margin-left: auto }
   .mtab tr.mdet { border-bottom: 1px solid var(--line) } .mdet td { padding: 0 12px 12px; white-space: normal } .mdbox dd { min-width: 0; overflow-wrap: anywhere } .mdbox dl { grid-template-columns: 82px 1fr }
@@ -1120,6 +1120,14 @@ html[data-theme=clean] .ksel { outline-color: #fff } html[data-theme=clean] .not
 .rvb { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line) } .rvb p { flex: 1; margin: 0; overflow-wrap: anywhere }
 .rvran summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--dim); padding: 4px 0 }
 .rvnone { margin: 0; color: var(--dim); font-size: 13px }
+/* The ask: every Review item says what it is, why and what the user decides; names open the 1:1, task ids link. */
+.rvwho { all: unset; cursor: pointer; font-weight: 600; color: inherit; text-decoration: underline; text-decoration-color: var(--dim); text-underline-offset: 2px }
+.rvwho:hover, .rvwho:focus-visible { text-decoration-color: currentColor }
+.mdbox .mask { margin: 0 0 10px; font-size: 15px; line-height: 1.45; white-space: normal; overflow-wrap: anywhere }
+.mdbox .mask .rvwho { color: var(--text) } .mdbox .mask.none { font-style: italic; color: var(--dim) }
+.mdbox .mask + .mdt { display: block; font-size: 13px; font-weight: 400; color: var(--dim) }
+.pickwhy { margin: 2px 0 8px; font-size: 13px; color: var(--dim); white-space: pre-wrap; overflow-wrap: anywhere }
+@media (pointer: coarse) { .rvwho { padding: 12px 0; margin: -12px 0 } }
 @media (pointer: coarse) { .waitbar { min-height: 44px } .waitbar b { padding: 10px 14px } .rvb .chip { min-height: 44px } }
 @media (max-width: 480px) { #calAdd .wd { display: none } }
 /* On a phone the Who list grows with the sheet (no 3-row box inside a scroll); 44px rows need no row gap. */

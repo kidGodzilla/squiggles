@@ -12,7 +12,7 @@ export function createPicks({ file, now = () => Date.now() }) {
   const save = (s) => { fs.mkdirSync(path.dirname(file), { recursive: true }); s.picks = s.picks.filter((p) => p.status === 'open' || now() - p.ended < WEEK); fs.writeFileSync(file, JSON.stringify(s, null, 1)); };
   const find = (s, id) => s.picks.find((p) => p.id === id) || (() => { throw err(`no pick ${id}`, 404); })();
 
-  function ask({ by, question, options, task }) {
+  function ask({ by, question, options, task, why }) {
     question = String(question || '').trim(); by = String(by || '').trim();
     if (!by) throw err('a pick needs the squiggle asking');
     if (!question || question.length > MAX_Q) throw err(`question: 1 to ${MAX_Q} characters`);
@@ -23,7 +23,7 @@ export function createPicks({ file, now = () => Date.now() }) {
     if (options.some((o) => o.image && !path.isAbsolute(o.image))) throw err('option images: absolute paths');
     const s = load();
     if (s.picks.filter((p) => p.status === 'open' && p.by === by).length >= MAX_OPEN) throw err(`${by} already has ${MAX_OPEN} open picks: wait for an answer or drop one`);
-    const p = { id: `p${++s.n}`, by, question, options, ...(task && { task: String(task) }), status: 'open', created: now() };
+    const p = { id: `p${++s.n}`, by, question, ...(String(why || '').trim() && { why: String(why).trim().slice(0, 1000) }), options, ...(task && { task: String(task) }), status: 'open', created: now() };
     s.picks.push(p); save(s); return p;
   }
   // An option by its number (1 = first) or its label, any case.
@@ -43,4 +43,4 @@ export function createPicks({ file, now = () => Date.now() }) {
   return { ask, pick, drop, list };
 }
 
-export const describePicks = (ps) => ps.length ? ps.map((p) => `${p.id}  ${p.by}  ${p.status === 'open' ? '' : `${p.status}${p.answer ? `: ${p.answer}` : ''}  `}${p.question}${p.task ? `  (${p.task})` : ''}\n${p.options.map((o, i) => `    ${i + 1}. ${o.label}${o.image ? `  ${o.image}` : ''}`).join('\n')}`).join('\n') : 'no picks waiting';
+export const describePicks = (ps) => ps.length ? ps.map((p) => `${p.id}  ${p.by}  ${p.status === 'open' ? '' : `${p.status}${p.answer ? `: ${p.answer}` : ''}  `}${p.question}${p.task ? `  (${p.task})` : ''}${p.why ? `\n    why: ${p.why}` : ''}\n${p.options.map((o, i) => `    ${i + 1}. ${o.label}${o.image ? `  ${o.image}` : ''}`).join('\n')}`).join('\n') : 'no picks waiting';

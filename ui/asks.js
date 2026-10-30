@@ -63,7 +63,7 @@ function askCard(a) {
     ? '<button class="chip primary" data-a="run">Run</button>'
     : '<span class="asknote">Run works only on the computer running the room. Copy it there.</span>';
   return `<div class="ask" data-id="${esc(a.id)}" data-ts="${+new Date(a.created)}">
-    <div class="askh"><b>${esc(askWho(a.by))}</b> asks to run this <small>${esc(a.id)}, ${esc(askTime(a.created))}, in <code>${d.html}</code>${c.lines > 1 ? `, ${c.lines} lines` : ''}</small></div>
+    <div class="askh"><button class="rvwho" type="button" data-one="${esc(a.by)}" title="Open ${esc(askWho(a.by))}'s 1:1">${esc(askWho(a.by))}</button> asks to run this <small>${esc(a.id)}, ${esc(askTime(a.created))}, in <code>${d.html}</code>${c.lines > 1 ? `, ${c.lines} lines` : ''}</small></div>
     ${a.why ? `<p class="askwhy">${esc(a.why)}</p>` : ''}
     ${r.length ? `<p class="askrisk">Careful: ${esc(r.join(', '))}.</p>` : ''}
     ${c.hidden || d.hidden ? `<p class="askrisk">Contains ${c.hidden + d.hidden} hidden or control character${c.hidden + d.hidden === 1 ? '' : 's'}, shown in brackets.</p>` : ''}
