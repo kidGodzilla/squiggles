@@ -145,7 +145,7 @@ function noteHtml(t) {
       draggable="true" data-task="${esc(t.id)}" style="--r:${rot(t.id)}deg">
     ${t.parent ? `<div class="np">Part of: ${esc(B.tasks.find((x) => x.id === t.parent)?.title || t.parent)}</div>` : ''}
     <div class="nt">${hl(t.title, q)}</div>${t.note ? `<div class="nn">${hl(t.note, q)}</div>` : ''}
-    ${t.kind === 'suggestion' ? sugHtml(t) : ''}${t.branch ? `<div class="nb" title="Branch">${esc(branchOf(t))}</div>` : ''}${t.split ? '<div class="nsplit">Needs splitting</div>' : ''}${subLine(t)}
+    ${t.kind === 'suggestion' ? sugHtml(t) : ''}${t.branch ? `<div class="nb" title="Branch">${esc(branchOf(t))}</div>` : ''}${t.split ? '<div class="nsplit">Needs splitting</div>' : ''}${t.alert === 'serious' && t.status !== 'done' ? '<div class="nsplit">Serious alert</div>' : ''}${subLine(t)}
     <div class="nf">${t.owner && S.sq[t.owner] ? `<span class="nown" data-owner="${esc(t.owner)}" title="Discuss with ${esc(ownerName(t.owner))}">${face(t.owner, 'nf' + t.id + '_')}</span>` : ''}<span class="age" title="Last confirmed ${esc(t.confirmed)}">${stale ? `${ago(t.confirmed)} old` : ago(t.created)}</span>${g ? `<span class="ng">${esc(g.title)}</span>` : ''}</div></div>`;
 }
 document.addEventListener('click', (e) => { const f = e.target.closest('[data-fold]'); if (f) foldGoals(f.dataset.fold); });

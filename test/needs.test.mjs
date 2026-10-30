@@ -21,3 +21,16 @@ test('needs: asks, open picks, shipped merges, blocked squiggles', () => {
   assert.match(describeNeeds(l), /Merge {2}t1 {2}apps {2}ready {2}\(shipped by ux\)/);
   assert.equal(describeNeeds([]), 'nothing needs you');
 });
+
+test('needs: a serious alert note open 2 hours leads the list', () => {
+  const now = 10 * 3600e3, h = 3600e3;
+  const l = needsList({ now, squiggles: [{ id: 'apps', status: 'blocked', note: 'x' }], tasks: [
+    { id: 't1', owner: 'logs', title: 'api 5xx storm', alert: 'serious', alertAt: now - 2 * h, status: 'doing' },
+    { id: 't2', owner: 'logs', title: 'fresh', alert: 'serious', alertAt: now - h, status: 'todo' },
+    { id: 't3', owner: 'logs', title: 'fixed', alert: 'serious', alertAt: now - 5 * h, status: 'done' },
+    { id: 't4', owner: 'logs', title: 'minor', alert: 'normal', alertAt: now - 5 * h, status: 'todo' },
+    { id: 't5', owner: 'logs', title: 'plain note', status: 'todo' },
+  ] });
+  assert.deepEqual(l.map((n) => `${n.kind}:${n.id}`), ['alert:t1', 'blocked:apps']);
+  assert.match(describeNeeds(l), /^Alert {2}t1 {2}logs {2}api 5xx storm/);
+});

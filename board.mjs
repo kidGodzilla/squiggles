@@ -239,7 +239,7 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
     task.repo = repo; task.branch = have?.branch || br; task.worktrees = [...new Set([...(task.worktrees || []), p])]; task.confirmed = today();
     saveTasks(t); return { ...task, path: p, created: !have };
   }
-  function taskOp({ op, id, title, goal, owner, status, note, by, asked, idea, parent, split, titles, branch, act, text, n, who, repo: repoArg, evidence, why, ask, needAsk }) {
+  function taskOp({ op, id, title, goal, owner, status, note, by, asked, idea, parent, split, titles, branch, act, text, n, who, repo: repoArg, evidence, why, ask, needAsk, alert }) {
     const t = tasks();
     // Suggestions (t825): a squiggle notices something outside its task and files it for the lead, unowned and off every goal.
     // Similar titles (open or declined) count as the same suggestion. accept turns it into a normal task; decline closes it.
@@ -255,7 +255,8 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
       if (!title) throw new Error('a task needs a title');
       const n = lastId(t) + 1;
       const task = { id: 't' + n, title, status: STATUSES.includes(status) ? status : 'todo', created: today(), confirmed: today(),
-        ...(goal ? { goal } : {}), ...(owner ? { owner } : {}), ...(note ? { note } : {}), ...(by ? { by } : {}), ...(asked ? { asked: String(asked).slice(0, 40) } : idea ? { idea: true } : {}), ...(parent ? { parent } : {}), ...(split ? { split: true } : {}) };
+        ...(goal ? { goal } : {}), ...(owner ? { owner } : {}), ...(note ? { note } : {}), ...(by ? { by } : {}), ...(asked ? { asked: String(asked).slice(0, 40) } : idea ? { idea: true } : {}), ...(parent ? { parent } : {}), ...(split ? { split: true } : {}),
+        ...(['serious', 'normal'].includes(alert) ? { alert, alertAt: Date.now() } : {}) };
       t.push(task); saveTasks(t); return task;
     }
     const task = t.find((x) => x.id === id);

@@ -38,3 +38,12 @@ test('plainAsk counts words; picks keep their why', () => {
   assert.match(describePicks(p.list()), /why: The Review tab header wraps/);
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test('task add keeps an alert level and when it was filed', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'alert-'));
+  fs.writeFileSync(path.join(dir, 'goals.json'), JSON.stringify({ active: [] })); fs.writeFileSync(path.join(dir, 'tasks.json'), JSON.stringify({ tasks: [] }));
+  const b = createBoard(dir, () => {}), t = b.taskOp({ op: 'add', title: 'site down', owner: 'logs', alert: 'serious' });
+  assert.equal(t.alert, 'serious'); assert.ok(Date.now() - t.alertAt < 5000);
+  assert.equal(b.taskOp({ op: 'add', title: 'x', alert: 'loud' }).alert, undefined);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
