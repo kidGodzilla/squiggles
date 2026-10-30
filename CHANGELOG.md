@@ -117,6 +117,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Picks: `pick ask "<question>" "<option>" "<option>" [--images a,b] [--task <id>]` files a choice for the user; open picks collect on one card above the lead chat composer, options as buttons (images shown when they live in files/ or research/). A tap answers and the asker is told; the lead relays a spoken answer with `pick <id> <option>`. `picks [all]`, `pick drop <id>`. Answering needs the room passcode.
 - Settings > Defaults > Turns at once, and `slots`, set how many turns each provider runs at once.
 ### Changed
+- Phone header: when someone is blocked or needs a rethink, those pills take the row; blocked and rethink together show as one "N stuck" pill that opens Team.
 - A squiggle that says WAITING on a background run of its own (started there, or moved there at its timeout) stays waiting instead of blocked; if its process ends first, it's blocked. Command output can't fake one: a run started in the background counts from the CLI's event, and one moved at its timeout only if the reply came after the call's own timeout.
 - A squiggle that says WAITING on a background subagent of its own stays waiting instead of blocked, like a background run.
 - A failed turn's status says why (its first line), not just "turn failed".

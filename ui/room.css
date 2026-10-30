@@ -54,6 +54,8 @@ header { min-width: 0; overflow-x: clip } /* nothing in the top bar may widen th
   /* One line at 360+ (t1016): the menu never wraps; pills shorten, then the name goes, then pills clip before the menu does. */
   header { flex-wrap: nowrap } #summary { flex: 0 1 auto; display: flex; gap: 6px } #summary i { display: none }
   header:has(#summary > :nth-child(3)) .brand b, header:has(#summary > :nth-child(2)):has(#meBtn:not([hidden])) .brand b { display: none }
+  /* When someone is stuck, the stuck pills win the row; counts like "7 working" go rather than clip mid-word. */
+  #summary:has(button) span { display: none }
 }
 #summary i { font-style: normal }
 .brand { display: flex; align-items: center; gap: 9px; cursor: pointer }
@@ -63,7 +65,7 @@ header { min-width: 0; overflow-x: clip } /* nothing in the top bar may widen th
 #summary { display: flex; gap: 6px; margin-left: 10px; font-size: 12px; color: var(--dim) }
 #summary span, #summary button { padding: 3px 10px; border-radius: 99px; background: var(--panel2); border: 0; font: inherit; color: inherit }
 #summary button { cursor: pointer } #summary button:hover { filter: brightness(1.15) }
-#summary .working { color: var(--gold) } #summary .blocked { color: #fff; background: #b8332b } #summary .rethink { color: #1b1d27; background: var(--warn) }
+#summary .working { color: var(--gold) } #summary :is(.blocked, .stuck) { color: #fff; background: #b8332b } #summary .rethink { color: #1b1d27; background: var(--warn) }
 .chip { height: 30px; padding: 0 12px; border-radius: 9px; background: var(--panel2); border: 1px solid var(--line); color: var(--dim); font-size: 12.5px }
 .chip:hover { color: var(--text) } .chip.on { color: var(--text) } .chip.primary { background: var(--accent); color: #0d1020; border-color: transparent; font-weight: 600 }
 .ctl { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--dim) } .ctl[hidden] { display: none }

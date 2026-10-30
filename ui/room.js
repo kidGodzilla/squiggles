@@ -226,14 +226,16 @@ function paintSubs(id) {
 function renderSummary() {
   if (typeof B !== 'undefined' && B.view === 'team') renderTeam();
   const n = {}; for (const id of S.order) { const s = S.sq[id]; const k = s.paused ? 'paused' : statusWord(s) === 'Proactive' ? 'proactive' : s.status || 'idle'; n[k] = (n[k] || 0) + 1; }
-  const parts = [['working', 'working'], ['blocked', 'blocked'], ['rethink', '<i>need a </i>rethink'], ['done', 'done'], ['proactive', 'proactive'], ['paused', 'paused']].filter(([k]) => n[k]);
+  let parts = [['working', 'working'], ['blocked', 'blocked'], ['rethink', '<i>need a </i>rethink'], ['done', 'done'], ['proactive', 'proactive'], ['paused', 'paused']].filter(([k]) => n[k]);
+  // On a phone, blocked and rethink side by side clip; one "N stuck" pill opens Team.
+  if (n.blocked && n.rethink && matchMedia('(max-width: 760px)').matches) { n.stuck = n.blocked + n.rethink; parts = [['stuck', 'stuck'], ...parts.filter(([k]) => k !== 'blocked' && k !== 'rethink')]; }
   $('#moreCount').textContent = `${S.order.length} in the room`;
-  $('#summary').innerHTML = parts.map(([k, w]) => k === 'blocked' || k === 'rethink'
+  $('#summary').innerHTML = parts.map(([k, w]) => k === 'blocked' || k === 'rethink' || k === 'stuck'
     ? `<button class="${k}" data-k="${k}" title="Show who">${n[k]} ${w}</button>` : `<span class="${k}">${n[k]} ${w}</span>`).join('');
 }
 // Blocked (or rethink) badge: one squiggle opens its 1:1 with the message in view; several open Team, stuck ones first.
 function openStuck(k = 'blocked') {
-  const ids = S.order.filter((id) => !S.sq[id].paused && S.sq[id].status === k);
+  const ids = S.order.filter((id) => !S.sq[id].paused && (k === 'stuck' ? ['blocked', 'rethink'].includes(S.sq[id].status) : S.sq[id].status === k));
   if (ids.length === 1) oneOnOne(ids[0]); else if (ids.length) setView('team');
 }
 $('#summary').onclick = (e) => { const b = e.target.closest('button[data-k]'); if (b) openStuck(b.dataset.k); };
@@ -548,6 +550,7 @@ if (window.visualViewport) {
 new ResizeObserver(() => document.documentElement.style.setProperty('--hh', $('header').offsetHeight + 'px')).observe($('header'));
 function clearUnread(id) { if (S.unread[id]) { S.unread[id] = 0; paintTile(id); } }
 const PHONE = matchMedia('(max-width: 760px)');
+PHONE.addEventListener('change', () => renderSummary());
 // @mentions (t677): typing @ in a chat offers squiggles and people; a known @name is a chip in the input and in messages.
 const mentionables = () => [
   ...S.order.map((id) => ({ key: /^[\w-]+$/.test(S.sq[id].name) ? S.sq[id].name : id, id, name: S.sq[id].name, role: S.sq[id].lead ? 'Lead' : S.sq[id].role, face: () => avatarSVG(P(id), undefined, 'mn_' + id) })),
