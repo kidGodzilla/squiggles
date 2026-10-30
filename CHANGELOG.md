@@ -42,7 +42,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - An ask cut off by a server restart is marked interrupted at boot and its filer is told; its output is lost.
 
 ### Added
-- Needs you: on a phone, the top of the Lead chat lists everything waiting on you (asks to run, picks, merges a reviewer shipped, blocked squiggles) with one-tap actions; its header stays pinned while the list scrolls, with Hide/Show beside the count. Also `needs` on the CLI and `GET /api/needs`.
+- Review tab (was Merge): picks, asks to run and blocked squiggles sit at the top, branches below, with a count on the tab. Chats no longer fill with approval cards; they show one line, how many wait and a Review button. Also `needs` on the CLI, `GET /api/needs` and `room view review`.
 - Tasks: a Waiting status for work held up by someone outside the team (a customer, a vendor). It needs a note saying who or what; the sheet asks for it, and dragging a note to Waiting opens the sheet. `wait add --until waiting` works too.
 - Keyboard shortcuts: `?` lists them (also `room keys`), ⌘K jumps to a squiggle, 1–9 switch tabs, `j k` move through Tasks, Merge and Team, `[ ]` and Alt ↑ ↓ step between 1:1s, `n` adds a note, goal or meeting. Tooltips name each key.
 - Squiggles can run on Cursor models (`cursor` in config.json): one `cursor-agent` run per turn, resuming its chat, with its own slot. Like Pi, Cursor runs every tool call without asking; a hook keeps it out of Downloads, Desktop and Documents, and Cursor turns are refused until it's installed.

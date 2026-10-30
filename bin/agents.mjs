@@ -314,7 +314,7 @@ const cmds = {
     return l.until ? `session limit hit, stated reset ${t(l.until)} (display only: wakes carry on)` : 'no session limit reported';
   },
   remove: () => call(`/squiggles/${a[0]}/remove`, {}),
-  // room radio <fip|fipjazz|...|off> | room volume <0-1> | room voices on|off | room chatter quiet|normal|lively | room theme flat|clean | room characters <generator> | room view room|lead|meeting|team|calendar|goals|tasks|merge|files|settings | room view files <name> (preview) | room view blocked|rethink | room keys | room view keys|jump | room fold|unfold active|hold|next|done|areas | room view 1on1 <id> | room view calendar week|month | room view settings [room|characters|squiggles|people|sharing|defaults|security] | room chat <id> ["<draft>"] | room lock
+  // room radio <fip|fipjazz|...|off> | room volume <0-1> | room voices on|off | room chatter quiet|normal|lively | room theme flat|clean | room characters <generator> | room view room|lead|meeting|team|calendar|goals|tasks|merge|review|files|settings | room view files <name> (preview) | room view blocked|rethink | room keys | room view keys|jump | room fold|unfold active|hold|next|done|areas | room view 1on1 <id> | room view calendar week|month | room view settings [room|characters|squiggles|people|sharing|defaults|security] | room chat <id> ["<draft>"] | room lock
   // room passcode set <code>|clear|status|local on|off (t913): optional lock-screen passcode. Once set, changing it asks for the current one.
   room: async () => {
     if (a[0] === 'passcode') {

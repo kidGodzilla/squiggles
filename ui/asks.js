@@ -79,23 +79,10 @@ function askDone(a) {
     <pre class="askcmd"><code>${showCmd(a.cmd).html}</code></pre>
     ${a.out != null ? `<pre class="askout">${esc(a.out || '(no output)')}</pre>` : ''}</details>`;
 }
-// Asks sit in the chat stream where they were filed: the lead's chat shows every ask, a 1:1 its own.
-// Past asks from before a clear stay cleared; pending ones always show.
+// Asks live in the Review tab; a chat only shows the waiting line (review.js), so clear any old stream cards.
 function paintAsks(cw) {
-  const id = cw.dataset.id, lead = S.sq[id]?.lead, mine = (a) => lead || a.by === id, box = cw.querySelector('.msgs');
-  if (!box) return;
-  const cut = +cw.dataset.cleared || 0, at = (a) => +new Date(a.created);
-  const want = [...ASK.list.filter(mine).map((a) => [a, askCard(a)]), ...ASK.recent.filter((a) => mine(a) && at(a) > cut).map((a) => [a, askDone(a)])];
-  const keep = new Set(want.map(([a]) => a.id));
-  for (const el of box.querySelectorAll(':scope > .ask')) if (!keep.has(el.dataset.id)) el.remove();
-  for (const [a, html] of want) {
-    const t = document.createElement('template'); t.innerHTML = html.trim(); const el = t.content.firstChild;
-    const old = box.querySelector(`:scope > .ask[data-id="${CSS.escape(a.id)}"]`);
-    if (old) { if (old.open) el.open = true; if (old.outerHTML !== el.outerHTML) old.replaceWith(el); continue; }
-    const next = [...box.children].find((x) => x.dataset.ts && +x.dataset.ts > at(a));
-    box.querySelector('.empty')?.remove(); box.insertBefore(el, next || null);
-  }
-  if (box.pinned !== false) pinBottom(box);
+  cw.querySelectorAll('.msgs > .ask').forEach((el) => el.remove());
+  window.paintWaitBar?.(cw);
 }
 function paintAskBadge() {
   const b = $('#asksBtn'), n = ASK.list.length;
@@ -107,7 +94,7 @@ async function loadAsks() {
   if (!Array.isArray(list)) return;
   const day = Date.now() - 864e5;
   ASK.list = list; ASK.can = can || { run: false }; ASK.recent = (all || []).filter((a) => a.status !== 'pending' && a.ended > day && ['done', 'failed', 'interrupted'].includes(a.status));
-  paintAskBadge(); document.querySelectorAll('.cw').forEach(paintAsks);
+  paintAskBadge(); document.querySelectorAll('.cw').forEach(paintAsks); window.paintReview?.();
 }
 // Run uses a raw fetch: api() reloads the page on a 401, and a locked Run is one.
 const askPost = (b) => fetch('/api/asks', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) }).then((r) => r.json()).catch(() => ({ error: 'Request failed' }));
@@ -133,8 +120,5 @@ document.addEventListener('click', async (e) => {
     toast(`Running ${id}. ${askWho(a.by)} gets the output.`);
   }
 });
-$('#asksBtn').onclick = () => {
-  const by = [...new Set(ASK.list.map((a) => a.by))], lead = S.order.find((x) => S.sq[x].lead);
-  const id = by.length === 1 && S.sq[by[0]] ? by[0] : lead; if (id) oneOnOne(id);
-};
+$('#asksBtn').onclick = () => setView('merge');
 loadAsks();

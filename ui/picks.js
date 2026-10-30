@@ -1,5 +1,4 @@
-// Picks: every question waiting on the owner's choice, in one card above the lead chat's composer (a 1:1 shows its
-// own). Options are buttons, with the image when it's one of ours (fileUrl). CLI: picks, pick ask|drop, pick <id> <option>.
+// Picks: every question waiting on the owner's choice, in one card at the top of the Review tab. Options are buttons, with the image when it's one of ours (fileUrl). CLI: picks, pick ask|drop, pick <id> <option>.
 const PICK = { list: [] };
 const pickWho = (id) => S.sq[id]?.name || id;
 function pickCard(list) {
@@ -10,16 +9,11 @@ function pickCard(list) {
         return `<button class="chip" data-n="${i + 1}" title="${esc(o.label)}">${u ? `<img src="${esc(u)}" alt="" loading="lazy">` : ''}<span>${esc(o.label)}</span></button>`;
       }).join('')}</div></div>`).join('')}`;
 }
-function paintPicks(cw) {
-  const id = cw.dataset.id, lead = S.sq[id]?.lead, list = PICK.list.filter((p) => lead || p.by === id);
-  let el = cw.querySelector(':scope > .picks');
-  if (!list.length) return el?.remove();
-  if (!el) { el = document.createElement('div'); el.className = 'picks'; cw.querySelector(':scope > .act')?.before(el); }
-  const html = pickCard(list); if (el.dataset.html !== html) { el.innerHTML = html; el.dataset.html = html; }
-}
+// Picks live in the Review tab; a chat only shows the waiting line.
+function paintPicks(cw) { cw.querySelector(':scope > .picks')?.remove(); window.paintWaitBar?.(cw); }
 async function loadPicks() {
   const list = await api('/picks').catch(() => null); if (!Array.isArray(list)) return;
-  PICK.list = list; document.querySelectorAll('.cw').forEach(paintPicks);
+  PICK.list = list; document.querySelectorAll('.cw').forEach(paintPicks); window.paintReview?.();
 }
 const pickPost = (b) => fetch('/api/picks', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) }).then((r) => r.json()).catch(() => ({ error: 'Request failed' }));
 document.addEventListener('click', async (e) => {

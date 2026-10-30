@@ -18,7 +18,7 @@
 <body class="locked">
 <header>
   <div class="brand"><img class="logo" src="/ui/logo-64.png" alt=""><b>Squiggles</b></div>
-  <nav class="tabs"><button data-view="room" class="on">Room</button><button data-view="lead" title="The lead's office: just the two of you, everyone else quiet">Lead</button><button data-view="team" title="Everyone on the team: what they care about, what they guard, how they run">Team</button><button data-view="calendar" title="Meetings with squiggles and goal due dates">Calendar</button><button data-view="goals">Goals</button><button data-view="tasks">Tasks</button><button data-view="merge" title="Branches waiting for you to merge">Merge</button><button data-view="files" title="Shared files: your drops and the research folders">Files</button><button type="button" class="tmore" aria-expanded="false">More</button></nav>
+  <nav class="tabs"><button data-view="room" class="on">Room</button><button data-view="lead" title="The lead's office: just the two of you, everyone else quiet">Lead</button><button data-view="team" title="Everyone on the team: what they care about, what they guard, how they run">Team</button><button data-view="calendar" title="Meetings with squiggles and goal due dates">Calendar</button><button data-view="goals">Goals</button><button data-view="tasks">Tasks</button><button data-view="merge" title="Picks, asks and branches waiting for you">Review</button><button data-view="files" title="Shared files: your drops and the research folders">Files</button><button type="button" class="tmore" aria-expanded="false">More</button></nav>
   <div id="summary"></div>
   <button class="chip asksb" id="asksBtn" hidden></button>
   <div class="sp"></div>
@@ -166,6 +166,7 @@
     </div>
   </section>
   <section id="mergeView" class="bview">
+    <div class="rv" id="rv"></div>
     <div class="btool"><span id="mcount"></span><span class="sp"></span><button class="chip" id="mmeet">Merge review now</button><button class="chip" id="mrefresh">Refresh</button></div>
     <div class="mq" id="mq"></div>
   </section>
@@ -215,6 +216,6 @@
 <script src="/ui/picks.js"></script>
 <script src="/ui/peers.js"></script>
 <script src="/ui/keys.js"></script>
-<script src="/ui/needs.js"></script>
+<script src="/ui/review.js"></script>
 </body>
 </html>
