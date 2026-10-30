@@ -98,6 +98,7 @@ main { flex: 1; display: flex; min-height: 0 }
 .status:empty { display: none }
 .status.working { color: var(--gold) } .status.done { color: var(--ok) } .status.idle { color: var(--dim) }
 .status.blocked { background: #b8332b; color: #fff } .status.rethink { background: var(--warn); color: #1b1d27 } .status.error { color: var(--red) } .status.paused { color: var(--dim) }
+.status, .ticker { color: #e8eaf0; --ok: #4ade80; --gold: #f5c451; --dim: #a1a1aa; --red: #f87171 } /* always-dark overlays: light text in every scheme */
 .bubble { display: none; position: absolute; top: 7px; left: 7px; right: 80px; background: #fff; color: #1b1d27; border-radius: 12px; padding: 7px 11px; font-size: 13px; line-height: 1.35; box-shadow: 0 6px 18px rgba(0,0,0,.35); max-height: 56%; overflow: hidden }
 .tile.speaking .bubble { display: block; animation: fadein .2s } .tile.focus .bubble { font-size: 15.5px; max-width: 72% }
 .ticker { display: none; position: absolute; left: 7px; right: 7px; bottom: 34px; font: 10.5px/1.35 var(--mono); color: #fff; background: rgba(14,18,32,.82); border-radius: 6px; padding: 2px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
@@ -990,6 +991,7 @@ html[data-theme=clean] .pbar { background: #171717; color: #a1a1a1 }
 html[data-theme=clean] #pstat { background: #121212; border-top-color: #262626; color: #a1a1a1 }
 html[data-theme=clean] #ptodo { background: var(--panel); backdrop-filter: none; border-color: var(--line); box-shadow: var(--sh-md) }
 html[data-theme=clean] .td { color: var(--text) }
+@media (max-width: 760px) { html[data-theme=clean] .corkcols { margin: 0 -18px; padding: 0 18px; scroll-padding-inline: 18px } } /* phone: columns scroll to the screen edge, not 18px short */
 
 /* ---------- Tasks: kanban. No board frame; columns bg-muted; notes are cards one step up.
    Owner colour = 3px top edge. Tint only in light (goes muddy on dark). ---------- */
