@@ -174,7 +174,7 @@ test('merge takes the reviewed commit: a branch moved since review is refused un
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test('an open goal\'s review branch shows in the Merge tab; one on main does not', async () => {
+test('an open goal\'s review branch shows in the Review tab; one on main does not', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'merges-')), repo = path.join(dir, 'repo');
   const g = (...a) => execFileSync('git', ['-C', repo, ...a], { stdio: 'pipe', env: { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' } });
   const commit = (f, m) => { fs.writeFileSync(path.join(repo, f), m); g('add', f); g('commit', '-q', '-m', m); };

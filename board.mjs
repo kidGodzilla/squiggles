@@ -11,7 +11,7 @@ const today = () => new Date(Date.now()).toISOString().slice(0, 10); // Date.now
 const TIERS = ['active', 'hold', 'todo', 'done'];
 // waiting: on someone outside the team (customer, vendor), said in the note; blocked is for the user or the team.
 const STATUSES = ['todo', 'doing', 'review', 'waiting', 'blocked', 'done'];
-// Merge policy per goal. gated: a branch per task, merged from the Merge tab. open: commit to main. Missing means gated.
+// Merge policy per goal. gated: a branch per task, merged from the Review tab. open: commit to main. Missing means gated.
 const MERGE = ['gated', 'open'];
 const expand = (p) => String(p || '').replace(/^~(?=$|\/)/, os.homedir());
 // The commit a branch pointed at when it went to review: merge takes that, never a later tip.
@@ -151,7 +151,7 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
     for (const x of whoIs ? text.matchAll(loose ? /\b([A-Z][\w-]*)\b/g : /@([\w-]+)/g) : []) { const v = whoIs(x[1], loose); if (v) return { t: text, who: v }; }
     return { t: text };
   }
-  // Each tagged squiggle hears its open steps; the user's stay theirs, in the Merge tab. Untagged ones go to the task's owner to tag.
+  // Each tagged squiggle hears its open steps; the user's stay theirs, in the Review tab. Untagged ones go to the task's owner to tag.
   const told = [];
   function tellSteps(task, list, only) {
     if (!onSteps) return;
@@ -327,7 +327,7 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
       task.shipped = [...(task.shipped || []).filter((x) => x.by !== (by || 'lead')), { by: by || 'lead', sha, date: today(), ...(String(note || '').trim() ? { note: String(note).trim() } : {}) }];
       task.confirmed = today();
     }
-    // task base <id> <branch>|auto: the branch the Merge tab merges into; auto re-detects, the default base clears it.
+    // task base <id> <branch>|auto: the branch the Review tab merges into; auto re-detects, the default base clears it.
     else if (op === 'base') {
       if (!task.repo || !task.branch) throw new Error(`${task.id} has no branch yet`);
       if (!hasBranch(task.repo, task.branch)) throw new Error(`branch ${task.branch} is gone from ${task.repo}`);
@@ -403,7 +403,7 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
     for (const repo of TIERS.flatMap((x) => goals()[x]).flatMap((g) => g.repos || [])) {
       let real; try { real = fs.realpathSync(expand(repo)); } catch { continue; } if (seen.has(real)) continue; seen.add(real);
       for (const w of await worktreesOfA(repo)) { // off the loop
-        if (/\/(merge-t\d+-|branch-d-)[^/]+$/.test(w.path)) continue; // the Merge tab's own temp worktrees, gone in a moment
+        if (/\/(merge-t\d+-|branch-d-)[^/]+$/.test(w.path)) continue; // the Review tab's own temp worktrees, gone in a moment
         const task = t.find((x) => x.status !== 'done' && ((x.worktrees || []).includes(w.path) || (w.branch && x.branch === w.branch && realOf(x.repo) === real))) || null;
         let dirty = 0; try { dirty = fs.existsSync(w.path) ? (await dirtyOfA(w.path)).length : 0; } catch {}
         out.push({ repo: real, path: w.path, branch: w.branch, head: w.head, dirty, missing: !fs.existsSync(w.path), home: w.path.startsWith(wtReal + '/'),
@@ -490,7 +490,7 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
   // The user merges every review branch: a gated goal's, and an open goal's when the work sits on a branch, not main.
   const needsUser = (t) => (goalOf(t.goal)?.merge || 'gated') === 'gated' || (!!t.branch && !/^(main|master)$/.test(t.branch));
   const inQueue = () => tasks().filter((t) => t.status === 'review' && needsUser(t));
-  // Why a review branch no longer needs the Merge tab, or '' if it still does. Never touches the branch.
+  // Why a review branch no longer needs the Review tab, or '' if it still does. Never touches the branch.
   async function mergedOutside(task, q) {
     if (!task.repo || !task.branch || !fs.existsSync(expand(task.repo))) return '';
     try {
@@ -508,7 +508,7 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
     } catch {}
     return '';
   }
-  // Close review tasks whose branch was merged (or deleted) outside the Merge tab.
+  // Close review tasks whose branch was merged (or deleted) outside the Review tab.
   async function mergeSweep(q = memo()) {
     const closed = (await pool(inQueue(), 6, async (t) => ({ id: t.id, why: await mergedOutside(t, q) }))).filter((x) => x.why);
     if (!closed.length) return closed;

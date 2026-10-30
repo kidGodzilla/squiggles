@@ -164,7 +164,7 @@ const board = createBoard(DATA, () => {
   const when = list === 'needs' ? `before ${USER} merges it` : 'now that it is merged', l = steps.map((x) => `${x.n}. ${x.t}`).join('\n');
   send(who, untagged
     ? `${id} "${String(title).slice(0, 80)}" has merge steps with no owner:\n${l}\nTag each: task ${list} ${id} tag <n> <squiggle or owner>.`
-    : `${id} "${String(title).slice(0, 80)}" has a step for you ${when}:\n${l}\nDo it, then task ${list} ${id} done <n>. It shows in the Merge tab until then. Journal it and end with a status line.`, 'harness');
+    : `${id} "${String(title).slice(0, 80)}" has a step for you ${when}:\n${l}\nDo it, then task ${list} ${id} done <n>. It shows in the Review tab until then. Journal it and end with a status line.`, 'harness');
 } });
 const meetings = createMeetings(DATA, () => {
   const line = `data: ${JSON.stringify({ id: '*board', ev: { k: 'meetings' } })}\n\n`;
@@ -1234,7 +1234,7 @@ function tts(text, voice) {
 kokoro.warm();
 
 // ---------- http ----------
-// ---------- the lead in a Teams call (~/claude-in-call) ----------
+// ---------- the lead in a call (~/claude-in-call) ----------
 // Detached, with its pid in runs/call.json, so a server restart neither hangs it up nor loses track of it.
 const CALL = path.join(RUNS, 'call.json'), CALL_LOG = path.join(RUNS, 'call.log'), CALL_DIR = home('~/claude-in-call');
 const alive = (pid) => { try { process.kill(pid, 0); return true; } catch { return false; } };
@@ -1289,7 +1289,7 @@ function callEnds(until) {
 }
 function callJoin(url, until) {
   if (!fs.existsSync(CALL_DIR)) throw new Error('calls need ~/claude-in-call, which is not installed');
-  if (!/^https:\/\/([\w-]+\.)*(teams\.microsoft\.com|teams\.live\.com)\//.test(String(url || ''))) throw new Error('give a Teams meeting link (https://teams.microsoft.com/... or teams.live.com/...)');
+  if (!/^https:\/\/(([\w-]+\.)*(teams\.microsoft\.com|teams\.live\.com)|meet\.google\.com)\//.test(String(url || ''))) throw new Error('give a meeting link (https://teams.microsoft.com/..., teams.live.com/... or meet.google.com/...)');
   const c = callStatus(); if (c.live) throw new Error(`already in a call (pid ${c.pid}): call leave first`);
   const lead = listSquiggles().find((s) => s.lead) || { id: 'lead', name: 'Lead', lead: true }, face = callFace(lead), ends = callEnds(until);
   const promptFile = path.join(RUNS, 'call-prompt.md'); fs.writeFileSync(promptFile, callPrompt());
@@ -1304,7 +1304,7 @@ function callJoin(url, until) {
 }
 async function callLeave() {
   const c = callStatus(); if (!c.live) return 'not in a call';
-  process.kill(c.pid, 'SIGINT'); // call.js hangs up in Teams first, then closes its browser
+  process.kill(c.pid, 'SIGINT'); // call.js hangs up first, then closes its browser
   for (let i = 0; i < 20 && alive(c.pid); i++) await new Promise((r) => setTimeout(r, 250));
   if (alive(c.pid)) process.kill(c.pid, 'SIGTERM');
   broadcast('*room', { k: 'room', action: 'call', value: 'left' });
@@ -1362,9 +1362,9 @@ async function callerSquiggle(req) {
 }
 async function merger(req, b) {
   const id = await callerSquiggle(req);
-  if (id) return loadSquiggle(id)?.lead ? { by: id } : { error: `${id} can't merge gated work: ${USER} presses Merge on the Merge tab` };
+  if (id) return loadSquiggle(id)?.lead ? { by: id } : { error: `${id} can't merge gated work: ${USER} presses Merge on the Review tab` };
   let why; try { pass.session(req); return { by: String(b.by || 'owner').slice(0, 40) }; } catch (e) { why = e; }
-  if (!/Mozilla\//.test(req.headers['user-agent'] || '')) return { error: `Only ${USER} and the lead merge gated work: ${USER} presses Merge on the Merge tab` };
+  if (!/Mozilla\//.test(req.headers['user-agent'] || '')) return { error: `Only ${USER} and the lead merge gated work: ${USER} presses Merge on the Review tab` };
   return { error: why.message, ...(why.unlock && { unlock: true }) };
 }
 const peers = createPeers(path.join(DATA, 'peers.json'));

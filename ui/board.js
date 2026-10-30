@@ -67,7 +67,7 @@ function renderGoals() {
         const open = openCount(g.id);
         return `<div class="g ${stale ? 'stale' : ''}" draggable="true" data-goal="${esc(g.id)}">
           <span class="gt"><span class="gtt" title="${esc(g.title)}">${hl(g.title, q)}</span>${g.note ? `<span class="gn gnote" title="${esc(g.note)}">${hl(g.note, q)}</span>` : ''}${open ? `<span class="gn">${open} open note${open > 1 ? 's' : ''}</span>` : ''}${g.due && tier !== 'done' ? dueLine(g.due) : ''}</span>
-          <span class="gm">${tier === 'done' ? '' : `<span class="gmerge ${g.merge}" title="${g.merge === 'open' ? 'Open: commits go to main' : 'Gated: a branch per task, merged from the Merge tab'}">${g.merge === 'open' ? 'Open' : 'Gated'}</span>`}${g.owner && S.sq[g.owner] ? `<span class="nown" data-owner="${esc(g.owner)}" title="Ask ${esc(ownerName(g.owner))} about this goal">${face(g.owner, 'gf' + hash(g.id) + '_')}</span>` : ''}${ago(g.last_confirmed)}</span></div>`;
+          <span class="gm">${tier === 'done' ? '' : `<span class="gmerge ${g.merge}" title="${g.merge === 'open' ? 'Open: commits go to main' : 'Gated: a branch per task, merged from the Review tab'}">${g.merge === 'open' ? 'Open' : 'Gated'}</span>`}${g.owner && S.sq[g.owner] ? `<span class="nown" data-owner="${esc(g.owner)}" title="Ask ${esc(ownerName(g.owner))} about this goal">${face(g.owner, 'gf' + hash(g.id) + '_')}</span>` : ''}${ago(g.last_confirmed)}</span></div>`;
       }).join('')}
       ${tier !== 'done' ? `<button class="addg" data-addgoal="${tier}">+ add a goal</button>` : ''}</div></div>`;
   }).join('');
@@ -815,7 +815,7 @@ setTimeout(() => {
 loadBoard();
 document.querySelector('.brand').onclick = () => setView('room');
 
-// ---------- the lead in a Teams call (Lead tab); CLI: call <url> | call status | call leave ----------
+// ---------- the lead in a call (Lead tab); CLI: call <url> | call status | call leave ----------
 async function loadCall() {
   const c = await api('/call'); if (!c || c.error) return;
   $('#callState').textContent = c.live ? `${c.name} is in the call${c.ends ? ` until ${c.ends.slice(11)}` : ''}` : 'Not in a call';
