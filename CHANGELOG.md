@@ -164,6 +164,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Settings number inputs show an accent border on focus and are 44px tall on touch screens.
 
 ### Fixed
+- Settings > Squiggles on a phone: the lead's row no longer leaves a blank gap where Trust would be.
 - Settings on a phone: every tab shows, wrapped onto a second row, instead of the last ones hiding past the edge.
 - Clean theme: text boxes in forms (meeting agenda, notes) match the other inputs instead of showing as a dark well.
 - Phone: the tab bar no longer shows behind the join screen.
