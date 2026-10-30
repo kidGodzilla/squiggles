@@ -14,7 +14,7 @@ import { createFiles } from './files.mjs';
 import { holdGate } from './hold.mjs';
 import { createAsks, runAsk } from './asks.mjs';
 import { createPicks } from './picks.mjs';
-import { needsList } from './needs.mjs';
+import { needsList, alertWake } from './needs.mjs';
 import { createWaits, bgStarted, bgEnded, ownRuns } from './waits.mjs';
 import { mimeFor } from './mime.mjs';
 import { trustLevel, trustOf, trustRules, updateRefusal, createRefusal, quitRefusal, slotsRefusal, shareRefusal, fileRmRefusal, fileBy, charterDiff, charterEdit, charterStart } from './trust.mjs';
@@ -1548,6 +1548,7 @@ const server = http.createServer(async (req, res) => {
       // A squiggle's review needs an ask the user can read cold; the user and the UI aren't held to it.
       b.needAsk = b.op === 'move' && b.status === 'review' && !!(await callerSquiggle(req));
       const r = await board.taskOp(b);
+      if (b.op === 'add' && r.alert === 'serious' && r.owner && loadSquiggle(r.owner) && !loadSquiggle(r.owner).paused) try { send(r.owner, alertWake(r, (r.by && loadSquiggle(r.by)?.name) || r.by, USER), 'harness'); } catch (e) { console.error('alert wake', r.id, e.message); }
       // A new suggestion rides along with the next team report to the lead; it never wakes anyone on its own (t825).
       if (b.op === 'suggest' && !r.dup) inbox.push(`[${(r.by && loadSquiggle(r.by)?.name) || r.by || 'Someone'} · SUGGESTION] ${r.id} ${r.title}${r.evidence ? ` (evidence: ${r.evidence})` : ''}`);
       return json(res, r);

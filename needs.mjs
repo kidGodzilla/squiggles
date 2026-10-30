@@ -3,6 +3,8 @@
 // the phone shows it at the top of the Lead chat, the CLI prints it with `needs`.
 // Serious alerts: the owner squiggle gets the note first; one still open ESCALATE_MS after filing leads the list.
 export const ESCALATE_MS = 2 * 3600e3;
+// The owner hears of a serious alert the moment it's filed, not at its next scheduled wake.
+export const alertWake = (t, from, user = 'the user') => `Serious alert ${t.id}${from ? ` from ${from}` : ''}: ${t.title}${t.note ? `\n${t.note}` : ''}\n\nFix it now, or say what you need (BLOCKED, ask run, pick). Still open ${ESCALATE_MS / 3600e3} hours after filing, it joins ${user}'s Review list. Journal it and end with a status line.`;
 export function needsList({ asks = [], picks = [], merges = [], squiggles = [], tasks = [], now = Date.now() } = {}) {
   const out = [];
   for (const t of tasks) if (t.alert === 'serious' && t.status !== 'done' && now - (t.alertAt || 0) >= ESCALATE_MS) out.push({ kind: 'alert', id: t.id, by: t.owner, text: t.title, task: t.id, at: t.alertAt });

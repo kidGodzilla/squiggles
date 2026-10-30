@@ -1,7 +1,7 @@
 // The Needs you list keeps only what waits on the user.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { needsList, describeNeeds } from '../needs.mjs';
+import { needsList, describeNeeds, alertWake } from '../needs.mjs';
 
 test('needs: asks, open picks, shipped merges, blocked squiggles', () => {
   const l = needsList({
@@ -33,4 +33,11 @@ test('needs: a serious alert note open 2 hours leads the list', () => {
   ] });
   assert.deepEqual(l.map((n) => `${n.kind}:${n.id}`), ['alert:t1', 'blocked:apps']);
   assert.match(describeNeeds(l), /^Alert {2}t1 {2}logs {2}api 5xx storm/);
+});
+
+test('alertWake tells the owner what, from whom, and when the user sees it', () => {
+  const m = alertWake({ id: 't9', title: 'api 5xx storm', note: '412 vs 20 baseline' }, 'Ann', 'Sam');
+  assert.match(m, /^Serious alert t9 from Ann: api 5xx storm\n412 vs 20 baseline/);
+  assert.match(m, /2 hours after filing, it joins Sam's Review list/);
+  assert.match(alertWake({ id: 't1', title: 'x' }), /joins the user's Review list/);
 });
