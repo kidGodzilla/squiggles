@@ -1018,6 +1018,7 @@ html[data-theme=clean] .wbframe::before { display: none }
 html[data-theme=clean] .wbtitle { font: 600 16px var(--sans); color: var(--text); transform: none }
 html[data-theme=clean] .areas { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--sh-sm); padding: 10px 12px; margin-bottom: 14px }
 html[data-theme=clean] :is(.areas h3, .wbcol h3) { font: 600 13px var(--sans) !important; color: var(--text) !important; text-decoration: none }
+@media (max-width: 760px) { html[data-theme=clean] .areas { margin: 0 0 14px; padding-left: 0 } html[data-theme=clean] .areas h3 { background: var(--panel); border-radius: 14px 0 0 14px; padding-left: 12px } } /* phone: card, not full bleed */
 html[data-theme=clean] .area .an { font: 500 13px var(--sans); color: var(--text) }
 html[data-theme=clean] .wbcol { background: var(--muted-col); border: 1px solid var(--line); border-radius: 14px; padding: 10px }
 html[data-theme=clean] .wbcol .glist { scrollbar-color: var(--panel2) transparent }

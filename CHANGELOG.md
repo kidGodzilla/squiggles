@@ -164,6 +164,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Settings number inputs show an accent border on focus and are 44px tall on touch screens.
 
 ### Fixed
+- Clean theme, Goals on a phone: the Areas strip is an inset card lined up with the columns, and its label no longer shows a grey patch.
 - Clean theme: the "meeting is on now" banner and its Join button are readable in light and dark.
 - Settings > Squiggles on a phone: the lead's row no longer leaves a blank gap where Trust would be.
 - Settings on a phone: every tab shows, wrapped onto a second row, instead of the last ones hiding past the edge.
