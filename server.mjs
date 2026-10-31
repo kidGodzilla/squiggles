@@ -772,7 +772,7 @@ function lastSaved(s) {
 }
 
 // Reports that need the lead's attention, delivered together whenever the lead is free.
-const inbox = [];
+const inbox = persisted['*inbox'] ||= []; // saved, so reports held for the user's quiet survive a restart
 // r.charterAt is the last approved charter, saved with the runtime state. A charter.md that changed between turns
 // (a job a past turn left running, or an edit across a restart) is put back before the turn starts.
 function charterAtStart(s) {
@@ -830,6 +830,7 @@ function turnEnded(s, text, isError, subtype) {
 }
 function flushInbox() {
   const lead = listSquiggles().find((x) => x.lead);
+  saveState();
   if (!lead || !inbox.length || R(lead.id).status === 'working') return;
   // The user is talking with the lead; the batch goes once they've been quiet 15 minutes.
   const wait = reportHoldMs(R(lead.id).userAt);
@@ -943,7 +944,7 @@ function releaseHeld() {
   for (const h of held) try { const lines = h.id === leadId && h.from === 'harness' && reportLines(h.text, USER); if (lines) { inbox.push(...lines); flushInbox(); continue; } send(h.id, h.text, h.from, { replay: true, human: h.human, images: h.images || [] }); } catch (e) { console.error('held', h.id, e.message); }
 }
 setTimeout(() => {
-  releaseHeld();
+  releaseHeld(); flushInbox();
   // Asks the old server was running when it stopped.
   for (const a of asks.interrupted()) {
     try { send(a.by, `Your ask ${a.id} was cut off: the server restarted while it ran${a.stillRunning ? ` (pid ${a.pid} still running)` : ''}. Its output is lost. Check what it did before filing it again:\n$ ${a.cmd}`, 'harness'); } catch (e) { console.error('ask interrupted', a.id, e.message); }
