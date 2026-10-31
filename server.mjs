@@ -15,7 +15,7 @@ import { holdGate } from './hold.mjs';
 import { createAsks, runAsk } from './asks.mjs';
 import { createPicks } from './picks.mjs';
 import { needsList, alertWake } from './needs.mjs';
-import { reportHoldMs } from './focus.mjs';
+import { reportHoldMs, reportsText, reportLines } from './focus.mjs';
 import { createWaits, bgStarted, bgEnded, ownRuns } from './waits.mjs';
 import { mimeFor } from './mime.mjs';
 import { trustLevel, trustOf, trustRules, updateRefusal, createRefusal, quitRefusal, slotsRefusal, shareRefusal, fileRmRefusal, fileBy, charterDiff, charterEdit, charterStart } from './trust.mjs';
@@ -834,7 +834,7 @@ function flushInbox() {
   // The user is talking with the lead; the batch goes once they've been quiet 15 minutes.
   const wait = reportHoldMs(R(lead.id).userAt);
   if (wait) { clearTimeout(flushInbox.t); flushInbox.t = setTimeout(flushInbox, wait + 1000); return; }
-  send(lead.id, `Team reports:\n${inbox.splice(0).join('\n')}\n\nHandle what you can. Tell ${USER} only what needs them, in one short message.`, 'harness');
+  send(lead.id, reportsText(inbox.splice(0), USER), 'harness');
 }
 
 // Session limit: display info only (t1284: the stated reset is guidance the user can change; never schedule around it).
@@ -939,7 +939,8 @@ function quitNow() {
 // Turns held by a pending restart go out once the new server is up, or when the user postpones it.
 function releaseHeld() {
   const held = persisted['*held'] || []; delete persisted['*held']; saveState();
-  for (const h of held) try { send(h.id, h.text, h.from, { replay: true, human: h.human, images: h.images || [] }); } catch (e) { console.error('held', h.id, e.message); }
+  const leadId = listSquiggles().find((x) => x.lead)?.id;
+  for (const h of held) try { const lines = h.id === leadId && h.from === 'harness' && reportLines(h.text, USER); if (lines) { inbox.push(...lines); flushInbox(); continue; } send(h.id, h.text, h.from, { replay: true, human: h.human, images: h.images || [] }); } catch (e) { console.error('held', h.id, e.message); }
 }
 setTimeout(() => {
   releaseHeld();
