@@ -135,7 +135,8 @@ const R = (id) => {
 function saveState() {
   const out = {};
   for (const [id, { proc, caff, cx, cxThread, cxLast, sig, subs, bg, bgUse, ...r }] of rt) out[id] = r;
-  for (const k of ['*meeting', '*started', '*held', '*warned', '*slots', '*alerted']) if (persisted[k]) out[k] = persisted[k];
+  // Every '*' key is server state; a fixed list dropped '*alerted'.
+  for (const k of Object.keys(persisted)) if (k[0] === '*' && persisted[k]) out[k] = persisted[k];
   fs.writeFileSync(STATE, JSON.stringify(out, null, 2));
 }
 
