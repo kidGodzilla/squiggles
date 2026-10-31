@@ -15,6 +15,7 @@ import { holdGate } from './hold.mjs';
 import { createAsks, runAsk } from './asks.mjs';
 import { createPicks } from './picks.mjs';
 import { needsList, alertWake } from './needs.mjs';
+import { reportHoldMs } from './focus.mjs';
 import { createWaits, bgStarted, bgEnded, ownRuns } from './waits.mjs';
 import { mimeFor } from './mime.mjs';
 import { trustLevel, trustOf, trustRules, updateRefusal, createRefusal, quitRefusal, slotsRefusal, shareRefusal, fileRmRefusal, fileBy, charterDiff, charterEdit, charterStart } from './trust.mjs';
@@ -616,6 +617,7 @@ function send(id, text, from = 'owner', { replay = false, human, images = [], as
   // Who asked this turn (Proactive): the user, a person, the lead, or a non-scheduled wake. Tasks filed while it runs are theirs, not the squiggle's own idea.
   if (!replay && r.status !== 'working') { r.asked = []; charterAtStart(s); } // checked again at turn end
   asker ||= from === 'harness' ? '' : from === 'owner' ? human || 'owner' : from;
+  if (s.lead && from === 'owner' && !replay) r.userAt = Date.now(); // team reports hold while the user talks with the lead
   if (asker && !(r.asked ||= []).includes(asker)) r.asked.push(asker);
   // A pending restart waits for everyone to be idle; new turns would starve it (a report wakes the lead, the lead wakes someone).
   // So a turn that would start now is held in state and sent after the restart. Messages to a squiggle mid-turn still go through.
@@ -829,6 +831,9 @@ function turnEnded(s, text, isError, subtype) {
 function flushInbox() {
   const lead = listSquiggles().find((x) => x.lead);
   if (!lead || !inbox.length || R(lead.id).status === 'working') return;
+  // The user is talking with the lead; the batch goes once they've been quiet 15 minutes.
+  const wait = reportHoldMs(R(lead.id).userAt);
+  if (wait) { clearTimeout(flushInbox.t); flushInbox.t = setTimeout(flushInbox, wait + 1000); return; }
   send(lead.id, `Team reports:\n${inbox.splice(0).join('\n')}\n\nHandle what you can. Tell ${USER} only what needs them, in one short message.`, 'harness');
 }
 
