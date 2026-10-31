@@ -135,7 +135,7 @@ const R = (id) => {
 function saveState() {
   const out = {};
   for (const [id, { proc, caff, cx, cxThread, cxLast, sig, subs, bg, bgUse, ...r }] of rt) out[id] = r;
-  for (const k of ['*meeting', '*started', '*held', '*warned', '*slots']) if (persisted[k]) out[k] = persisted[k];
+  for (const k of ['*meeting', '*started', '*held', '*warned', '*slots', '*alerted']) if (persisted[k]) out[k] = persisted[k];
   fs.writeFileSync(STATE, JSON.stringify(out, null, 2));
 }
 
@@ -1127,8 +1127,8 @@ function endMeeting() {
 // At the start a dialog offers Join, which opens the room on the meeting view.
 const pageOpenHere = () => [...clients].some((c) => c.local);
 const asStr = (s) => `"${String(s).replace(/[\x00-\x1f]/g, ' ').replace(/[\\"]/g, '\\$&')}"`;
-function macAlert(title, text, join) {
-  if (pageOpenHere()) return false;
+function macAlert(title, text, join, always = false) {
+  if (!always && pageOpenHere()) return false;
   const script = join
     ? `display dialog ${asStr(text)} with title ${asStr(title)} buttons {"Later", "Join"} default button "Join" giving up after 120`
     : `display notification ${asStr(text)} with title ${asStr(title)} sound name "Glass"`;
@@ -1138,6 +1138,15 @@ function macAlert(title, text, join) {
   });
   return true;
 }
+// Serious alerts: one still open 2 hours after filing leads Review and pops one Mac notification, open page or not.
+// Each alert once; the list is remembered across restarts.
+function alertEscalate() {
+  const seen = new Set(persisted['*alerted'] || []), fresh = needsList({ tasks: board.tasks() }).filter((n) => n.kind === 'alert' && !seen.has(n.id));
+  if (!fresh.length) return;
+  persisted['*alerted'] = [...seen, ...fresh.map((n) => n.id)].slice(-200); saveState();
+  for (const n of fresh) macAlert(`Serious alert: ${loadSquiggle(n.by)?.name || n.by || 'unowned'}`, `${n.text} (${n.id}). Open 2 hours. In the Review tab.`, false, true);
+}
+setInterval(() => { try { alertEscalate(); } catch (e) { console.error('alerts', e.message); } }, 60000);
 function meetingSoon(now) {
   const warned = new Set(persisted['*warned'] || []);
   for (const m of meetings.upcoming(new Date(now + 4 * 60000), new Date(now + 5 * 60000 + 30000))) {
