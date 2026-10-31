@@ -473,6 +473,8 @@ function chatEvent(id, ev, live) {
   const line = chatLine(id, ev); if (!line) return;
   line.ts = +new Date(ev.ts || Date.now());
   if (line.handled) return foldHandled(id, line.ts);
+  // A report the lead answered in words joins the fold above it; the answer stands alone below.
+  if (line.cls === 'm lead' && S.hist[id]?.[S.hist[id].length - 1]?.rep) foldHandled(id, line.ts);
   if (S.meeting?.attendees.includes(id)) queueThread();
   (S.hist[id] = S.hist[id] || []).push(line); if (S.hist[id].length > 300) S.hist[id].shift();
   const cw = document.getElementById('cw-' + id);
