@@ -169,7 +169,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Settings number inputs show an accent border on focus and are 44px tall on touch screens.
 
 ### Fixed
-- Clean theme: room tile status and activity text stay readable in a light scheme; on a phone, Tasks columns scroll to the screen edge.
+- Clean theme: room tile status and activity text stay readable in a light scheme, as does the call bar's clock icon; on a phone, Tasks columns scroll to the screen edge.
 - Changing a guard module (claude/, cursor/, codex/) now counts as a server change, so restart picks it up.
 - Clean theme, Goals on a phone: a goal card's footer lines up with its title instead of sitting indented.
 - Clean theme, Goals on a phone: the Areas strip is an inset card lined up with the columns, and its label no longer shows a grey patch.
