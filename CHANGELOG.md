@@ -169,6 +169,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Settings number inputs show an accent border on focus and are 44px tall on touch screens.
 
 ### Fixed
+- `goal edit <id> title|owner|note|repos|merge|kind|due <value>` edits that field; before, it renamed the goal to the field word. A bare field word is refused as a title.
 - Clean theme: room tile status and activity text stay readable in a light scheme, as does the call bar's clock icon; on a phone, Tasks columns scroll to the screen edge.
 - Changing a guard module (claude/, cursor/, codex/) now counts as a server change, so restart picks it up.
 - Clean theme, Goals on a phone: a goal card's footer lines up with its title instead of sitting indented.

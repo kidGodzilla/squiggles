@@ -178,6 +178,7 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
     for (const t of TIERS) { const i = g[t].findIndex((x) => x.id === id); if (i >= 0) return { tier: t, i, goal: g[t][i] }; }
     throw new Error(`no goal ${id}`);
   }
+  const GOAL_FIELDS = ['title', 'owner', 'note', 'repos', 'merge', 'kind', 'due', 'tier'];
   function goalOp({ op, id, title, tier, owner, note, index, repos, merge, kind, due }) {
     const g = goals();
     // An area (t977) is an ongoing responsibility with no finish line; a goal finishes.
@@ -200,7 +201,12 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
       g[tier].splice(index == null ? g[tier].length : Math.max(0, Math.min(index, g[tier].length)), 0, f.goal);
     } else if (op === 'confirm') f.goal.last_confirmed = today();
     else if (op === 'edit') {
-      if (title != null) { if (!String(title).trim()) throw new Error('a goal needs a title'); f.goal.title = title; }
+      if (title != null) {
+        if (!String(title).trim()) throw new Error('a goal needs a title');
+        // 'goal edit <id> title <text>' once stored the word title.
+        if (GOAL_FIELDS.includes(String(title).trim().toLowerCase())) throw new Error(`'${String(title).trim()}' is a field name, not a title: goal edit <id> title "<text>"`);
+        f.goal.title = title;
+      }
       if (owner !== undefined) { if (owner) f.goal.owner = owner; else delete f.goal.owner; }
       if (note !== undefined) { if (note) f.goal.note = note; else delete f.goal.note; }
       if (repos !== undefined) { const r = (Array.isArray(repos) ? repos : String(repos).split(/[\s,]+/)).filter(Boolean); if (r.length) f.goal.repos = r; else delete f.goal.repos; }

@@ -82,7 +82,7 @@ const cmds = {
     return ['active', 'hold', 'todo', 'done'].map((t) => `${t.toUpperCase()}\n` + (g[t] || []).filter((x) => x.kind !== 'area').map(line).join('\n'))
       .concat(areas.length ? [`AREAS (ongoing, no finish line)\n${areas.map(line).join('\n')}`] : []).join('\n');
   },
-  // goal add <title> [tier] [repos...] | goal repos <id> <repo...> | goal merge <id> gated|open | goal move <id> <active|hold|todo|done> | goal confirm <id> | goal owner <id> <squiggle> | goal edit <id> <title> | goal note <id> <text> | goal kind <id> area|goal | goal drop <id>
+  // goal add <title> [tier] [repos...] | goal repos <id> <repo...> | goal merge <id> gated|open | goal move <id> <active|hold|todo|done> | goal confirm <id> | goal owner <id> <squiggle> | goal edit <id> [title|owner|note|repos|merge|kind|due] <value> | goal note <id> <text> | goal kind <id> area|goal | goal drop <id>
   goal: () => {
     const [op, x, y] = a;
     if (op === 'add') return call('/goals', { op, title: x, tier: y, repos: a.slice(3) });
@@ -93,7 +93,9 @@ const cmds = {
     if (op === 'merge') return call('/goals', { op: 'edit', id: x, merge: y });
     if (op === 'kind') return call('/goals', { op: 'edit', id: x, kind: y });
     if (op === 'due') return call('/goals', { op: 'edit', id: x, due: y || 'clear' });
-    if (op === 'edit') return call('/goals', { op, id: x, title: y });
+    // goal edit <id> <field> <value> works like task edit; goal edit <id> <title> still renames.
+    if (op === 'edit' && ['owner', 'note', 'repos', 'merge', 'kind', 'due'].includes(y)) return call('/goals', { op, id: x, [y]: y === 'repos' ? a.slice(3) : y === 'due' ? (a[3] || 'clear') : (a[3] ?? '') });
+    if (op === 'edit') return call('/goals', { op, id: x, title: y === 'title' && a[3] != null ? a[3] : y });
     return call('/goals', { op, id: x });
   },
   tasks: async () => {

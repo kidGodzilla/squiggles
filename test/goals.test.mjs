@@ -33,3 +33,13 @@ test('goal due: real dates only, clear removes it', () => {
   assert.equal(b.goalOp({ op: 'edit', id: g.id, due: 'clear' }).due, undefined);
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test('goal edit refuses a bare field word as the title', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'goals-'));
+  const b = createBoard(dir, () => {});
+  const g = b.goalOp({ op: 'add', title: 'Security', tier: 'active' });
+  for (const w of ['title', 'Title', ' note ']) assert.throws(() => b.goalOp({ op: 'edit', id: g.id, title: w }), /field name/);
+  assert.equal(b.goals().active[0].title, 'Security');
+  assert.equal(b.goalOp({ op: 'edit', id: g.id, title: 'Title fixes' }).title, 'Title fixes');
+  fs.rmSync(dir, { recursive: true, force: true });
+});
