@@ -24,8 +24,8 @@ export const trustRules = (s) => RULES[trustOf(s)];
 // squiggle's double-forked child) needs `owner()`, the page's unlocked session, for those fields and for a charter.
 // With no room passcode (`passcode` false) no session can exist: lead and lead-only fields are refused until one is set;
 // a charter stays open. A non-lead squiggle changes only itself.
-export const UPDATE_FIELDS = ['name', 'role', 'cwd', 'every', 'permissionMode', 'paused', 'look', 'lookSeed', 'maxTurns', 'chrome', 'effort', 'model', 'awake', 'autocompact', 'voice', 'trust', 'lead'];
-const LEAD_ONLY = ['permissionMode', 'cwd', 'trust', 'model'];
+export const UPDATE_FIELDS = ['name', 'role', 'cwd', 'every', 'permissionMode', 'paused', 'look', 'lookSeed', 'maxTurns', 'chrome', 'effort', 'model', 'awake', 'autocompact', 'voice', 'trust', 'lead', 'alwaysWake'];
+const LEAD_ONLY = ['permissionMode', 'cwd', 'trust', 'model', 'alwaysWake']; // alwaysWake: wakes that cost usage with nothing new
 export const PERMISSION_MODES = ['auto', 'acceptEdits', 'plan', 'bypassPermissions'];
 const badMode = (b) => 'permissionMode' in b && !PERMISSION_MODES.includes(b.permissionMode) && { status: 400, error: `permissionMode: ${PERMISSION_MODES.join(', ')}` };
 // Hiring: a new squiggle is all lead-only fields, so only the lead or the user's unlocked page creates one.

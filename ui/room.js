@@ -921,7 +921,7 @@ async function openSheet(id) {
     </div>
     ${lookCustom(p)}
     <div class="row2">
-      <div><label>Keep the Mac awake while working</label><select id="shAwake"><option value="">No</option><option value="1" ${s.awake ? 'selected' : ''}>Yes: display on, no sleep or lock</option></select></div><div></div>
+      <div><label>Keep the Mac awake while working</label><select id="shAwake"><option value="">No</option><option value="1" ${s.awake ? 'selected' : ''}>Yes: display on, no sleep or lock</option></select></div><div><label>Scheduled wakes when nothing changed</label><select id="shAlways"><option value="">Skip them (saves usage)</option><option value="1" ${s.alwaysWakes ? 'selected' : ''}>Always wake: watches outside things</option></select></div>
     </div>
     <div class="actions">${s.lead ? '' : '<button class="btn danger" data-a="remove" style="margin-right:auto">Remove from the room</button>'}<button class="btn go" data-a="save">Save</button></div>
     <h3>Journal</h3><div class="journal">${esc(journal.slice(-3000))}</div>
@@ -942,7 +942,7 @@ async function openSheet(id) {
     }
     if (a === 'shuffle') { await restyle(id, { lookSeed: Math.floor(Math.random() * 1e9) }); return openSheet(id); }
     if (a === 'dropwait') { const r = await api('/waits', { op: 'drop', id: e.target.dataset.w }); if (r?.error) toast(r.error); return openSheet(id); }
-    if (a === 'save') { const r = await unlocked(() => api(`/squiggles/${id}/update`, { name: $('#shName').value.trim() || s.name, role: $('#shRole').value.trim() || s.role, ...($('#shCharter').value.trim() !== (s.charter || '').trim() && { charter: $('#shCharter').value }), cwd: $('#shCwd').value, every: Number($('#shEvery').value) || 0, model: $('#shModel').value || undefined, permissionMode: $('#shPerm').value, effort: $('#shEffort').value || undefined, chrome: $('#shBrowser').value === 'chrome', awake: !!$('#shAwake').value, maxTurns: Number($('#shTurns').value) || 40, autocompact: Number($('#shCompact').value) || undefined, ...($('#shTrust') && { trust: $('#shTrust').value }) }), 'Unlock settings'); if (!r || r.error) return toast(r?.error || 'Not saved'); Object.assign(S.sq[id], r); }
+    if (a === 'save') { const r = await unlocked(() => api(`/squiggles/${id}/update`, { name: $('#shName').value.trim() || s.name, role: $('#shRole').value.trim() || s.role, ...($('#shCharter').value.trim() !== (s.charter || '').trim() && { charter: $('#shCharter').value }), cwd: $('#shCwd').value, every: Number($('#shEvery').value) || 0, model: $('#shModel').value || undefined, permissionMode: $('#shPerm').value, effort: $('#shEffort').value || undefined, chrome: $('#shBrowser').value === 'chrome', awake: !!$('#shAwake').value, ...(!!$('#shAlways').value !== !!s.alwaysWakes && { alwaysWake: !!$('#shAlways').value }), maxTurns: Number($('#shTurns').value) || 40, autocompact: Number($('#shCompact').value) || undefined, ...($('#shTrust') && { trust: $('#shTrust').value }) }), 'Unlock settings'); if (!r || r.error) return toast(r?.error || 'Not saved'); Object.assign(S.sq[id], r); }
     paintTile(id); renderSummary(); $('#sheet').classList.remove('on');
   };
   $('#shLook').onchange = async (e) => { await restyle(id, { look: e.target.value }); openSheet(id); };

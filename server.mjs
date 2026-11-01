@@ -16,6 +16,7 @@ import { createAsks, runAsk } from './asks.mjs';
 import { createPicks } from './picks.mjs';
 import { needsList, alertWake } from './needs.mjs';
 import { reportHoldMs, reportsText, reportLines } from './focus.mjs';
+import { quietSig, skipWake, alwaysWakes, ownEnd } from './quiet.mjs';
 import { createWaits, bgStarted, bgEnded, ownRuns } from './waits.mjs';
 import { mimeFor } from './mime.mjs';
 import { trustLevel, trustOf, trustRules, updateRefusal, createRefusal, quitRefusal, slotsRefusal, shareRefusal, fileRmRefusal, fileBy, charterDiff, charterEdit, charterStart } from './trust.mjs';
@@ -756,6 +757,7 @@ function wake(id, why = 'scheduled', asker = '', due = 0) {
   return true;
 }
 
+const quietSigOf = (s) => { try { return quietSig(s.id, board.tasks(), readText(path.join(sqDir(s.id), 'charter.md'))); } catch { return ''; } };
 const ownNotes = (id) => { try { return Object.fromEntries(board.tasks().filter((t) => t.owner === id).map((t) => [t.id, `${t.status}\n${t.note || ''}`])); } catch { return {}; } };
 // What a capped squiggle managed to save this wake: its journal's last entry heading and the notes it moved.
 function lastSaved(s) {
@@ -811,6 +813,8 @@ function turnEnded(s, text, isError, subtype) {
   // WAITING needs a wait the harness checks, or a background run or subagent of its own the CLI wakes it from.
   if (st.status === 'waiting' && subtype !== 'capacity') { let open = []; try { open = waits.list({ by: s.id }); } catch {} if (!open.length && !ownRuns(R(s.id))) Object.assign(st, { status: 'blocked', note: `said WAITING but filed no wait: ${st.note}` }); }
   R(s.id).lastEnd = now();
+  // What the next scheduled wake compares against (quiet.mjs). Only a turn that ended on its own status line counts.
+  Object.assign(R(s.id), { endStatus: ownEnd(isError, subtype, limited) ? st.status : '', quietSig: quietSigOf(s) });
   charterAtEnd(s);
   { const r = R(s.id), u = r.usage || {}, m = r.usageMark || {};
     const sp = r.spent || (r.usageMark ? { in: (u.in || 0) - (m.in || 0), out: (u.out || 0) - (m.out || 0) } : {}); // no mark yet: tokens so far are all-time
@@ -1007,8 +1011,11 @@ setInterval(() => {
     const p = providerOf(s);
     if (started.has(p) || Date.now() - (newest[p] || 0) < 2 * 60000) continue;
     const r = R(s.id);
-    const last = Date.parse(r.lastWake || 0) || 0;
+    const last = Math.max(Date.parse(r.lastWake || 0) || 0, Date.parse(r.skipAt || 0) || 0);
     const due = dueAt(s.id, s.every, last);
+    // Nothing new since an IDLE or WAITING end, so this wake would only re-read its context. Skip it (quiet.mjs).
+    // Claude only; alwaysWake squiggles watch outside state (logs, servers, an inbox) and always run.
+    if (r.status !== 'working' && Date.now() >= due && !providerOf(s) && !alwaysWakes(s) && skipWake(r, quietSigOf(s))) { r.skipAt = new Date().toISOString(); emit(s.id, { k: 'log', text: `scheduled wake skipped: nothing new since ${r.endStatus.toUpperCase()}` }); saveState(); continue; }
     if (r.status !== 'working' && Date.now() >= due && timed(`wake ${s.id}`, () => wake(s.id, 'scheduled', '', due))) started.add(p);
   }
 }, 30000);
@@ -1354,7 +1361,7 @@ function serveFile(res, file, csp = FILE_CSP) {
 }
 const view = (s) => {
   const { proc, caff, cx, cxThread, cxLast, sig, ...r } = R(s.id);
-  return { ...s, ...r, voice: voiceFor(s.id), charter: readText(path.join(sqDir(s.id), 'charter.md')) };
+  return { ...s, ...r, alwaysWakes: alwaysWakes(s), voice: voiceFor(s.id), charter: readText(path.join(sqDir(s.id), 'charter.md')) };
 };
 function tailEvents(id, n = 400) {
   const lines = readText(path.join(RUNS, `${id}.jsonl`)).trim().split('\n').filter(Boolean);

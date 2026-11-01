@@ -43,6 +43,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - An ask cut off by a server restart is marked interrupted at boot and its filer is told; its output is lost.
 
 ### Added
+- Quiet wakes: a scheduled wake is skipped when the last turn ended IDLE or WAITING and nothing it would act on (its open notes, untold suggestion answers, its charter) has changed. A real wake still runs every 6 hours. Squiggles that watch outside things can be set to always wake (squiggle sheet, set by the user or the lead).
 - Review tab (was Merge): picks, asks to run and blocked squiggles sit at the top, branches below, with a count on the tab. Chats no longer fill with approval cards; they show one line, how many wait and a Review button. Also `needs` on the CLI, `GET /api/needs` and `room view review`.
 - Every Review item carries a plain ask the user can read cold: `task move <id> review ... --ask "<words>"`, an ask's why and a pick's question plus `--why` need 12+ words, or the server refuses a squiggle's item. A merge row shows the ask in place of its title; `task edit <id> ask` fixes one. Names on Review items open that squiggle's 1:1 and task ids link.
 - Serious alerts: `task add ... --alert serious` marks a note Serious alert and wakes its owner at once. If it is still open 2 hours later it leads the Review tab and `needs` and pops one Mac notification.
