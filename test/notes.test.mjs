@@ -20,3 +20,21 @@ test('notes finds files holding every word, best line first', () => {
   assert.throws(() => searchNotes(' ', { roots: [root] }), /usage/);
   fs.rmSync(root, { recursive: true });
 });
+
+test('a non-Claude squiggle\'s notes search skips private folders', async () => {
+  const { claudeCaller } = await import('../notes.mjs');
+  const data = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'notes-priv-'))), w = (f, s) => { fs.mkdirSync(path.dirname(path.join(data, f)), { recursive: true }); fs.writeFileSync(path.join(data, f), s); };
+  w('research/open.md', 'backup plan\n');
+  w('private/secret.md', 'backup plan\n');
+  w('squiggles/cx/squiggle.json', JSON.stringify({ id: 'cx', model: 'gpt-6.1-sol' }));
+  w('squiggles/cl/squiggle.json', JSON.stringify({ id: 'cl', model: 'opus' }));
+  w('config.json', JSON.stringify({ codex: true, privateDirs: [path.join(data, 'private')] }));
+  const roots = [path.join(data, 'research'), path.join(data, 'private')], found = (id) => searchNotes('backup plan', { roots, data, claude: claudeCaller(id, data) }).map((x) => path.relative(data, x.file)).sort();
+  assert.deepEqual(found('cx'), ['research/open.md']);
+  assert.deepEqual(found('cl'), ['private/secret.md', 'research/open.md']);
+  assert.deepEqual(found(''), ['private/secret.md', 'research/open.md'], 'the user at a shell');
+  assert.deepEqual(found('ghost'), ['research/open.md'], 'unreadable squiggle counts as non-Claude');
+  w('config.json', JSON.stringify({ codex: true }));
+  assert.deepEqual(found('cx'), ['private/secret.md', 'research/open.md'], 'off until configured');
+  fs.rmSync(data, { recursive: true });
+});

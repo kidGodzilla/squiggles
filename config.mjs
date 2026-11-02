@@ -21,6 +21,11 @@ export const DEFAULTS = {
   privateRemote: false, // true: non-Claude squiggles may not ssh out or reach a remote database
 };
 
+// The model picks the provider: Codex models (when config.codex), config.pi and config.cursor lists; '' is Claude.
+export const CODEX_MODELS = ['gpt-6.1-sol'];
+const strs = (v) => (Array.isArray(v) ? v.map(String).filter(Boolean) : []);
+export const providerFor = (s, cfg) => (cfg.codex && CODEX_MODELS.includes(s.model) ? 'codex' : strs(cfg.pi).includes(s.model) ? 'pi' : strs(cfg.cursor).includes(s.model) ? 'cursor' : '');
+
 export const dataDir = () => path.resolve(String(process.env.SQUIGGLES_HOME || '~/.squiggles').replace(/^~(?=\/|$)/, os.homedir()));
 
 export function loadConfig(dir = dataDir()) {

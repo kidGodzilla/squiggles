@@ -30,7 +30,7 @@ import { fenced as cursorFenced, HOOKS as CURSOR_HOOKS } from './cursor/install.
 import { createMeetings, local, markPast, meetingNotes, parseWhen } from './meetings.mjs';
 import { createInbox } from './inbox.mjs';
 import { createHumans } from './humans.mjs';
-import { dataDir, loadConfig } from './config.mjs';
+import { dataDir, loadConfig, providerFor, CODEX_MODELS } from './config.mjs';
 import { migrate } from './migrate.mjs';
 import { createSchedule, wakeToken, stampWake } from './schedule.mjs';
 import { makeGuard, tailnetName } from './guard.mjs';
@@ -359,7 +359,7 @@ function launch(s) {
 
 // ---------- other providers (t165) ----------
 // Whitelist in code, not in squiggle.json: the model picks the provider, anything unlisted runs on Claude (modelFor).
-const PROVIDERS = { codex: ['gpt-6.1-sol'] };
+const PROVIDERS = { codex: CODEX_MODELS };
 // config.pi: the Pi models the user set up in pi itself; a squiggle on one runs on pi. Team defaults stay Claude or Codex.
 const PI_MODELS = Array.isArray(CONFIG.pi) ? CONFIG.pi.map(String).filter(Boolean) : [];
 // config.cursor: Cursor models (cursor-agent names) a squiggle may run on; needs the fence from cursor/install.mjs.
@@ -370,7 +370,7 @@ if (!listSquiggles().length) {
   createSquiggle({ id: 'lead', name: 'Lead', role: 'Runs the team', cwd: '~', every: 0, charter: prompt('lead-charter.md') });
   saveSquiggle({ ...loadSquiggle('lead'), lead: true, look: 'avataaars:eyes=default', lookSeed: 858327934 }); // the face on the shipped app icon
 }
-const providerOf = (s) => (CONFIG.codex && Object.keys(PROVIDERS).find((p) => PROVIDERS[p].includes(s.model))) || (PI_MODELS.includes(s.model) ? 'pi' : CURSOR_MODELS.includes(s.model) ? 'cursor' : '');
+const providerOf = (s) => providerFor(s, CONFIG);
 // A provider usage limit holds nothing (t971): the turn just ends and the next wake tries again; limits often reset early.
 // Codex: one `codex app-server` per squiggle, kept between turns, so MCP servers live on (computer use
 // keeps its window bindings, t330). Each wake is a turn on the saved thread; messages mid-turn steer it.

@@ -3,7 +3,10 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { privateCheck } from './fence.mjs';
+import { dataDir, providerFor } from './config.mjs';
 
+const json = (f) => JSON.parse(fs.readFileSync(f, 'utf8'));
 const ROOT = path.dirname(new URL(import.meta.url).pathname);
 // Journals and charters, research/, files/ and fileSources in the data dir, plus the repo's docs/.
 export const notesRoots = (data, extra = []) => [path.join(data, 'squiggles'), path.join(data, 'research'), path.join(data, 'files'), ...extra, path.join(ROOT, 'docs')];
@@ -20,11 +23,19 @@ function walk(dir, out = []) {
   return out;
 }
 
-export function searchNotes(query, { roots = [], files = 12, lines = 3 } = {}) {
+// Private folders (config privateDirs) are Claude-only: a Codex, Cursor or Pi squiggle's search skips them.
+// AGENTS_ID is set on every squiggle process; one whose squiggle.json can't be read counts as non-Claude.
+export function claudeCaller(id = process.env.AGENTS_ID, data = dataDir()) {
+  if (!id) return true;
+  let cfg = {}; try { cfg = json(path.join(data, 'config.json')); } catch {}
+  try { return !providerFor(json(path.join(data, 'squiggles', id, 'squiggle.json')), cfg); } catch { return false; }
+}
+export function searchNotes(query, { roots = [], files = 12, lines = 3, data = dataDir(), claude = claudeCaller(undefined, data) } = {}) {
   const words = String(query || '').toLowerCase().split(/\s+/).filter(Boolean);
   if (!words.length) throw new Error('usage: notes <query>');
   const score = (t) => words.filter((w) => t.includes(w)).length, out = [];
   for (const file of [...new Set(roots.filter((r) => fs.existsSync(r)).flatMap((r) => walk(r)))]) {
+    if (!claude && privateCheck('read', { path: file }, process.cwd(), os.homedir(), data)) continue;
     let text; try { if (fs.statSync(file).size > 16 << 20) continue; text = fs.readFileSync(file, 'utf8'); } catch { continue; }
     const low = text.toLowerCase();
     if (!words.every((w) => low.includes(w))) continue; // files that hold every word
