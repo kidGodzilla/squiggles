@@ -17,6 +17,7 @@ import { createPicks } from './picks.mjs';
 import { needsList, alertWake } from './needs.mjs';
 import { reportHoldMs, reportsText, reportLines } from './focus.mjs';
 import { quietSig, skipWake, alwaysWakes, ownEnd } from './quiet.mjs';
+import { wantsPrecheck, precheckPrompt, runPrecheck, PRECHECK_MODEL } from './precheck.mjs';
 import { createWaits, bgStarted, bgEnded, ownRuns } from './waits.mjs';
 import { mimeFor } from './mime.mjs';
 import { trustLevel, trustOf, trustRules, updateRefusal, createRefusal, quitRefusal, slotsRefusal, shareRefusal, fileRmRefusal, fileBy, charterDiff, charterEdit, charterStart } from './trust.mjs';
@@ -136,7 +137,7 @@ const R = (id) => {
 };
 function saveState() {
   const out = {};
-  for (const [id, { proc, caff, cx, cxThread, cxLast, sig, subs, bg, bgUse, ...r }] of rt) out[id] = r;
+  for (const [id, { proc, caff, cx, cxThread, cxLast, sig, subs, bg, bgUse, prechecking, ...r }] of rt) out[id] = r;
   // Every '*' key is server state; a fixed list dropped '*alerted'.
   for (const k of Object.keys(persisted)) if (k[0] === '*' && persisted[k]) out[k] = persisted[k];
   fs.writeFileSync(STATE, JSON.stringify(out, null, 2));
@@ -751,11 +752,11 @@ function serveMedia(req, res, f) {
   fs.createReadStream(f, { start: a, end: z }).pipe(res);
 }
 
-function wake(id, why = 'scheduled', asker = '', due = 0) {
+function wake(id, why = 'scheduled', asker = '', due = 0, pre = '') {
   const s = loadSquiggle(id);
   if (!s || R(id).status === 'working') return false;
   let news = []; try { news = board.suggestionNews(id); } catch {}
-  send(id, `Wake (${why}), ${wakeToken(due)}. Read your charter and the end of your journal, decide the single most valuable thing to do now, do it, verify it, append a dated journal entry, then end with a status line. You have ${s.maxTurns ?? 40} turns this wake; journal findings as you confirm them.${limitOf(roomCfg(), slotKey(providerOf(s))) ? ' Your provider runs a few turns at a time, so your next turn may start much later: leave work resumable, and file a wait rather than checking back.' : ''}${news.length ? `\n\nYour suggestions, decided by the lead:\n${news.map((x) => `- ${x}`).join('\n')}` : ''}`, 'harness', { asker });
+  send(id, `Wake (${why}), ${wakeToken(due)}. Read your charter and the end of your journal, decide the single most valuable thing to do now, do it, verify it, append a dated journal entry, then end with a status line. You have ${s.maxTurns ?? 40} turns this wake; journal findings as you confirm them.${limitOf(roomCfg(), slotKey(providerOf(s))) ? ' Your provider runs a few turns at a time, so your next turn may start much later: leave work resumable, and file a wait rather than checking back.' : ''}${news.length ? `\n\nYour suggestions, decided by the lead:\n${news.map((x) => `- ${x}`).join('\n')}` : ''}${pre ? `\n\nA quick pre-check found: ${pre}` : ''}`, 'harness', { asker });
   return true;
 }
 
@@ -1018,9 +1019,28 @@ setInterval(() => {
     // Nothing new since an IDLE or WAITING end, so this wake would only re-read its context. Skip it (quiet.mjs).
     // Claude only; alwaysWake squiggles watch outside state (logs, servers, an inbox) and always run.
     if (r.status !== 'working' && Date.now() >= due && !providerOf(s) && !alwaysWakes(s) && skipWake(r, quietSigOf(s))) { r.skipAt = new Date().toISOString(); emit(s.id, { k: 'log', text: `scheduled wake skipped: nothing new since ${r.endStatus.toUpperCase()}` }); saveState(); continue; }
+    if (r.prechecking) continue;
+    // After an IDLE or WAITING end, a cheap Sonnet session decides first; DEFER skips the full wake (precheck.mjs).
+    if (r.status !== 'working' && Date.now() >= due && !p && wantsPrecheck(r)) { started.add(p); precheck(s, r, due); continue; }
     if (r.status !== 'working' && Date.now() >= due && timed(`wake ${s.id}`, () => wake(s.id, 'scheduled', '', due))) started.add(p);
   }
 }, 30000);
+
+function precheck(s, r, due) {
+  r.prechecking = true;
+  const rd = (f) => readText(path.join(sqDir(s.id), f), '');
+  let notes = ''; try { notes = board.tasks().filter((t) => t.owner === s.id && !['done', 'dropped'].includes(t.status)).map((t) => `- ${t.id} [${t.status}] ${t.title}${t.note ? `\n  ${String(t.note).slice(-400)}` : ''}`).join('\n'); } catch {}
+  const mins = Math.round((Date.now() - (Date.parse(r.lastWake || 0) || 0)) / 60000);
+  const prompt = precheckPrompt({ s, user: USER, charter: rd('charter.md'), journal: rd('journal.md'), notes, lastEnd: `${String(r.endStatus).toUpperCase()}${r.note ? `: ${r.note}` : ''}`, sinceWake: mins >= 120 ? `${Math.round(mins / 60)} hours` : `${mins} minutes` });
+  let own = {}; try { own = JSON.parse(rd('settings.json') || '{}'); } catch {}
+  runPrecheck({ prompt, settings: JSON.stringify(claudeFence(own)), cwd: home(s.cwd), env: { ...process.env, AGENTS_ID: s.id, AGENTS_NODE: process.execPath, CLAUDE_ENV_FILE: path.join(ROOT, 'bin', 'squiggle-env.sh') } }).then((v) => {
+    r.prechecking = false;
+    try { ledger.add({ id: s.id, precheck: true, provider: 'claude', model: PRECHECK_MODEL, in: v.in, out: v.out, cost: v.cost }); } catch {}
+    if (!v.wake) { r.skipAt = new Date().toISOString(); emit(s.id, { k: 'log', text: `scheduled wake deferred by pre-check ($${v.cost.toFixed(2)}): ${v.why}` }); saveState(); return; }
+    emit(s.id, { k: 'log', text: `pre-check ($${v.cost.toFixed(2)}) woke it: ${v.why}` });
+    if (!s.paused && R(s.id).status !== 'working') timed(`wake ${s.id}`, () => wake(s.id, 'scheduled', '', due, v.why));
+  });
+}
 
 // ---------- waits: the harness checks a squiggle's long job and wakes it when it's over (waits.mjs) ----------
 let waitTick = false;
