@@ -16,6 +16,9 @@ export const DEFAULTS = {
   piExtensions: [], // pi extensions to load (-e), e.g. one that adds a provider
   cursor: [],       // Cursor models squiggles may run on, as cursor-agent names them (needs the Cursor CLI, signed in, and node cursor/install.mjs)
   fileSources: {},  // extra read-only folders listed by `files`: { "name": "/path" }
+  privateDirs: [],  // folders only Claude squiggles may reach (relative to home, ~/x or absolute); Codex, Cursor and Pi are fenced off
+  privateTools: [], // tool-name words only Claude squiggles may use, e.g. "helpdesk" for an MCP server holding customer data
+  privateRemote: false, // true: non-Claude squiggles may not ssh out or reach a remote database
 };
 
 export const dataDir = () => path.resolve(String(process.env.SQUIGGLES_HOME || '~/.squiggles').replace(/^~(?=\/|$)/, os.homedir()));

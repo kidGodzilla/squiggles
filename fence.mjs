@@ -192,3 +192,104 @@ export function commandReason(cmd, cwd = process.cwd(), home = os.homedir()) {
   if (mentionsSsh(cmd, home) || (startsHome(cmd, cwd, home) && /(^|[\s=;&|(`])\.ssh\b/i.test(cmd)) || relReason(cmd, cwd, home) === REASONS.ssh) return REASONS.ssh;
   return treeReason(cmd, cwd, home) || (pushes(cmd) ? REASONS.push : '');
 }
+
+// Private data (config privateDirs, privateTools, privateRemote): folders, tools and remote machines only Claude squiggles may
+// reach. The codex, cursor and pi guards add this check; Claude never does. Off until configured. Commands and paths, not prose.
+REASONS.private = 'private data is Claude-only here: hand that part to a Claude squiggle through the lead';
+const list = (v) => [].concat(v || []).map(String).map((s) => s.trim()).filter(Boolean);
+export const privateRules = (cfg = {}) => ({ dirs: list(cfg.privateDirs), tools: list(cfg.privateTools), remote: !!cfg.privateRemote });
+const REMOTE_SHELLS = ['ssh', 'scp', 'sftp', 'mosh', 'autossh'];
+const DB_CLIENTS = ['psql', 'pg_dump', 'mysql', 'mysqldump', 'mongosh', 'mongo', 'redis-cli'];
+const DB_URL = /\b(?:postgres(?:ql)?|mysql|mariadb|mongodb(?:\+srv)?|rediss?):\/\/(?:[^@\/\s]*@)?([^\/:\s?'"]+)/gi;
+const DB_DRIVER = /\b(?:pymongo|MongoClient|psycopg2?|mongoose\.connect|pg\.(?:Client|Pool)|redis\.(?:Redis|createClient))\b[\s\S]*\b(?:os\.environ|getenv|process\.env)\b|\b(?:os\.environ|getenv|process\.env)\b[\s\S]*\b(?:pymongo|MongoClient|psycopg2?|mongoose\.connect)\b/;
+const LOCAL = /^(localhost|127\.\d+\.\d+\.\d+|::1|\[::1\]|0\.0\.0\.0)$/i;
+const HOST_ARG = /^(?:[\w.-]+@)?([\w.-]+):(?!\/\/)/;
+const CODE_HOSTS = /^(github|gitlab|bitbucket)\.(com|org)$/i;
+const WRAPS = ['sudo', 'exec', 'env', 'nohup', 'time', 'command', 'builtin', 'xargs', 'timeout', 'nice', 'sh', 'bash', 'zsh', 'source', '.',
+  'do', 'then', 'else', 'elif', 'if', 'while', 'until', '{', '!'];
+const WALKERS = ['rg', 'ag', 'fd', 'find', 'tree', 'tar', 'zip', 'du', '7z'];
+const isGlob = (s) => /[*?[{]/.test(s);
+export function privateReason(tool, input = {}, cwd = process.cwd(), home = os.homedir(), rules = {}) {
+  const names = list(rules.dirs), tools = list(rules.tools).map((t) => t.toLowerCase()), remote = !!rules.remote;
+  if (!names.length && !tools.length && !remote) return '';
+  const t = String(tool || '').toLowerCase();
+  if (tools.some((x) => t.includes(x))) return REASONS.private;
+  const toHome = (p) => String(p).replace(homeArg(home), home);
+  const dirs = names.map((d) => real(path.resolve(home, toHome(d))).toLowerCase());
+  const hit = (p, from) => { const abs = path.resolve(from, toHome(p));
+    return [abs, real(abs)].some((a) => { a = a.toLowerCase(); return dirs.some((d) => a === d || a.startsWith(d + '/')); }); };
+  // A path that can name something inside a private folder ('in': ~/cl*/a, ~/**) or a parent of one ('above': ~, ~/work),
+  // which only matters to something that walks down (grep -r, find, a Glob tool).
+  const reach = (p, from) => {
+    const gs = path.resolve(from, toHome(p)).toLowerCase().split('/').filter(Boolean); let out = '';
+    for (const d of dirs) {
+      const ds = d.split('/').filter(Boolean); let i = 0, ok = true;
+      for (; i < Math.min(gs.length, ds.length); i++) {
+        if (gs[i] === '**') return 'in';
+        let m; try { m = isGlob(gs[i]) ? globRe(gs[i]).test(ds[i]) : gs[i] === ds[i]; } catch { m = true; }
+        if (!m) { ok = false; break; }
+      }
+      if (!ok) continue;
+      if (gs.length >= ds.length) return 'in';
+      out = 'above';
+    }
+    return out;
+  };
+  const walker = /glob|grep|find|search/i.test(t);
+  const strings = []; const walk = (v, k) => { if (typeof v === 'string') strings.push([k, v]); else if (v && typeof v === 'object') for (const [k2, v2] of Object.entries(v)) walk(v2, Array.isArray(v) ? k : k2); };
+  walk(input, '');
+  for (const [k, s] of strings) {
+    if (k === 'command' || k === 'cmd') { if (privateCommand(s, cwd, home, { hit, reach, remote, dirs }, 0)) return REASONS.private; continue; }
+    const p = s.trim();
+    if (!dirs.length || !p || p.includes('\n') || p.length >= 4096) continue;
+    const r = reach(p, cwd);
+    if (hit(p, cwd) || (r === 'in' && isGlob(p)) || (r === 'above' && walker)) return REASONS.private;
+  }
+  return '';
+}
+function privateCommand(cmd, cwd, home, o, depth) {
+  const raw = String(cmd), text = unquote(raw), here = [...new Set(places(text, cwd, home))];
+  if (o.remote) {
+    if (DB_DRIVER.test(raw)) return true;
+    for (const m of text.matchAll(DB_URL)) if (!LOCAL.test(m[1])) return true;
+  }
+  // Each segment's program, past env assignments and wrappers: `grep ssh x.js` passes, `sudo ssh x` doesn't.
+  for (const seg of text.split(/[;&|`\n(]|\$\(/)) {
+    const ws = seg.trim().split(/\s+/).filter(Boolean); let viaShell = false;
+    while (ws.length && (/^\w+=/.test(ws[0]) || WRAPS.includes(ws[0]) || /^-/.test(ws[0]) || /^\d+[smh]?$/.test(ws[0]))) {
+      if (['sh', 'bash', 'zsh', 'source', '.'].includes(ws[0])) viaShell = true;
+      ws.shift();
+    }
+    if (!ws.length) continue;
+    const prog = ws[0].split('/').pop(), rest = ws.slice(1);
+    if (o.remote) {
+      if (REMOTE_SHELLS.includes(prog) && rest.join(' ') !== '-V') return true;
+      if (prog === 'tailscale' && rest[0] === 'ssh') return true;
+      const host = seg.match(/(?:^|\s)(?:-h|--host)(?:=|\s*)([^\s-]\S*)/);
+      if (DB_CLIENTS.includes(prog) && host && !LOCAL.test(host[1])) return true;
+      // `$c "ls"`: a program held in a variable can't be checked.
+      if (/^\$/.test(prog)) return true;
+      // rsync, git and unison reach another machine over ssh with host:path (code hosts and drive letters excepted).
+      if (['rsync', 'git', 'unison'].includes(prog) && rest.some((w) => { const m = w.match(HOST_ARG); return m && !CODE_HOSTS.test(m[1]) && !/^[a-z]$/i.test(m[1]) && /[.@]/.test(m[0] + m[1]); })) return true;
+    }
+    if (o.dirs.length) {
+      // grep -r ~/work, find ~: a walk from a parent reaches the private folders under it.
+      const flags = rest.filter((w) => /^-/.test(w)).join(' '), args = rest.filter((w) => !/^-/.test(w));
+      const walks = WALKERS.includes(prog) || /(^|\s)--recursive\b/.test(flags)
+        || (['grep', 'egrep', 'fgrep', 'chmod', 'chown'].includes(prog) && /(^|\s)-[a-zA-Z]*[rR]/.test(flags))
+        || (prog === 'ls' && /(^|\s)-[a-zA-Z]*R/.test(flags)) || (['cp', 'rsync'].includes(prog) && /(^|\s)-[a-zA-Z]*[rRa]/.test(flags));
+      const targets = /grep$/.test(prog) && args.length <= 1 || !/grep$/.test(prog) && !args.length ? [...args, '.'] : args;
+      if (walks && here.some((dir) => targets.some((w) => o.reach(w, dir) === 'above'))) return true;
+    }
+    // A script run here gets the same check, one level deep.
+    if (depth < 1 && (viaShell || ws[0].includes('/') || /\.(sh|bash|zsh)$/.test(ws[0]))) {
+      let body = '';
+      const f = path.resolve(cwd, ws[0].replace(homeArg(home), home));
+      try { if (fs.statSync(f).size < 256 * 1024) body = fs.readFileSync(f, 'utf8'); } catch {}
+      if (body && !body.includes('\0') && (viaShell || /^#!.*\b(sh|bash|zsh)\b/.test(body)) && privateCommand(body, path.dirname(f), home, o, depth + 1)) return true;
+    }
+  }
+  if (!o.dirs.length) return false;
+  const words = text.split(/[\s;|&()<>`]+/).filter(Boolean);
+  return here.some((dir) => words.some((w) => w.split('=').some((part) => part && (o.hit(part, dir) || (isGlob(part) && o.reach(part, dir) === 'in')))));
+}
