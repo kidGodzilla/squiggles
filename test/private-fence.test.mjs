@@ -62,3 +62,25 @@ test('nearby work still passes', () => {
     'grep -r foo ~/team/notes', 'ls ~/team', "grep 'a*b' x.js"]) assert.equal(bash(c), '', c);
   assert.equal(run('Glob', { pattern: '*.js', path: `${cwd}/src` }), '');
 });
+
+test('codex, cursor and pi guards read the rules from config.json; claude does not', async () => {
+  const data = `${H}/data`, old = process.env.SQUIGGLES_HOME;
+  fs.mkdirSync(data); process.env.SQUIGGLES_HOME = data;
+  try {
+    const { check: cursor } = await import('../cursor/guard.mjs');
+    const { check: codex } = await import('../codex/guard.mjs');
+    const { default: pi } = await import('../pi/guard.ts');
+    let h; pi({ on: (_, fn) => { h = fn; } });
+    const all = async (tool, input) => [cursor({ tool_name: tool, tool_input: input, cwd }), codex({ tool_name: tool, tool_input: input, cwd }), (await h({ toolName: tool, input }))?.reason || ''];
+    const file = `${H}/team/alpha/a.md`;
+    assert.deepEqual(await all('read', { path: file }), ['', '', ''], 'no config.json: off');
+    fs.writeFileSync(`${data}/config.json`, JSON.stringify({ privateDirs: [`${H}/team/alpha`], privateRemote: true }));
+    assert.deepEqual(await all('read', { path: file }), [P, P, P]);
+    assert.deepEqual(await all('bash', { command: 'ssh box' }), [P, P, P]);
+    assert.deepEqual(await all('bash', { command: 'git status' }), ['', '', '']);
+    assert.equal(codex({ tool_name: 'apply_patch', tool_input: { command: `*** Begin Patch\n*** Add File: ${file}\n+x\n*** End Patch` }, cwd }), P);
+    fs.writeFileSync(`${data}/config.json`, '{ broken');
+    assert.match(cursor({ tool_name: 'read', tool_input: { path: '/tmp/x' }, cwd }), /could not be read/);
+    assert.doesNotMatch(fs.readFileSync(new URL('../claude/guard.mjs', import.meta.url), 'utf8'), /private/i);
+  } finally { if (old === undefined) delete process.env.SQUIGGLES_HOME; else process.env.SQUIGGLES_HOME = old; }
+});

@@ -395,7 +395,7 @@ function codexServer(s) {
   const proc = spawn(codexBin(), ['app-server', '-c', codexHook.hookConfig(), '-c', 'sandbox_mode="workspace-write"', '-c', 'approval_policy="never"',
     // The agents CLI talks to this server over HTTP; the journal lives in the squiggle's folder.
     '-c', 'sandbox_workspace_write.network_access=true', '-c', `sandbox_workspace_write.writable_roots=${JSON.stringify(roots)}`],
-  { cwd: home(s.cwd), stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, AGENTS_ID: s.id, AGENTS_NODE: process.execPath } });
+  { cwd: home(s.cwd), stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, AGENTS_ID: s.id, AGENTS_NODE: process.execPath, SQUIGGLES_HOME: DATA } });
   lowPriority(s, proc);
   const cx = r.cx = { proc, n: 0, wait: new Map(), on: null };
   cx.req = (method, params) => new Promise((res, rej) => { const id = ++cx.n; cx.wait.set(id, { res, rej }); proc.stdin.write(JSON.stringify({ id, method, params }) + '\n'); });
@@ -494,7 +494,7 @@ function piServer(s) {
   const proc = spawn(process.env.PI_BIN || 'pi', ['--mode', 'rpc', '--no-approve', '--model', s.model, '--models', s.model, '--session-id', r.piSession,
     '--no-extensions', ...ext.flatMap((e) => ['-e', e]), '-e', path.join(ROOT, 'pi', 'guard.ts'),
     '--no-skills', '--no-prompt-templates', '--no-mcp', '--append-system-prompt', systemPrompt(s)],
-  { cwd: home(s.cwd), stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, AGENTS_ID: s.id } });
+  { cwd: home(s.cwd), stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, AGENTS_ID: s.id, SQUIGGLES_HOME: DATA } });
   lowPriority(s, proc);
   const cx = r.cx = { pi: true, model: s.model, proc, on: null, cmd: (m) => proc.stdin.write(JSON.stringify(m) + '\n') };
   let buf = '';
@@ -562,7 +562,7 @@ function cursorTurn(s, prompt) {
   if (!r.cursorSession) prompt = `${systemPrompt(s)}\n\n---\n\n${prompt}`;
   const proc = spawn(process.env.CURSOR_BIN || 'cursor-agent', ['-p', '--output-format', 'stream-json', '--model', s.model, '--force', '--trust',
     '--workspace', home(s.cwd), ...(r.cursorSession ? ['--resume', r.cursorSession] : []), '--', prompt],
-  { cwd: home(s.cwd), stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, AGENTS_ID: s.id, AGENTS_NODE: process.execPath } });
+  { cwd: home(s.cwd), stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, AGENTS_ID: s.id, AGENTS_NODE: process.execPath, SQUIGGLES_HOME: DATA } });
   let lastText = '', ended = false, stopped = false, done = null, errText = '';
   const end = (text, err, subtype) => {
     if (ended) return; ended = true; r.proc = null; turnEnded(s, text, err, subtype);

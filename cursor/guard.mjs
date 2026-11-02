@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { pathReason, commandReason, mentionsHome, mentionsSsh, REASONS } from '../fence.mjs';
+import { pathReason, commandReason, mentionsHome, mentionsSsh, privateCheck, REASONS } from '../fence.mjs';
 
 // The shell command gets the full check; every string in the call is checked as a path and for home paths (fence.mjs).
 // Returns the reason, or '' to allow.
@@ -19,7 +19,7 @@ export function check(ev) {
     if (mentionsSsh(s)) return REASONS.ssh;
     const r = !s.includes('\n') && s.length < 4096 && pathReason(s.trim(), cwd); if (r) return r;
   }
-  return '';
+  return privateCheck(ev.tool_name, ev.tool_input, cwd);
 }
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   let ev; try { ev = JSON.parse(fs.readFileSync(0, 'utf8')); } catch { process.stderr.write('guard could not read the tool call'); process.exit(2); }

@@ -293,3 +293,14 @@ function privateCommand(cmd, cwd, home, o, depth) {
   const words = text.split(/[\s;|&()<>`]+/).filter(Boolean);
   return here.some((dir) => words.some((w) => w.split('=').some((part) => part && (o.hit(part, dir) || (isGlob(part) && o.reach(part, dir) === 'in')))));
 }
+// What the codex, cursor and pi guards call: the rules from <data dir>/config.json, read on every call so a change applies
+// at once. No file: off. A file that can't be read: blocked, since the rules are unknown.
+const dataDir = () => path.resolve(String(process.env.SQUIGGLES_HOME || '~/.squiggles').replace(/^~(?=\/|$)/, os.homedir()));
+export function savedRules(dir = dataDir()) {
+  try { return privateRules(JSON.parse(fs.readFileSync(path.join(dir, 'config.json'), 'utf8'))); }
+  catch (e) { return e.code === 'ENOENT' ? privateRules({}) : null; }
+}
+export function privateCheck(tool, input, cwd = process.cwd(), home = os.homedir(), dir = dataDir()) {
+  const rules = savedRules(dir);
+  return rules ? privateReason(tool, input, cwd, home, rules) : 'config.json in the data folder could not be read, so the private-data rules are unknown: fix it to go on';
+}

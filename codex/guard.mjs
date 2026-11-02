@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { check as cursorCheck } from '../cursor/guard.mjs';
-import { mentionReason, pathReason } from '../fence.mjs';
+import { mentionReason, pathReason, privateCheck } from '../fence.mjs';
 
 const PATCH = /^(apply_patch|Edit|Write)$/;
 export function check(ev) {
@@ -13,7 +13,7 @@ export function check(ev) {
   if (!PATCH.test(ev.tool_name || '')) return cursorCheck({ ...ev, cwd });
   const text = String(ev.tool_input?.command ?? '');
   for (const m of text.matchAll(/^\*\*\* (?:Add|Update|Delete) File: (.+)$|^\*\*\* Move to: (.+)$/gm)) { const r = pathReason((m[1] || m[2]).trim(), cwd); if (r) return r; }
-  return mentionReason(text) || cursorCheck({ ...ev, cwd, tool_input: { ...ev.tool_input, command: undefined } });
+  return mentionReason(text) || privateCheck(ev.tool_name, ev.tool_input, cwd) || cursorCheck({ ...ev, cwd, tool_input: { ...ev.tool_input, command: undefined } });
 }
 // Args for codex: the hook inline (-c) as a session flag. App-server runs it only once trusted: codex keeps the trust in
 // ~/.codex/config.toml under hooks.state.<HOOK_KEY>.trusted_hash, which bin/codex-trust-guard.mjs writes.
