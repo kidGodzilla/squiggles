@@ -268,7 +268,9 @@ function systemPrompt(s) {
 const modelFor = (s) => pickModel(s, CONFIG.model);
 // Settings baked into a process's flags. A change ends the idle process before the next turn; --resume keeps the session.
 // The squiggle's settings.json (allow rules) is in it too: an edit relaunches the idle process on its next message. So is the system prompt (t1307).
-const launchSig = (s) => JSON.stringify([!!s.chrome, modelFor(s), s.permissionMode, s.autocompact, s.maxTurns, s.effort, s.cwd, readText(path.join(sqDir(s.id), 'settings.json'), ''), 'fence:claude-hook', systemPrompt(s)]);
+// Every tool call re-reads the whole session, so the compaction point sets the cost per call.
+const compactAt = (s) => s.autocompact ?? (s.lead ? 300000 : 120000);
+const launchSig = (s) => JSON.stringify([!!s.chrome, modelFor(s), s.permissionMode, compactAt(s), s.maxTurns, s.effort, s.cwd, readText(path.join(sqDir(s.id), 'settings.json'), ''), 'fence:claude-hook', systemPrompt(s)]);
 // Busy Mac: every squiggle but the lead runs at nice 10 and its builds and tests inherit it, so the lead and the page stay quick.
 const lowPriority = (s, proc) => { if (!s.lead && proc.pid) try { os.setPriority(proc.pid, 10); } catch {} };
 function launch(s) {
@@ -281,7 +283,7 @@ function launch(s) {
   if (s.chrome) args.push('--chrome');
   if (modelFor(s)) args.push('--model', modelFor(s));
   // Usage controls (per squiggle, see handoff): context window cap, effort, and a turn cap per wake.
-  args.push('--autocompact', String(s.autocompact ?? (s.lead ? 300000 : 200000)), '--max-turns', String(s.maxTurns ?? 40));
+  args.push('--autocompact', String(compactAt(s)), '--max-turns', String(s.maxTurns ?? 40));
   const effort = s.effort ?? (s.lead ? '' : 'medium'); if (effort) args.push('--effort', effort);
   const cli = `node ${ROOT}/bin/agents.mjs`;
   if (s.lead) args.push('--allowedTools', `Bash(${cli} *)`, 'Read', 'Grep', 'Glob', `Edit(${SQ}/**)`, `Write(${SQ}/**)`, `Edit(${DATA}/goals.json)`, `Edit(${DATA}/config.json)`);
@@ -1361,7 +1363,7 @@ function serveFile(res, file, csp = FILE_CSP) {
 }
 const view = (s) => {
   const { proc, caff, cx, cxThread, cxLast, sig, ...r } = R(s.id);
-  return { ...s, ...r, alwaysWakes: alwaysWakes(s), voice: voiceFor(s.id), charter: readText(path.join(sqDir(s.id), 'charter.md')) };
+  return { ...s, ...r, alwaysWakes: alwaysWakes(s), compactAt: compactAt(s), voice: voiceFor(s.id), charter: readText(path.join(sqDir(s.id), 'charter.md')) };
 };
 function tailEvents(id, n = 400) {
   const lines = readText(path.join(RUNS, `${id}.jsonl`)).trim().split('\n').filter(Boolean);

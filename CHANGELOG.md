@@ -121,6 +121,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Picks: `pick ask "<question>" "<option>" "<option>" [--images a,b] [--task <id>]` files a choice for the user; open picks collect on one card above the lead chat composer, options as buttons (images shown when they live in files/ or research/). A tap answers and the asker is told; the lead relays a spoken answer with `pick <id> <option>`. `picks [all]`, `pick drop <id>`. Answering needs the room passcode.
 - Settings > Defaults > Turns at once, and `slots`, set how many turns each provider runs at once.
 ### Changed
+- A squiggle's default context cap is now 120k tokens (the lead keeps 300k): every tool call re-reads the session, so a smaller cap costs less per call.
 - Team reports wait while you're talking with the lead, and go as one batch once you've been quiet 15 minutes, including over a restart.
 - Lead chat: a team report the lead answers in words joins the handled-reports fold; the answer stays below it.
 - Call bar: neutral copy ("Meeting link"), and `call` takes Google Meet links as well as Teams. Leftover "Merge tab" wording now says Review tab.
@@ -171,6 +172,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Settings number inputs show an accent border on focus and are 44px tall on touch screens.
 
 ### Fixed
+- The squiggle sheet saves in a room with no passcode again: it sends permissions, model, start folder and context cap only when they changed.
 - `goal edit <id> title|owner|note|repos|merge|kind|due <value>` edits that field; before, it renamed the goal to the field word. A bare field word is refused as a title.
 - Clean theme: room tile status and activity text stay readable in a light scheme, as does the call bar's clock icon; on a phone, Tasks columns scroll to the screen edge.
 - Changing a guard module (claude/, cursor/, codex/) now counts as a server change, so restart picks it up.
