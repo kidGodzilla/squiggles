@@ -174,6 +174,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 
 ### Fixed
 - The squiggle sheet saves in a room with no passcode again: it sends permissions, model, start folder and context cap only when they changed.
+- The Goals and Tasks columns keep their scroll position when the board refreshes, instead of jumping back to the top whenever a note changes.
 - `goal edit <id> title|owner|note|repos|merge|kind|due <value>` edits that field; before, it renamed the goal to the field word. A bare field word is refused as a title.
 - Clean theme: room tile status and activity text stay readable in a light scheme, as does the call bar's clock icon; on a phone, Tasks columns scroll to the screen edge.
 - Changing a guard module (claude/, cursor/, codex/) now counts as a server change, so restart picks it up.

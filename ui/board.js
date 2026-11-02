@@ -52,6 +52,12 @@ function dueLine(d) {
   const n = Math.round((new Date(d + 'T00:00') - new Date(new Date().toDateString())) / 864e5), day = new Date(d + 'T00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   return `<span class="gn gdue${n < 0 ? ' over' : ''}">${n < 0 ? `Overdue since ${day}` : n === 0 ? 'Due today' : n === 1 ? 'Due tomorrow' : `Due ${day}, in ${n} days`}</span>`;
 }
+// Refreshes keep each column's scroll: board events re-render often while squiggles edit notes, and an innerHTML rewrite resets scrollTop.
+function setCols(el, html, list, key) {
+  const tops = {}; for (const c of el.querySelectorAll(list)) { const k = c.closest(`[${key}]`)?.getAttribute(key); if (k) tops[k] = c.scrollTop; }
+  el.innerHTML = html;
+  for (const c of el.querySelectorAll(list)) { const k = c.closest(`[${key}]`)?.getAttribute(key); if (tops[k]) c.scrollTop = tops[k]; }
+}
 function renderGoals() {
   const q = B.gq.toLowerCase(), found = (g) => hit(q, g.title, g.note, ownerName(g.owner)); let shown = 0;
   const areas = allGoals().filter(isArea).sort((a, b) => openCount(b.id) - openCount(a.id)), aShown = areas.filter(found);
@@ -59,7 +65,7 @@ function renderGoals() {
   $('#areas').classList.toggle('folded', B.gfold.has('areas'));
   $('#areas').innerHTML = `<h3>${foldHead('areas', 'Areas', B.gfold.has('areas') ? aShown.length : null)}</h3>` + (B.gfold.has('areas') ? [] : aShown).map((g, i) => { const n = openCount(g.id);
     return `<button class="area" type="button" data-goal="${esc(g.id)}" title="${esc(g.title)}${g.owner ? `, ${esc(ownerName(g.owner))}` : ''}">${g.owner && S.sq[g.owner] ? face(g.owner, 'ar' + i + '_') : ''}<span class="an">${hl(areaName(g.title), q)}</span><span class="ac ${n ? '' : 'none'}">${n ? `${n} open` : 'Nothing open'}</span></button>`; }).join('');
-  $('#wbcols').innerHTML = Object.entries(TIER_NAMES).map(([tier, name]) => {
+  setCols($('#wbcols'), Object.entries(TIER_NAMES).map(([tier, name]) => {
     const all = B.goals[tier].filter((g) => !isArea(g)), list = all.filter(found); shown += list.length;
     return `<div class="wbcol ${tier}${B.gfold.has(tier) ? ' folded' : ''}" data-tier="${tier}"><h3>${foldHead(tier, name, all.length)}</h3><div class="glist">
       ${list.map((g) => {
@@ -70,7 +76,7 @@ function renderGoals() {
           <span class="gm">${tier === 'done' ? '' : `<span class="gmerge ${g.merge}" title="${g.merge === 'open' ? 'Open: commits go to main' : 'Gated: a branch per task, merged from the Review tab'}">${g.merge === 'open' ? 'Open' : 'Gated'}</span>`}${g.owner && S.sq[g.owner] ? `<span class="nown" data-owner="${esc(g.owner)}" title="Ask ${esc(ownerName(g.owner))} about this goal">${face(g.owner, 'gf' + hash(g.id) + '_')}</span>` : ''}${ago(g.last_confirmed)}</span></div>`;
       }).join('')}
       ${tier !== 'done' ? `<button class="addg" data-addgoal="${tier}">+ add a goal</button>` : ''}</div></div>`;
-  }).join('');
+  }).join(''), '.glist', 'data-tier');
   const cols = (w) => Object.keys(TIER_NAMES).map((t) => (B.gfold.has(t) ? 'max-content' : w)).join(' ');
   $('#wbcols').style.setProperty('--gcols', cols('minmax(0, 1fr)')); $('#wbcols').style.setProperty('--gcols-m', cols('220px'));
   const goals = allGoals().length - areas.length, both = `${goals} goal${goals === 1 ? '' : 's'}${areas.length ? `, ${areas.length} area${areas.length === 1 ? '' : 's'}` : ''}`;
@@ -110,7 +116,7 @@ function renderTasks() {
   cols.classList.toggle('none', !!none);
   if (none) cols.innerHTML = B.tq ? `<div class="empty">No notes match “${esc(B.tq)}”.<button class="chip" data-tclear="q">Clear search</button></div>`
     : '<div class="empty">No notes match these filters.<button class="chip" data-tclear="f">Clear filters</button></div>';
-  else cols.innerHTML = COLS.map(([st, name]) => {
+  else setCols(cols, COLS.map(([st, name]) => {
     const list = vis.filter((t) => t.status === st);
     let body;
     if (B.tidy && !B.towner && B.tshow !== 'suggest') {
@@ -120,7 +126,7 @@ function renderTasks() {
       body = Object.entries(piles).map(([o, ts]) => pileHtml(o, ts, st)).join('') + loose.map(noteHtml).join('');
     } else body = list.map(noteHtml).join('');
     return `<div class="ccol" data-status="${st}"><h3><span>${name}<small>${list.length || ''}</small></span></h3><div class="notes">${body}</div></div>`;
-  }).join('');
+  }).join(''), '.notes', 'data-status');
   linkTasks($('#corkcols'));
   const sb = $('#tshow [data-v=suggest]'), open = B.tasks.filter((t) => t.kind === 'suggestion' && !t.decision).length; if (sb) sb.textContent = open ? `Suggestions ${open}` : 'Suggestions';
   $('#tcount').textContent = `${vis.length} of ${B.tasks.length} notes`;
