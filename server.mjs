@@ -17,6 +17,7 @@ import { createPicks } from './picks.mjs';
 import { needsList, alertWake } from './needs.mjs';
 import { reportHoldMs, reportsText, reportLines } from './focus.mjs';
 import { quietSig, skipWake, alwaysWakes, ownEnd } from './quiet.mjs';
+import { HOME_FENCE } from './fence.mjs';
 import { wantsPrecheck, precheckPrompt, runPrecheck, PRECHECK_MODEL } from './precheck.mjs';
 import { createWaits, bgStarted, bgEnded, ownRuns } from './waits.mjs';
 import { mimeFor } from './mime.mjs';
@@ -280,7 +281,7 @@ function launch(s) {
     '--append-system-prompt', systemPrompt(s), '--permission-mode', s.permissionMode || 'auto', '--permission-prompts', 'none',
     '--add-dir', sqDir(s.id), '--add-dir', DATA, '--add-dir', os.homedir(),
     // Squiggles roam the home folder freely, except these. Bash, Grep and Glob go through claude/guard.mjs.
-    '--disallowedTools', ...['Downloads', 'Desktop', 'Documents', '.ssh'].flatMap((d) => [`Read(~/${d}/**)`, `Edit(~/${d}/**)`, `Write(~/${d}/**)`])];
+    '--disallowedTools', ...HOME_FENCE];
   if (s.chrome) args.push('--chrome');
   if (modelFor(s)) args.push('--model', modelFor(s));
   // Usage controls (per squiggle, see handoff): context window cap, effort, and a turn cap per wake.
@@ -1021,7 +1022,7 @@ setInterval(() => {
     if (r.status !== 'working' && Date.now() >= due && !providerOf(s) && !alwaysWakes(s) && skipWake(r, quietSigOf(s))) { r.skipAt = new Date().toISOString(); emit(s.id, { k: 'log', text: `scheduled wake skipped: nothing new since ${r.endStatus.toUpperCase()}` }); saveState(); continue; }
     if (r.prechecking) continue;
     // After an IDLE or WAITING end, a cheap Sonnet session decides first; DEFER skips the full wake (precheck.mjs).
-    if (r.status !== 'working' && Date.now() >= due && !p && wantsPrecheck(r)) { started.add(p); precheck(s, r, due); continue; }
+    if (r.status !== 'working' && Date.now() >= due && wantsPrecheck(r, Date.now(), p)) { started.add(p); precheck(s, r, due); continue; }
     if (r.status !== 'working' && Date.now() >= due && timed(`wake ${s.id}`, () => wake(s.id, 'scheduled', '', due))) started.add(p);
   }
 }, 30000);

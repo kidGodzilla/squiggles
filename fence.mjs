@@ -6,6 +6,9 @@ import os from 'node:os';
 import path from 'node:path';
 
 export const DIRS = ['downloads', 'desktop', 'documents'];
+// Home folders no squiggle or pre-check may Read, Edit or Write (claude --disallowedTools). Bash, Grep and Glob go through
+// claude/guard.mjs; Read has no hook, so this list is its only fence.
+export const HOME_FENCE = ['Downloads', 'Desktop', 'Documents', '.ssh'].flatMap((d) => [`Read(~/${d}/**)`, `Edit(~/${d}/**)`, `Write(~/${d}/**)`]);
 export const REASONS = { dirs: 'Downloads, Desktop and Documents are off limits', ssh: '~/.ssh is off limits', push: 'git push is off limits: squiggles commit, you push',
   tree: 'a recursive read or copy from home or above reaches Downloads, Desktop, Documents and ~/.ssh: name a folder inside home' };
 export const REASON = REASONS.dirs;

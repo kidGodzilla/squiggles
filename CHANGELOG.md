@@ -5,6 +5,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 ## 0.1.2 (unreleased)
 
 ### Security
+- The idle pre-check runs only for Claude squiggles, so its findings can't carry private files into a Codex, Cursor or Pi wake, and it can't Read, Edit or Write Downloads, Desktop, Documents or ~/.ssh.
 - Squiggles can't send or receive Claude Code cross-session messages: each wake refuses inbound peer messages and denies SendMessage and ListAgents, so nothing steers a session outside the board.
 - The fence catches a fenced folder reached through a brace holding the home path or the folder itself ({~,/x}/.ssh, {~/.ssh,/x}/*) or a glob above home (/home/*/.ssh, /*/*/Downloads), for every provider.
 - Claude squiggles are fenced like the others: ~/.ssh joins the blocked folders for Read, Edit and Write, and a hook runs every Bash, Grep and Glob through the fence (git push, the three folders, ~/.ssh, recursive reads from home), absolute Glob and Grep patterns included. If the hook can't start, the call is refused. Your own settings.json hooks still run.

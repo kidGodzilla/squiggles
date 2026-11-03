@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { wantsPrecheck, precheckPrompt, parseVerdict, runPrecheck, PRECHECK_MAX_MS } from '../precheck.mjs';
+import { wantsPrecheck, precheckPrompt, parseVerdict, runPrecheck, precheckArgs, PRECHECK_MAX_MS } from '../precheck.mjs';
 
 test('parseVerdict: last WAKE/DEFER line wins, bold allowed, none wakes', () => {
   assert.deepEqual(parseVerdict('x\nDEFER: same as before'), { wake: false, why: 'same as before' });
@@ -41,4 +41,16 @@ test('runPrecheck: errors, junk, timeouts and a missing binary all wake', async 
   assert.equal((await run(bin('echo nope'))).wake, true);
   assert.equal((await run(bin('sleep 5'), { timeoutMs: 200 })).why, 'pre-check timed out');
   assert.equal((await run('/nonexistent/claude')).wake, true);
+});
+
+test('wantsPrecheck: never for a non-Claude squiggle', () => {
+  const now = Date.now(), lastWake = new Date(now - 3600e3).toISOString();
+  assert.equal(wantsPrecheck({ endStatus: 'idle', lastWake }, now, ''), true);
+  for (const p of ['codex', 'cursor', 'pi']) assert.equal(wantsPrecheck({ endStatus: 'idle', lastWake }, now, p), false);
+});
+
+test('precheckArgs carries the home Read/Edit/Write fence', () => {
+  const a = precheckArgs('p', '{}'), i = a.indexOf('--disallowedTools');
+  assert.ok(i > 0);
+  for (const d of ['Downloads', 'Desktop', 'Documents', '.ssh']) for (const t of ['Read', 'Edit', 'Write']) assert.ok(a.slice(i + 1).includes(`${t}(~/${d}/**)`), `${t} ${d}`);
 });

@@ -2,6 +2,7 @@
 // Sonnet session with the squiggle's charter, journal tail and notes. It answers WAKE or DEFER. DEFER skips the full wake;
 // WAKE runs it with the finding attached. Anything unclear wakes. A real wake still runs every PRECHECK_MAX_MS.
 import { spawn } from 'node:child_process';
+import { HOME_FENCE } from './fence.mjs';
 
 export const PRECHECK_MODEL = 'claude-sonnet-5-5';
 export const PRECHECK_MAX_MS = 12 * 3600e3;
@@ -9,7 +10,10 @@ export const PRECHECK_TURNS = 12;
 export const PRECHECK_BUDGET = 0.4; // dollars; a check that costs more than a wake would defeats itself
 
 // Run it? Same turns quiet.mjs looks at: the last turn ended on its own IDLE or WAITING line, and a real wake ran recently.
-export function wantsPrecheck(r, now = Date.now()) {
+// Claude squiggles only: the check runs on Claude without a non-Claude squiggle's private fence, and its WAKE line goes into
+// that squiggle's prompt, so private files could reach a Codex, Cursor or Pi model.
+export function wantsPrecheck(r, now = Date.now(), provider = '') {
+  if (provider) return false;
   if (r.endStatus !== 'idle' && r.endStatus !== 'waiting') return false;
   return now - (Date.parse(r.lastWake || 0) || 0) < PRECHECK_MAX_MS;
 }
@@ -47,7 +51,7 @@ export function parseVerdict(text) {
 export const precheckArgs = (prompt, settings) => ['-p', prompt, '--model', PRECHECK_MODEL, '--output-format', 'json', '--max-turns', String(PRECHECK_TURNS),
   '--max-budget-usd', String(PRECHECK_BUDGET), '--effort', 'low', '--no-session-persistence', '--strict-mcp-config',
   '--tools', 'Bash,Read,Grep,Glob', '--permission-mode', 'auto', '--permission-prompts', 'none',
-  '--system-prompt', 'You check whether an agent has work. Read-only. Be brief.', '--settings', settings];
+  '--system-prompt', 'You check whether an agent has work. Read-only. Be brief.', '--settings', settings, '--disallowedTools', ...HOME_FENCE];
 
 // Runs the check; resolves { wake, why, cost, in } and never rejects (a failure wakes).
 export function runPrecheck({ prompt, settings, cwd, env, timeoutMs = 5 * 60e3, bin = 'claude' }) {
