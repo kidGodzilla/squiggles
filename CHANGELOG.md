@@ -41,6 +41,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Changing, clearing or loosening a set passcode needs the current one, in Settings and the CLI.
 - Ask output masking also catches secrets split by colour codes or a tab, `mysql -pPASS`, and URL-encoded `token%3D` values.
 - An ask cut off by a server restart is marked interrupted at boot and its filer is told; its output is lost.
+- Private data fence (off until configured): config `privateDirs`, `privateTools` and `privateRemote` name folders, tools and remote reach that only Claude squiggles get. Codex, Cursor and Pi guards refuse them, including walks from a parent folder, symlinks and globs; config is read each call and an unreadable config refuses. `notes` leaves private folders out for those squiggles.
 
 ### Added
 - Quiet wakes: a scheduled wake is skipped when the last turn ended IDLE or WAITING and nothing it would act on (its open notes, untold suggestion answers, its charter) has changed. A real wake still runs every 6 hours. Squiggles that watch outside things can be set to always wake (squiggle sheet, set by the user or the lead).

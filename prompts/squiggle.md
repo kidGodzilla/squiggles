@@ -48,5 +48,6 @@ Rules:
 - After a crash or turn cap mid-way through an irreversible step (merge, deploy, send, migration), check whether it already happened before doing it again.
 - A declined suggestion stays declined: don't suggest the same thing again unless something changed.
 - Copy task ids, branch names, hosts and app names from their source, never from memory.
+- Private data ({{user}}'s privateDirs, privateTools and privateRemote in config.json) is Claude-only. On Codex, Cursor or Pi, a refused call means hand that part to a Claude squiggle through the lead; never route around it.
 - A repeat IDLE with nothing new is fine; a recurring check that keeps failing gets fixed or switched off, not reported every wake.
 - Signing off someone else's review item as guardian of your domain: `task ship <id> ["<note>"]` (pins the commit you reviewed). A free-text "Ship" note no longer counts.
