@@ -5,6 +5,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 ## 0.1.2 (unreleased)
 
 ### Security
+- The fence refuses shell and edit-tool writes to `watches.json`, so a squiggle can't approve its own watch by editing the file. Reads stay open; a script file still gets through.
 - A watch's `--ignore` regex has a 250 ms limit: a slow pattern pauses the watch and tells its owner instead of hanging the server.
 - The private-data fence refuses code it can't read first: a script piped to a shell, a program or script path held in a variable, or a script the same command writes. It also follows scripts after a cd and one-line helpers, sees through full-path wrappers (/bin/sh), shells fed from a file (sh < x.sh) and braces across folders.
 - A watch waiting for approval shows its whole command, folder and ignore pattern on the Team card, with the same risky and hidden-character warnings as a command card. Long commands used to cut off at one line.

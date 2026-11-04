@@ -10,6 +10,7 @@ export const DIRS = ['downloads', 'desktop', 'documents'];
 // claude/guard.mjs; Read has no hook, so this list is its only fence.
 export const HOME_FENCE = ['Downloads', 'Desktop', 'Documents', '.ssh'].flatMap((d) => [`Read(~/${d}/**)`, `Edit(~/${d}/**)`, `Write(~/${d}/**)`]);
 export const REASONS = { dirs: 'Downloads, Desktop and Documents are off limits', ssh: '~/.ssh is off limits', push: 'git push is off limits: squiggles commit, you push',
+  watches: 'watches.json is written only by the watch commands: reading it is fine',
   tree: 'a recursive read or copy from home or above reaches Downloads, Desktop, Documents and ~/.ssh: name a folder inside home' };
 export const REASON = REASONS.dirs;
 const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -185,6 +186,18 @@ function treeReason(cmd, cwd, home) {
   }
   return '';
 }
+// A watch runs what its entry says and the hash has no key, so writing watches.json would approve a command with no one looking.
+// Rough like the rest of the fence: reads stay open, and a script file, a glob or code piped into an interpreter still get through.
+const WATCH_WRITES = [
+  />\|?\s*\S*watches\.json/i,
+  /\b(?:cp|mv|ln|install|rsync|ditto|tee|truncate|dd|patch|touch|rm|ed|ex|vim?|nano)\b[^\n;|&]*watches\.json/i,
+  /\b(?:g?sed|perl|ruby)\b[^\n;|&]*\s-\w*i\S*\s[^\n;|&]*watches\.json/i,
+  /\b(?:node|bun|deno|python[\d.]*|ruby|perl|php|osascript)\b[^\n;|&]*(?:\s-\w*[ecp]\b|\s--eval\b|\s--print\b|\s-(?:\s|$)|<<)[\s\S]*watches\.json/im,
+];
+const watchWrite = (cmd) => WATCH_WRITES.some((re) => re.test(cmd));
+export const watchesPath = (p) => /(?:^|[\\/])watches\.json$/i.test(String(p).trim());
+// Edit and write tools: a path argument that is the file. Contents that name it pass.
+export const editReason = (tool, input = {}) => /edit|write|patch|replace|create/i.test(tool || '') && Object.entries(input || {}).some(([k, v]) => /path|file|target/i.test(k) && typeof v === 'string' && watchesPath(v)) ? REASONS.watches : '';
 // The reason a path or shell command is refused, or ''.
 export function pathReason(p, cwd = process.cwd(), home = os.homedir()) {
   return fencedPath(p, cwd, home) ? REASONS.dirs : sshPath(p, cwd, home) ? REASONS.ssh : '';
@@ -193,7 +206,7 @@ export function commandReason(cmd, cwd = process.cwd(), home = os.homedir()) {
   if (fencedCommand(cmd, cwd, home)) return REASONS.dirs;
   cmd = unquote(cmd);
   if (mentionsSsh(cmd, home) || (startsHome(cmd, cwd, home) && /(^|[\s=;&|(`])\.ssh\b/i.test(cmd)) || relReason(cmd, cwd, home) === REASONS.ssh) return REASONS.ssh;
-  return treeReason(cmd, cwd, home) || (pushes(cmd) ? REASONS.push : '');
+  return treeReason(cmd, cwd, home) || (pushes(cmd) ? REASONS.push : '') || (watchWrite(cmd) ? REASONS.watches : '');
 }
 
 // Private data (config privateDirs, privateTools, privateRemote): folders, tools and remote machines only Claude squiggles may

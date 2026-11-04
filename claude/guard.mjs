@@ -4,7 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { commandReason } from '../fence.mjs';
+import { commandReason, editReason } from '../fence.mjs';
 
 const q = (s) => String(s).replace(/\s/g, '?');
 // A pattern that is absolute or starts at ~ stands alone; path.join would drop its root.
@@ -14,9 +14,9 @@ export function check(ev) {
   if (ev.tool_name === 'Bash') return commandReason(String(i.command ?? ''), cwd);
   if (ev.tool_name === 'Grep') return commandReason(`grep -r x ${q(i.path || '.')}${i.glob ? ` ${q(under(i.path || '.', String(i.glob)))}` : ''}`, cwd);
   if (ev.tool_name === 'Glob') return commandReason(`ls ${q(under(i.path || '.', String(i.pattern ?? '')))}`, cwd) || (i.path ? commandReason(`ls ${q(i.path)}`, cwd) : '');
-  return '';
+  return editReason(ev.tool_name, i);
 }
-export const MATCHER = 'Bash|Grep|Glob';
+export const MATCHER = 'Bash|Grep|Glob|Edit|Write|NotebookEdit';
 export const HOOK_CMD = fileURLToPath(new URL('./guard.sh', import.meta.url));
 // Cross-session messaging off: a squiggle neither receives nor sends Claude Code peer messages, so nothing wakes or
 // steers a session outside the board, slots and turn caps. Squiggles talk through tell/wake.
