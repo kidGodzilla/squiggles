@@ -114,6 +114,7 @@ function setTalk() {
 }
 $('#setGen').onchange = (e) => { SET.gen = e.target.value; renderSettings(); };
 $('#setTalk').onchange = setTalk;
+$('#reactOn').onchange = async (e) => { const r = await api('/room', { action: 'reactions', value: e.target.checked ? 'on' : 'off' }); if (r && r.error) { toast(r.error); e.target.checked = S.rxOn; } };
 $('#setRoom').onclick = async () => { const r = await api('/room', { action: 'characters', value: SET.gen }); if (r && r.error) return toast(r.error); roomGen(SET.gen); S.order.forEach(reskin); renderSettings(); };
 $('#setGrid').onclick = async (e) => {
   const id = e.target.closest('[data-use]')?.dataset.use; if (!id) return;

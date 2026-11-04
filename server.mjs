@@ -10,6 +10,7 @@ import path from 'node:path';
 import os from 'node:os';
 import vm from 'node:vm';
 import { createBoard, ownIdeas, plainAsk, ASK_WORDS } from './board.mjs';
+import { createReactions, findMessage } from './reactions.mjs';
 import { createFiles } from './files.mjs';
 import { holdGate } from './hold.mjs';
 import { createAsks, runAsk } from './asks.mjs';
@@ -102,6 +103,7 @@ function saveSquiggle(s) {
   fs.writeFileSync(path.join(sqDir(id), 'squiggle.json'), JSON.stringify(meta, null, 2) + '\n');
 }
 const ROOMCFG = path.join(DATA, 'room.json');
+const reactions = createReactions(path.join(RUNS, 'reactions.json'));
 // App icons follow the lead's look: redraw them into <data>/icons a moment after its look or the room's characters change.
 const ICONS = path.join(DATA, 'icons'), ICON_FILES = ['icon-180.png', 'icon-192.png', 'icon-512.png', 'favicon-64.png', 'logo-64.png'];
 let iconTimer; const drawIcons = () => { clearTimeout(iconTimer); iconTimer = setTimeout(() => { const c = spawn(path.join(ROOT, 'bin', 'render-icons.sh'), [], { stdio: 'ignore', detached: true, env: { ...process.env, SQUIGGLES_HOME: DATA } }); c.on('error', () => {}); c.unref(); }, 3000); };
@@ -1586,6 +1588,12 @@ const server = http.createServer(async (req, res) => {
     // Room controls (radio, voices, chatter, tabs, chat windows) so the lead can do whatever the user can.
     if (url.pathname === '/api/room' && req.method === 'POST') {
       const b = await body(req, res);
+      if (b.action === 'reactions') { // on or off for the whole room. Stored reactions stay, so off then on brings them back.
+        const c = await callerSquiggle(req), v = String(b.value || '').toLowerCase();
+        if (c && !loadSquiggle(c)?.lead) return json(res, { error: 'Only the owner and the lead turn reactions on or off' }, 403);
+        if (!['on', 'off'].includes(v)) return json(res, { error: 'room reactions on|off' }, 400);
+        fs.writeFileSync(ROOMCFG, JSON.stringify({ ...roomCfg(), reactions: v }, null, 2) + '\n'); b.value = v;
+      }
       if (b.action === 'characters') {   // the room's default character generator (t832), saved so every page agrees
         const gens = Object.keys(castCtx().GENS), g = String(b.value || '').toLowerCase();
         if (!gens.includes(g)) return json(res, { error: `generators: ${gens.join(', ')}` }, 400);
@@ -1593,6 +1601,18 @@ const server = http.createServer(async (req, res) => {
       }
       broadcast('*room', { k: 'room', ...b }); return json(res, 'ok');
     }
+    if (url.pathname === '/api/react' && req.method === 'POST') { // `by` is the process tree first; only a person's page names itself
+      const b = await body(req, res), c = await callerSquiggle(req), chat = String(b.chat || '');
+      if (roomCfg().reactions === 'off') return json(res, { error: 'Reactions are off' }, 409);
+      if (!loadSquiggle(chat)) return json(res, { error: 'no such chat' }, 404);
+      const ts = b.ts ?? findMessage(tailEvents(chat), b.match)?.ts;
+      if (ts == null) return json(res, { error: b.match ? `no recent message in ${chat} says "${b.match}"` : `no messages in ${chat}` }, 404);
+      const by = c || humans.all().find((h) => h.id === b.human)?.id || 'owner', r = reactions.toggle({ chat, ts, emoji: b.emoji, by });
+      if (r.error) return json(res, { error: r.error }, 400);
+      broadcast('*room', { k: 'room', action: 'react', chat, ts, list: r.list });
+      return json(res, { chat, ts, list: r.list });
+    }
+    if (url.pathname === '/api/react') return json(res, { on: roomCfg().reactions !== 'off', items: reactions.all() });
     if (url.pathname === '/api/defaults' && req.method === 'POST') {
       const d = setDefaults(await body(req, res)); broadcast('*room', { k: 'room', action: 'defaults' }); return json(res, d);
     }

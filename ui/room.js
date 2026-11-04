@@ -21,7 +21,7 @@ applyTheme();
 
 const S = {
   sq: {}, order: [], term: {}, todos: {}, run: {}, speakers: new Set(), present: null, pin: {}, vis: {}, focus: null, office: '', officeIds: [], meeting: null,
-  queue: [], level: {}, hist: {}, unread: {}, spokeAt: performance.now(), fill: 0, joined: false, lastFill: '', forUser: {},
+  queue: [], level: {}, hist: {}, rx: {}, rxOn: true, unread: {}, spokeAt: performance.now(), fill: 0, joined: false, lastFill: '', forUser: {},
 };
 const P = (id) => persona(S.sq[id]);
 
@@ -486,8 +486,44 @@ function appendLine(cw, line, keepPlace) {
   d.className = line.cls; if (line.ts) d.dataset.ts = line.ts; if (line.html) d.innerHTML = line.html; else d.textContent = line.text; line.el = d;
   if (line.fold) d.onclick = (e) => { if (e.target.closest('.fhead')) d.classList.toggle('open'); };
   box.querySelector('.empty')?.remove();
-  box.appendChild(d); if (typeof linkTasks === 'function') linkTasks(d); if (box.pinned !== false || !keepPlace) pinBottom(box);
+  box.appendChild(d); if (typeof linkTasks === 'function') linkTasks(d); if (/^m (you|lead)/.test(line.cls)) paintRx(d, cw.id.slice(3)); if (box.pinned !== false || !keepPlace) pinBottom(box);
   for (const i of d.querySelectorAll('img')) i.addEventListener('load', () => { if (box.pinned !== false) pinBottom(box); }, { once: true });
+}
+// Emoji reactions: a row under each message, one chip per emoji; your own click takes yours back.
+const RX_PALETTE = ['👍', '❤️', '😂', '🎉', '🔥', '👀', '🙌', '🤔', '😮', '😢', '🚀', '✅'];
+const rxName = (by) => S.sq[by]?.name || B.humans.find((h) => h.id === by)?.name || (by === 'owner' ? 'You' : by);
+function paintRx(d, id) {
+  if (!d.dataset.ts) return;
+  const list = S.rx[`${id}:${d.dataset.ts}`] || [], me = S.me || 'owner', groups = new Map();
+  for (const r of list) groups.set(r.emoji, [...(groups.get(r.emoji) || []), r.by]);
+  let row = d.querySelector(':scope > .rxrow');
+  if (!row) { row = document.createElement('div'); row.className = 'rxrow'; d.appendChild(row); row.onclick = (e) => rxClick(e, id, +d.dataset.ts); d.addEventListener('click', (e) => { if (!e.target.closest('a,button,img')) d.classList.toggle('rxshow'); }); }
+  row.innerHTML = [...groups].map(([e, by]) => `<button type="button" class="rxchip${by.includes(me) ? ' mine' : ''}" data-e="${esc(e)}" title="${esc(by.map(rxName).join(', '))}" aria-label="${esc(`${e} from ${by.map(rxName).join(', ')}`)}">${esc(e)} ${by.length}</button>`).join('') + '<button type="button" class="rxadd" aria-label="Add a reaction" title="Add a reaction">+</button>';
+}
+const rxSend = async (chat, ts, emoji) => { const r = await api('/react', { chat, ts, emoji, human: S.me }); if (r?.error) toast(r.error); };
+function rxClick(e, id, ts) {
+  const chip = e.target.closest('.rxchip'); if (chip) return rxSend(id, ts, chip.dataset.e);
+  const add = e.target.closest('.rxadd'); if (add) rxPick(add, id, ts);
+}
+function rxClose() { document.getElementById('rxpick')?.remove(); document.removeEventListener('pointerdown', rxOutside, true); document.removeEventListener('keydown', rxKey, true); }
+const rxOutside = (e) => { if (!e.target.closest('#rxpick')) rxClose(); };
+const rxKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); rxClose(); } };
+function rxPick(btn, id, ts) {
+  rxClose();
+  const p = document.createElement('div'); p.id = 'rxpick'; p.setAttribute('role', 'menu'); p.setAttribute('aria-label', 'Add a reaction');
+  p.innerHTML = RX_PALETTE.map((e) => `<button type="button" role="menuitem" data-e="${e}">${e}</button>`).join('');
+  p.onclick = (e) => { const b = e.target.closest('button'); if (b) { rxClose(); rxSend(id, ts, b.dataset.e); btn.focus?.(); } };
+  document.body.appendChild(p);
+  const r = btn.getBoundingClientRect(), w = p.offsetWidth, h = p.offsetHeight;
+  p.style.left = `${Math.max(8, Math.min(r.left, innerWidth - w - 8))}px`;
+  p.style.top = `${r.top - h - 6 >= 8 ? r.top - h - 6 : Math.min(r.bottom + 6, innerHeight - h - 8)}px`;
+  p.querySelector('button').focus();
+  document.addEventListener('pointerdown', rxOutside, true); document.addEventListener('keydown', rxKey, true);
+}
+function rxPower(on) { S.rxOn = on; document.body.classList.toggle('rxoff', !on); const c = document.getElementById('reactOn'); if (c) c.checked = on; if (!on) rxClose(); }
+function rxUpdate({ chat, ts, list }) {
+  const key = `${chat}:${ts}`; if (list.length) S.rx[key] = list; else delete S.rx[key];
+  const d = document.querySelector(`#cw-${CSS.escape(chat)} .m:is(.you,.lead)[data-ts="${+ts}"]`); if (d) paintRx(d, chat);
 }
 // A chat stays pinned to its newest message unless the user scrolls up. Hidden windows (lock screen, another tab,
 // minimized) can't scroll, so the pin is re-applied whenever the list becomes visible or changes size.
@@ -783,6 +819,8 @@ async function roomCommand(ev) {
     case 'radio': prefs.music = v !== 'off'; if (prefs.music && STATIONS.some(([s]) => s === v)) prefs.station = v; paintSound(); break;
     case 'volume': prefs.musicVol = Math.max(0, Math.min(1, +v || 0)); paintSound(); break;
     case 'voices': prefs.voice = v !== 'off'; paintSound(); break;
+    case 'reactions': rxPower(v !== 'off'); break;
+    case 'react': rxUpdate(ev); break;
     case 'chatter': if (['quiet', 'normal', 'lively'].includes(v)) { prefs.chatter = v; paintSound(); } break;
     case 'theme': if (['flat', 'clean'].includes(v)) { prefs.theme = v; savePrefs(); applyTheme(); paintSound(); } break;
     case 'view': if (v === 'review') v = 'merge'; if (v === 'settings' && ev.id) B.stab = setTab(String(ev.id).toLowerCase()); if (v === 'calendar' && ev.id) setCalMode(String(ev.id).toLowerCase()); if (['room', 'lead', 'meeting', 'team', 'calendar', 'goals', 'tasks', 'merge', 'files', 'settings'].includes(v)) { setView(v); if (v === 'files' && ev.id) previewByName(ev.id); } else if (v === 'blocked' || v === 'rethink') openStuck(v); else if (v === '1on1' && S.sq[ev.id]) oneOnOne(ev.id); else if (v === 'keys') window.openKeys?.(); else if (v === 'jump') window.openJump?.(); break;
@@ -815,7 +853,7 @@ function showLimit(until) {
 }
 async function load() {
   api('/limit').then((l) => showLimit(l.until || 0));
-  const room = await api('/room').catch(() => ({})); roomGen(room.characters || 'cast'); S.roots = room.fileRoots || {}; S.realRoots = room.fileReal || {}; S.home = room.home || ''; S.piModels = room.piModels || []; S.cursorModels = room.cursorModels || [];
+  const room = await api('/room').catch(() => ({})); rxPower(room.reactions !== 'off'); S.rx = (await api('/react').catch(() => null))?.items || {}; roomGen(room.characters || 'cast'); S.roots = room.fileRoots || {}; S.realRoots = room.fileReal || {}; S.home = room.home || ''; S.piModels = room.piModels || []; S.cursorModels = room.cursorModels || [];
   const list = await api('/squiggles').catch(() => null);
   // A failed read must not empty the room (t671): keep what's on screen and try again.
   if (!Array.isArray(list)) { setTimeout(load, 2000); return; }

@@ -51,6 +51,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Private data fence (off until configured): config `privateDirs`, `privateTools` and `privateRemote` name folders, tools and remote reach that only Claude squiggles get. Codex, Cursor and Pi guards refuse them, including walks from a parent folder, symlinks and globs; config is read each call and an unreadable config refuses. `notes` leaves private folders out for those squiggles.
 
 ### Added
+- Emoji reactions in chats: tap + under a message (or the chip itself, to take it back) to react, and squiggles react with `react <chat> <emoji> [words]`. Reactions wake nobody. Settings turns them off for the whole room (`room reactions on|off`).
 - Watches: a squiggle files a read-only check (`watch add "<command>" --every 30m`), you approve the exact text on the Team tab, and the room runs it on schedule and wakes the squiggle only when the output changes. Drop one there or with `watch drop`. Nothing else checks that a command only reads, so read it before you approve.
 - Quiet wakes: a scheduled wake is skipped when the last turn ended IDLE or WAITING and nothing it would act on (its open notes, untold suggestion answers, its charter) has changed. A real wake still runs every 6 hours. Squiggles that watch outside things can be set to always wake (squiggle sheet, set by the user or the lead).
 - Pre-check: when a scheduled wake isn't skipped but the last turn ended IDLE or WAITING, a small Sonnet session first reads the squiggle's charter, notes and journal tail with read-only tools and answers WAKE or DEFER. DEFER skips the wake; WAKE runs it with what the check found. Anything unclear wakes, and a real wake still runs every 12 hours. Claude squiggles only.
@@ -182,6 +183,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Settings number inputs show an accent border on focus and are 44px tall on touch screens.
 
 ### Fixed
+- The Team tab's cards no longer overflow sideways on a phone.
 - With "This Mac's browser skips the passcode" on, a step that needs an unlocked page (Run on an ask, answering a pick) prompts for the passcode instead of reloading the page.
 - The squiggle sheet saves in a room with no passcode again: it sends permissions, model, start folder and context cap only when they changed.
 - The Goals and Tasks columns keep their scroll position when the board refreshes, instead of jumping back to the top whenever a note changes.

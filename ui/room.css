@@ -559,7 +559,7 @@ html[data-theme=clean] .mrow .mres { color: var(--dim) } html[data-theme=clean] 
 .tm dd:has(> code) { display: block; white-space: nowrap; text-overflow: ellipsis }
 .tm .acts { flex-wrap: wrap }
 @media (max-width: 760px) {
-  .team { grid-template-columns: 1fr; gap: 12px }
+  .team { grid-template-columns: minmax(0, 1fr); gap: 12px } /* plain 1fr grows to the widest line in any card */
   .tm { padding: 14px; gap: 10px }
   .tmh { grid-template-columns: 72px 1fr auto; gap: 12px }
   .tmh .face { width: 72px; height: 72px; border-radius: 14px }
@@ -1141,3 +1141,14 @@ html[data-theme=clean] .ksel { outline-color: #fff } html[data-theme=clean] .not
 @media (pointer: coarse) { .pop.modal .calwho { max-height: none; row-gap: 0 } }
 /* Note status buttons in even thirds on a phone, not a ragged 4 + 2. */
 @media (max-width: 760px) { .pop .row.sts { display: grid; grid-template-columns: repeat(3, 1fr) } .pop .row.sts button { margin: 0 } }
+/* Emoji reactions. The add button shows on hover or focus; touch has no hover, so tapping a message shows it, 44px. */
+.rxrow { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; white-space: normal } .rxrow:not(:has(.rxchip)) { height: 0; margin: 0; overflow: visible }
+body.rxoff .rxrow { display: none }
+.rxchip, .rxadd { font-family: inherit; font-size: 13px; line-height: 1; color: inherit; background: rgba(255,255,255,.07); border: 1px solid var(--line); border-radius: 999px; height: 24px; padding: 0 8px; cursor: pointer }
+.rxchip.mine { border-color: var(--accent); background: rgba(255,255,255,.14) }
+.rxadd { opacity: 0; width: 28px; padding: 0 } .m:hover .rxadd, .rxadd:focus-visible { opacity: 1 }
+/* No chips yet: the row has no height, so the add button sits beside the bubble rather than on its edge. */
+@media (pointer: fine) { .m:has(> .rxrow) { position: relative } .rxrow:not(:has(.rxchip)) .rxadd { position: absolute; bottom: 4px } .m.you:not(.other) > .rxrow:not(:has(.rxchip)) .rxadd { left: -34px } .m.lead > .rxrow:not(:has(.rxchip)) .rxadd, .m.you.other > .rxrow:not(:has(.rxchip)) .rxadd { right: -32px } }
+#rxpick { position: fixed; z-index: 9000; display: grid; grid-template-columns: repeat(6, 36px); gap: 2px; padding: 6px; background: #1a1e2a; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.4) }
+#rxpick button { width: 36px; height: 36px; font-size: 19px; background: none; border: 0; border-radius: 8px; cursor: pointer } #rxpick button:hover, #rxpick button:focus-visible { background: rgba(255,255,255,.1) }
+@media (pointer: coarse) { .rxchip { height: 44px; padding: 0 12px } .rxadd { display: none; opacity: 1; width: 44px; height: 44px } .m.rxshow .rxadd { display: block } #rxpick { grid-template-columns: repeat(6, 44px) } #rxpick button { width: 44px; height: 44px } .m.rxshow .rxrow { height: auto; margin-top: 4px } }
