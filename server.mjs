@@ -1060,6 +1060,17 @@ setInterval(async () => {
   } catch (e) { console.error('waits', e.message); } finally { waitTick = false; }
 }, 30000);
 
+// ---------- watches: approved read-only checks; the owner wakes only when the output changes (watches.mjs) ----------
+// No reentry guard: tick runs due watches side by side and skips any still running.
+setInterval(async () => {
+  try {
+    await watches.tick({ skip: (id) => !!loadSquiggle(id)?.paused, onWake: (w) => {
+      try { send(w.owner, `${w.prompt}${w.task ? `\n[${w.task}]` : ''}\n\nPick it up from here, journal it and end with a status line.`, 'harness'); } catch (e) { console.error('watch', w.id, e.message); }
+      broadcast('*room', { k: 'room', action: 'watches' });
+    } });
+  } catch (e) { console.error('watches', e.message); }
+}, 60000);
+
 // ---------- meetings: at the start time, wake the attendees with the agenda and open the meeting view ----------
 // One meeting at a time; it closes at its end time (or `meeting end`). Started occurrences are remembered so a restart doesn't repeat them.
 const meetingNow = () => persisted['*meeting'] || null;
