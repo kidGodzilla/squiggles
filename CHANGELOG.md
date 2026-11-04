@@ -5,6 +5,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 ## 0.1.2 (unreleased)
 
 ### Security
+- Dropping a watch needs an unlocked session unless the caller is a squiggle the server recognises, so a plain curl or a squiggle's detached process can't drop another squiggle's watch. The terminal asks for the passcode.
 - The fence refuses shell and edit-tool writes to `watches.json`, so a squiggle can't approve its own watch by editing the file. Reads stay open; a script file still gets through.
 - A watch's `--ignore` regex has a 250 ms limit: a slow pattern pauses the watch and tells its owner instead of hanging the server.
 - The private-data fence refuses code it can't read first: a script piped to a shell, a program or script path held in a variable, or a script the same command writes. It also follows scripts after a cd and one-line helpers, sees through full-path wrappers (/bin/sh), shells fed from a file (sh < x.sh) and braces across folders.

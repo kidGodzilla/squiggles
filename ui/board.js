@@ -566,7 +566,7 @@ $('#teamList').onclick = async (e) => {
   if (a === 'edit') return openSheet(id);
   if (a === 'meet') return meetNowPop(e.target, id);
   if (a === 'wapprove') { const { w, h } = e.target.dataset; const r = await unlocked(() => api('/watches', { op: 'approve', id: w, hash: h }), 'Unlock to approve'); if (r === null) return; if (!r?.error) loadWatches(); return toast(r?.error || `Approved ${w}`); }
-  if (a === 'wdrop') { const w = e.target.dataset.w; if (!confirm(`Drop watch ${w}?`)) return; const r = await api('/watches', { op: 'drop', id: w }); if (!r?.error) loadWatches(); return toast(r?.error || `Dropped ${w}`); }
+  if (a === 'wdrop') { const w = e.target.dataset.w; if (!confirm(`Drop watch ${w}?`)) return; const r = await unlocked(() => api('/watches', { op: 'drop', id: w }), 'Unlock to drop'); if (r === null) return; if (!r?.error) loadWatches(); return toast(r?.error || `Dropped ${w}`); }
   if (a === 'wake') { const r = await api(`/squiggles/${id}/wake`, { why: 'Asked from the room' }); return toast(r?.error || `Woke ${S.sq[id].name}`); }
   oneOnOne(id);
 };

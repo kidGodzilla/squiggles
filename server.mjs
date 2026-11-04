@@ -1676,7 +1676,7 @@ const server = http.createServer(async (req, res) => {
           const w = watches.add({ owner: who, cmd: b.cmd, cwd: b.cwd ? path.resolve(home(String(b.cwd))) : home(loadSquiggle(who)?.cwd || '~'), every: b.every, ignore: b.ignore, task: b.task, timeout: b.timeout, added: !!b.added });
           broadcast('*room', { k: 'room', action: 'watches' }); return json(res, w);
         }
-        if (b.op === 'drop') { const boss = !who || !!loadSquiggle(who)?.lead; const w = watches.drop(String(b.id || ''), { by: who || 'owner', boss }); broadcast('*room', { k: 'room', action: 'watches' }); return json(res, w); }
+        if (b.op === 'drop') { if (!who) { try { pass.session(req, "dropping a squiggle's watch"); } catch (e) { return json(res, { error: e.message, ...(e.unlock && { unlock: true }) }, e.code || 403); } } const boss = !who || !!loadSquiggle(who)?.lead; const w = watches.drop(String(b.id || ''), { by: who || 'owner', boss }); broadcast('*room', { k: 'room', action: 'watches' }); return json(res, w); }
         // Approving runs a command unattended: the owner only, from an unlocked browser (same gate as Run on an ask).
         if (b.op === 'approve') {
           if (who) return json(res, { error: `only ${USER} approves a watch, on the Team tab` }, 403);
