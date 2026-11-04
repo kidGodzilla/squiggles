@@ -175,6 +175,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Settings number inputs show an accent border on focus and are 44px tall on touch screens.
 
 ### Fixed
+- With "This Mac's browser skips the passcode" on, a step that needs an unlocked page (Run on an ask, answering a pick) prompts for the passcode instead of reloading the page.
 - The squiggle sheet saves in a room with no passcode again: it sends permissions, model, start folder and context cap only when they changed.
 - The Goals and Tasks columns keep their scroll position when the board refreshes, instead of jumping back to the top whenever a note changes.
 - `goal edit <id> title|owner|note|repos|merge|kind|due <value>` edits that field; before, it renamed the goal to the field word. A bare field word is refused as a title.

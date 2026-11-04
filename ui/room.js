@@ -9,7 +9,7 @@ const URL0 = location.search;
 const fmtDur = (ms) => (ms < 1000 ? `${Math.round(ms)}ms` : ms < 60000 ? `${(ms / 1000).toFixed(1)}s` : `${Math.floor(ms / 60000)}m${Math.round((ms % 60000) / 1000)}s`);
 // Room passcode (t913): PASS mirrors /api/passcode. A 401 after unlocking means the session ended elsewhere: reload to the lock screen.
 const PASS = { set: false, ok: true };
-const api = async (p, body) => (p === '/passcode' || await GATE, fetch('/api' + p, body === undefined ? {} : { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then((r) => { if (r.status === 401 && PASS.set && PASS.ok) location.reload(); return r.json(); }));
+const api = async (p, body) => (p === '/passcode' || await GATE, fetch('/api' + p, body === undefined ? {} : { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then(async (r) => { const j = await r.json(); if (r.status === 401 && PASS.set && PASS.ok && !j?.unlock) location.reload(); return j; })); // unlock: unlocked() prompts for the code
 // Every api() call waits here until the passcode gate opens (at once when there is none).
 const GATE = passGate();
 
@@ -803,6 +803,7 @@ async function roomCommand(ev) {
     case 'asks': loadAsks(); return;
     case 'picks': loadPicks(); return;
     case 'waits': return;
+    case 'watches': loadWatches(); return;
     case 'characters': roomGen(v); S.order.forEach(reskin); if (B.view === 'settings') renderSettings(); break;
   }
   savePrefs(); AUD.apply();

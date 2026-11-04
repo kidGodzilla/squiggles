@@ -27,7 +27,7 @@ async function loadBoard() {
   if (B.seen) for (const t of B.tasks) if (!before.has(t.id)) B.fresh.add(t.id);
   B.seen = true;
   renderGoals(); renderTasks(); B.fresh.clear(); linkAll();
-  if (B.view === 'team') { renderTeam(); loadHumans(); loadCost(); }
+  if (B.view === 'team') { renderTeam(); loadHumans(); loadCost(); loadWatches(); }
   if (B.view === 'calendar') loadCal();
   if (B.view === 'merge') loadMerges();
 }
@@ -498,9 +498,18 @@ function renderTeam() {
         ${dd('runs', 'Runs', `${cadence(s.every)}, ${modelName(s.model)}${s.permissionMode && s.permissionMode !== 'auto' ? `, ${s.permissionMode}` : ''}`)}
         ${B.cost[s.id] ? dd('spend', 'Spend', spend(B.cost[s.id])) : ''}
         <dt data-k="cwd">Works in</dt><dd data-k="cwd" title="${esc(s.cwd || '~')}"><code>${esc(s.cwd || '~')}</code></dd></dl>
+      ${watchRows(s.id)}
       <div class="acts"><button data-a="one">1:1</button><button data-a="chat">Chat</button><button data-a="wake">Wake</button><button data-a="meet">Meet</button><button data-a="edit">Settings</button></div>
     </div>`;
   }).join('') || '<div class="empty">Nobody matches.</div>';
+}
+// Watches: each squiggle's model-free checks, with Approve and Drop. CLI: watches, watch add|drop.
+B.watches = {};
+async function loadWatches() { const r = await api('/watches'); if (Array.isArray(r)) { B.watches = {}; for (const w of r) (B.watches[w.owner] ||= []).push(w); if (B.view === 'team') renderTeam(); } }
+const WATCH_STATE = { pending: 'Waiting for your approval', on: 'On', failing: 'Failing', paused: 'Paused' };
+function watchRows(id) {
+  const l = B.watches[id]; if (!l?.length) return '';
+  return `<div class="tmw"><h5>Watches</h5>${l.map((w) => `<div class="tmwr"><div><code title="${esc(w.cmd)}">${esc(w.cmd)}</code><small>${esc(WATCH_STATE[w.state] || w.state)}, every ${Math.round(w.every / 6e4)} min${w.timeout ? `, up to ${Math.round(w.timeout / 6e4) || 1} min a run` : ''}${w.added ? ', wakes on new lines only' : ''}${w.lastRun ? `, ran ${esc(when(w.lastRun))}` : ''}${w.why ? `. ${esc(w.why)}` : ''}</small>${w.ignore ? `<small>Ignoring <code>/${esc(w.ignore)}/</code></small>` : ''}${w.runsFor ? `<small>Runs for ${esc(w.runsFor)}: output reaches a non-Claude model</small>` : ''}</div>${w.state === 'pending' ? `<button data-a="wapprove" data-w="${esc(w.id)}" data-h="${esc(w.hash || '')}" title="Run this exact command on its schedule. Nothing else checks that it only reads: read it first.">Approve</button>` : ''}<button data-a="wdrop" data-w="${esc(w.id)}" title="Drop this watch">Drop</button></div>`).join('')}</div>`;
 }
 // People: the humans who use the room (humans.json). The owner first; click one to edit. CLI: humans, human add|edit|remove.
 B.humans = [];
@@ -556,6 +565,8 @@ $('#teamList').onclick = async (e) => {
   if (a === 'chat') return openChat(id);
   if (a === 'edit') return openSheet(id);
   if (a === 'meet') return meetNowPop(e.target, id);
+  if (a === 'wapprove') { const { w, h } = e.target.dataset; const r = await unlocked(() => api('/watches', { op: 'approve', id: w, hash: h }), 'Unlock to approve'); if (r === null) return; if (!r?.error) loadWatches(); return toast(r?.error || `Approved ${w}`); }
+  if (a === 'wdrop') { const w = e.target.dataset.w; if (!confirm(`Drop watch ${w}?`)) return; const r = await api('/watches', { op: 'drop', id: w }); if (!r?.error) loadWatches(); return toast(r?.error || `Dropped ${w}`); }
   if (a === 'wake') { const r = await api(`/squiggles/${id}/wake`, { why: 'Asked from the room' }); return toast(r?.error || `Woke ${S.sq[id].name}`); }
   oneOnOne(id);
 };
@@ -755,7 +766,7 @@ function setView(v, who, nav) {
   if (nav !== 'none' && location.search !== q) history[nav === 'replace' ? 'replaceState' : 'pushState'](null, '', location.pathname + q);
   if (v === 'room' || office) layout(); else loadBoard();
   if (v === 'merge') loadMerges();
-  if (v === 'team') { renderTeam(); loadHumans(); loadCost(); }
+  if (v === 'team') { renderTeam(); loadHumans(); loadCost(); loadWatches(); }
   if (v === 'calendar') loadCal();
   if (v === 'goals') loadLoad();
   if (v === 'files' && typeof loadFiles === 'function') loadFiles();
