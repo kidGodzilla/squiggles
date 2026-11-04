@@ -147,6 +147,18 @@ test('wrappers by full path, and shells fed from a file', () => {
     assert.equal(bash(c, d), '', c);
 });
 
+test('merge diffs, plumbing, stash patches and commit searches in a private repo', () => {
+  const R = `${H}/repo2`, O = `${H}/plain2`, r = privateRules({ privateDirs: ['repo2/secret'] }), g = (c, at = R) => bash(c, at, r);
+  for (const d of [R, O]) { fs.mkdirSync(`${d}/secret`, { recursive: true }); fs.mkdirSync(`${d}/docs`); fs.writeFileSync(`${d}/docs/b.md`, 'y'); execFileSync('git', ['init', '-q'], { cwd: d }); }
+  for (const c of ['git log -c', 'git log --cc', 'git log --dd', 'git log --remerge-diff', 'git log --binary', 'git log --diff-merges=on', 'git log --diff-merges on', 'git log --check', 'git log --stat -c',
+    'git diff-tree -p HEAD', 'git diff-tree --patch-with-raw HEAD', 'git diff-tree --cc HEAD', 'git diff-index -p HEAD', 'git diff-files -p', 'git stash show -p', 'git stash show --patch', 'git stash show --include-untracked -p',
+    'git stash list -p', 'git request-pull -p a b',
+    'git show :/text', 'git show :0:docs/b.md', 'git show "HEAD^{/a:b}"', 'git cat-file -p :/text', 'git cat-file -p :0:docs/b.md']) assert.equal(g(c), P, c);
+  for (const c of ['git log -c -- docs', 'git diff-tree -p HEAD -- docs', 'git diff-tree -r --name-only HEAD', 'git diff-tree --stat HEAD', 'git stash', 'git stash -u', 'git stash list', 'git stash show',
+    'git log --oneline -n 5', 'git show HEAD:docs/b.md', 'git show main:docs/b.md HEAD:docs/b.md']) assert.equal(g(c), '', c);
+  for (const c of ['git log -c', 'git diff-tree -p HEAD', 'git stash show -p', 'git show :/text']) assert.equal(g(c, O), '', c);
+});
+
 test('git history in a repo holding a private folder', () => {
   const R = `${H}/repo`, O = `${H}/plain`, r = privateRules({ privateDirs: ['repo/secret'] }), g = (c, at = R) => bash(c, at, r);
   for (const d of [R, O]) {

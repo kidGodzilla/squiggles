@@ -286,8 +286,10 @@ const sysBin = (w) => w.replace(/^\/(?:usr\/(?:local\/)?|opt\/homebrew\/)?s?bin\
 const repoRoot = (dir) => { for (let d = real(dir); ; d = path.dirname(d)) { if (fs.existsSync(path.join(d, '.git'))) return d; if (d === path.dirname(d)) return ''; } };
 const holds = (root, dirs) => { const r = root.toLowerCase(); return !!r && dirs.some((d) => d === r || d.startsWith(r + '/') || r.startsWith(d + '/')); };
 const NAMES_ONLY = /^(-s|--no-patch|--stat|--shortstat|--numstat|--name-only|--name-status|--summary)$/;
-const PATCH = /^(-\w*[pu]\w*|-U\d*|--patch\S*|--unified\S*|--cc|--word-diff\S*|--color-words\S*|--full-diff|-W|--function-context|-[GSL].*)$/;
+const PATCH = /^(-\w*[puc]\w*|-U\d*|--patch\S*|--unified\S*|--cc|--dd|--remerge-diff|--diff-merges\S*|--binary|--check|--word-diff\S*|--color-words\S*|--full-diff|-W|--function-context|-[GSL].*)$/;
 const REV_PATH = /^[^:]*:(?!\/\/)(.+)$/;
+// A real rev:path. Not :/text or HEAD^{/a:b}, which name a commit, nor :0:path, whose path REV_PATH misreads.
+const REV_ONLY = /^(?!.*\^\{\/)[^-:][^:]*:.+/;
 function gitHistory(ws, here, home, o) {
   let dirs = here, blind = false, i = 1;
   for (; ws[i]?.startsWith('-'); i++) {
@@ -301,11 +303,13 @@ function gitHistory(ws, here, home, o) {
   if (!inside.length && !blind) return false;
   if (['format-patch', 'archive', 'bundle', 'fast-export'].includes(sub)) return true;
   // Only rev:path words: each was just checked. git show HEAD:a <rev> still shows <rev>.
-  const named = rest.filter((w) => !w.startsWith('-')), revOnly = !blind && named.length > 0 && named.every((w) => REV_PATH.test(w));
+  const named = rest.filter((w) => !w.startsWith('-')), revOnly = !blind && named.length > 0 && named.every((w) => REV_ONLY.test(w));
   if (sub === 'cat-file') return !revOnly && !rest.some((w) => /^-[est]$/.test(w));
-  const logs = ['log', 'whatchanged', 'reflog'].includes(sub);
-  if (logs ? !rest.some((w) => PATCH.test(w)) : !['show', 'diff', 'grep'].includes(sub)) return false;
-  if (sub !== 'grep' && !rest.some((w) => PATCH.test(w)) && (rest.some((w) => NAMES_ONLY.test(w)) || !logs && revOnly)) return false;
+  // Read like log: names only until a patch flag. stash -u is a write, so only its read forms count.
+  const logs = ['log', 'whatchanged', 'reflog', 'diff-tree', 'diff-index', 'diff-files', 'request-pull'].includes(sub) || sub === 'stash' && ['show', 'list'].includes(rest[0]);
+  const patch = rest.some((w) => PATCH.test(w));
+  if (logs ? !patch : !['show', 'diff', 'grep'].includes(sub)) return false;
+  if (sub !== 'grep' && !patch && (rest.some((w) => NAMES_ONLY.test(w)) || !logs && revOnly)) return false;
   const dash = rest.indexOf('--'), operands = named.slice(sub === 'grep' ? 1 : 0);
   const paths = dash >= 0 ? rest.slice(dash + 1) : operands.filter((w) => inside.some((d) => fs.existsSync(path.resolve(d, w))));
   return blind || !paths.length || paths.some((p) => /[*?[:]/.test(p) || inside.some((d) => o.hit(p, d) || o.reach(p, d)));
