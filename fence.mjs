@@ -209,7 +209,7 @@ const LOCAL = /^(localhost|127\.\d+\.\d+\.\d+|::1|\[::1\]|0\.0\.0\.0)$/i;
 const HOST_ARG = /^(?:[\w.-]+@)?([\w.-]+):(?!\/\/)/;
 const CODE_HOSTS = /^(github|gitlab|bitbucket)\.(com|org)$/i;
 const WRAPS = ['sudo', 'exec', 'env', 'nohup', 'time', 'command', 'builtin', 'xargs', 'timeout', 'nice', 'sh', 'bash', 'zsh', 'source', '.',
-  'do', 'then', 'else', 'elif', 'if', 'while', 'until', '{', '!'];
+  'do', 'then', 'else', 'elif', 'if', 'while', 'until', '{', ')', '!'];
 const WALKERS = ['rg', 'ag', 'fd', 'find', 'tree', 'tar', 'zip', 'du', '7z'];
 const isGlob = (s) => /[*?[{]/.test(s);
 export function privateReason(tool, input = {}, cwd = process.cwd(), home = os.homedir(), rules = {}) {
@@ -250,8 +250,29 @@ export function privateReason(tool, input = {}, cwd = process.cwd(), home = os.h
   }
   return '';
 }
+// One-line helpers (run() { echo "$1"; sh "$1"; }): each plain call is checked as the helper's body with the call's words for
+// $1..$9. A helper used any other way ($(run x), run "$f" in a loop) stays as written, so its $1 still refuses.
+function inlineHelpers(cmd) {
+  for (const [line, name, body] of [...cmd.matchAll(/^[ \t]*(?:function[ \t]+)?([A-Za-z_]\w*)[ \t]*\(\)[ \t]*\{(.*)\}[ \t]*;?[ \t]*$/gm)]) {
+    const lines = cmd.split('\n'), word = new RegExp(`(?<![\\w$-])${name}(?![\\w-])`);
+    const calls = lines.map((l) => l.match(new RegExp(`^[ \\t]*${name}((?:[ \\t]+[\\w./~@:+,=-]+)*)[ \\t]*$`)));
+    if (lines.filter((l) => word.test(l)).length !== 1 + calls.filter(Boolean).length) continue;
+    cmd = lines.map((l, i) => l === line ? '' : calls[i] ? body.replace(/\$\{?([1-9])\}?/g, (_, n) => calls[i][1].trim().split(/[ \t]+/)[n - 1] ?? '') : l).join('\n');
+  }
+  return cmd;
+}
+// Does the command, before this point, write the script it runs? What's on disk then isn't what will run, so it can't be checked.
+// A heredoc is exempt: its lines are read as part of the command.
+const writes = (cmd, base) => { const re = new RegExp(`(?:>|\\btee\\s+(?:-a\\s+)?|\\b(?:cp|mv|ln)\\s[^;&|]*\\s|\\b(?:curl|wget)\\s(?:[^;&|]*\\s)?(?:-o|-O|--output)[\\s=]*)\\s*(?:\\S*/)?${esc(base)}(?=[\\s;&|)]|$)`);
+  return !!base && cmd.split('\n').some((l) => re.test(l) && !l.includes('<<')); };
+// /bin/sh is sh. System folders only: ~/bin/sh is a script and gets read as one.
+const sysBin = (w) => w.replace(/^\/(?:usr\/(?:local\/)?|opt\/homebrew\/)?s?bin\/(?=[^/]+$)/, '');
 function privateCommand(cmd, cwd, home, o, depth) {
-  const raw = String(cmd), text = unquote(raw), here = [...new Set(places(text, cwd, home))];
+  const raw = String(cmd), text = inlineHelpers(unquote(raw)), here = [...new Set(places(text, cwd, home))];
+  // Code the fence can't read is refused once there is a folder or machine to protect. Tools alone are matched by name.
+  const strict = o.remote || o.dirs.length > 0;
+  // `echo 'ssh x' | sh`: the script is only on the pipe. Read from raw so grep 'a|sh' stays a pattern.
+  if (strict && !depth && /\|\s*(?:sudo\s+|env\s+)?(?:\S*\/)?(?:sh|bash|zsh)(?:\s+-\w+)*\s*(?:$|[;&|)])/m.test(raw)) return true;
   if (o.remote) {
     if (DB_DRIVER.test(raw)) return true;
     for (const m of text.matchAll(DB_URL)) if (!LOCAL.test(m[1])) return true;
@@ -259,19 +280,22 @@ function privateCommand(cmd, cwd, home, o, depth) {
   // Each segment's program, past env assignments and wrappers: `grep ssh x.js` passes, `sudo ssh x` doesn't.
   for (const seg of text.split(/[;&|`\n(]|\$\(/)) {
     const ws = seg.trim().split(/\s+/).filter(Boolean); let viaShell = false;
-    while (ws.length && (/^\w+=/.test(ws[0]) || WRAPS.includes(ws[0]) || /^-/.test(ws[0]) || /^\d+[smh]?$/.test(ws[0]))) {
-      if (['sh', 'bash', 'zsh', 'source', '.'].includes(ws[0])) viaShell = true;
+    while (ws.length && (/^\w+=/.test(ws[0]) || WRAPS.includes(sysBin(ws[0])) || /^-/.test(ws[0]) || /^\d+[smh]?$/.test(ws[0]))) {
+      if (['sh', 'bash', 'zsh', 'source', '.'].includes(sysBin(ws[0]))) viaShell = true;
       ws.shift();
+      // `sh < x.sh`, `bash <<< 'ssh x'`: what follows is the script.
+      if (viaShell && ws[0]?.startsWith('<')) { ws[0] = ws[0].replace(/^<+/, ''); if (!ws[0]) ws.shift(); }
     }
     if (!ws.length) continue;
     const prog = ws[0].split('/').pop(), rest = ws.slice(1);
+    // `$c "ls"`: a program held in a variable can't be checked. `sh $D/x.sh` too, in the command itself:
+    // inside a script `$DIR/lib.sh` is everyday, and refusing it would stop ordinary scripts.
+    if (strict && (/^\$/.test(prog) || !depth && /^\$/.test(ws[0].replace(/^\$\{?HOME\}?(?=\/)/, '')))) return true;
     if (o.remote) {
       if (REMOTE_SHELLS.includes(prog) && rest.join(' ') !== '-V') return true;
       if (prog === 'tailscale' && rest[0] === 'ssh') return true;
       const host = seg.match(/(?:^|\s)(?:-h|--host)(?:=|\s*)([^\s-]\S*)/);
       if (DB_CLIENTS.includes(prog) && host && !LOCAL.test(host[1])) return true;
-      // `$c "ls"`: a program held in a variable can't be checked.
-      if (/^\$/.test(prog)) return true;
       // rsync, git and unison reach another machine over ssh with host:path (code hosts and drive letters excepted).
       if (['rsync', 'git', 'unison'].includes(prog) && rest.some((w) => { const m = w.match(HOST_ARG); return m && !CODE_HOSTS.test(m[1]) && !/^[a-z]$/i.test(m[1]) && /[.@]/.test(m[0] + m[1]); })) return true;
     }
@@ -284,16 +308,22 @@ function privateCommand(cmd, cwd, home, o, depth) {
       const targets = /grep$/.test(prog) && args.length <= 1 || !/grep$/.test(prog) && !args.length ? [...args, '.'] : args;
       if (walks && here.some((dir) => targets.some((w) => o.reach(w, dir) === 'above'))) return true;
     }
-    // A script run here gets the same check, one level deep.
-    if (depth < 1 && (viaShell || ws[0].includes('/') || /\.(sh|bash|zsh)$/.test(ws[0]))) {
-      let body = '';
-      const f = path.resolve(cwd, ws[0].replace(homeArg(home), home));
-      try { if (fs.statSync(f).size < 256 * 1024) body = fs.readFileSync(f, 'utf8'); } catch {}
-      if (body && !body.includes('\0') && (viaShell || /^#!.*\b(sh|bash|zsh)\b/.test(body)) && privateCommand(body, path.dirname(f), home, o, depth + 1)) return true;
+    // A script run here gets the same check, two levels deep, found from every folder the command cd's to.
+    // Its own $(dirname "$0") reads as the script's folder.
+    if (depth < 2 && (viaShell || ws[0].includes('/') || /\.(sh|bash|zsh)$/.test(ws[0]))) {
+      const rel = ws[0].replace(homeArg(home), home);
+      if (strict && !depth && /^[\w.~\/-]+$/.test(rel) && writes(text.slice(0, text.lastIndexOf(seg)), path.basename(rel))) return true;
+      for (const f of new Set(here.map((dir) => path.resolve(dir, rel)))) {
+        let body = '';
+        try { if (fs.statSync(f).size < 256 * 1024) body = fs.readFileSync(f, 'utf8'); } catch {}
+        if (!body || body.includes('\0') || !(viaShell || /^#!.*\b(sh|bash|zsh)\b/.test(body))) continue;
+        body = body.replace(/\$\(\s*dirname\s+(?:--\s+)?["']?\$\{?(?:0|BASH_SOURCE(?:\[0\])?)\}?["']?\s*\)|\$\{(?:0|BASH_SOURCE(?:\[0\])?)%\/\*\}/g, () => path.dirname(f));
+        if (privateCommand(body, path.dirname(f), home, o, depth + 1)) return true;
+      }
     }
   }
   if (!o.dirs.length) return false;
-  const words = text.split(/[\s;|&()<>`]+/).filter(Boolean);
+  const words = text.split(/[\s;|&()<>`]+/).filter(Boolean).flatMap((w) => braces(w));
   return here.some((dir) => words.some((w) => w.split('=').some((part) => part && (o.hit(part, dir) || (isGlob(part) && o.reach(part, dir) === 'in')))));
 }
 // What the codex, cursor and pi guards call: the rules from <data dir>/config.json, read on every call so a change applies

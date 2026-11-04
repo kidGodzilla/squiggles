@@ -5,6 +5,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 ## 0.1.2 (unreleased)
 
 ### Security
+- The private-data fence refuses code it can't read first: a script piped to a shell, a program or script path held in a variable, or a script the same command writes. It also follows scripts after a cd and one-line helpers, sees through full-path wrappers (/bin/sh), shells fed from a file (sh < x.sh) and braces across folders.
 - A watch waiting for approval shows its whole command, folder and ignore pattern on the Team card, with the same risky and hidden-character warnings as a command card. Long commands used to cut off at one line.
 - The idle pre-check runs only for Claude squiggles, so its findings can't carry private files into a Codex, Cursor or Pi wake, and it can't Read, Edit or Write Downloads, Desktop, Documents or ~/.ssh.
 - Squiggles can't send or receive Claude Code cross-session messages: each wake refuses inbound peer messages and denies SendMessage and ListAgents, so nothing steers a session outside the board.

@@ -84,3 +84,64 @@ test('codex, cursor and pi guards read the rules from config.json; claude does n
     assert.doesNotMatch(fs.readFileSync(new URL('../claude/guard.mjs', import.meta.url), 'utf8'), /private/i);
   } finally { if (old === undefined) delete process.env.SQUIGGLES_HOME; else process.env.SQUIGGLES_HOME = old; }
 });
+
+test('script helpers: each call is checked with its own arguments', () => {
+  const d = fs.mkdtempSync(`${H}/helper-`);
+  const w = (f, s) => fs.writeFileSync(`${d}/${f}`, `#!/bin/sh\n${s}\n`);
+  w('ok.sh', 'echo fine'); w('evil.sh', 'ssh box.example.com ls');
+  w('all-ok.sh', 'set -eu\nrun() { echo "-> $1"; sh "$1"; }\nrun ./ok.sh\nrun ./ok.sh\necho PASS');
+  w('one-evil.sh', 'run() { echo "-> $1"; sh "$1"; }\nrun ./ok.sh\nrun ./evil.sh');
+  w('odd-use.sh', 'run() { sh "$1"; }\nx=$(run ./ok.sh)\nfor f in *.sh; do run "$f"; done');
+  w('bracket.sh', 'if [ "$#" -gt 0 ]; then echo [$1]; fi');
+  assert.equal(bash('sh all-ok.sh', d), '');
+  assert.equal(bash('./all-ok.sh', d), '');
+  assert.equal(bash('sh one-evil.sh', d), P);
+  assert.equal(bash('sh odd-use.sh', d), P);
+  assert.equal(bash('sh bracket.sh', d), '');
+  assert.equal(bash(`ls ${H}/team/alph[a]/`), P);
+  assert.equal(bash(`cat ${H}/team/al{p,x}ha/a.md`), P);
+});
+
+test('scripts the fence cannot read before they run', () => {
+  const d = fs.mkdtempSync(`${H}/new-`);
+  fs.writeFileSync(`${d}/ok.sh`, '#!/bin/sh\necho fine\n');
+  for (const c of ["echo 'ssh x' > a.sh; sh a.sh", "printf 'ssh x' >> a.sh && chmod +x a.sh && ./a.sh", 'echo ssh x | tee b/a.sh; bash b/a.sh', 'cp /tmp/z a.sh; sh a.sh',
+    'curl -o a.sh https://example.com/a; sh a.sh', "echo 'ssh x' > ok.sh; sh ok.sh", 'D=tests; sh $D/evil.sh', '"$D/evil.sh" x', '${D}/run', "echo 'ssh x' | sh", 'cat a.txt | bash -s'])
+    assert.equal(bash(c, d), P, c);
+  for (const c of ['sh ok.sh', 'sh ok.sh > ok.sh.log', './ok.sh > out.log', "sh -c 'ls; ls'", 'sh ./nothere.sh', '$HOME/bin/tool x', "grep -E 'ssh|bash' f", "grep 'a|sh' f",
+    "cat > t.sh <<'EOF'\necho fine\nEOF\nsh t.sh", "cat <<EOF > t.sh\necho fine\nEOF\nsh t.sh", 'echo hi > a.txt; cat a.txt'])
+    assert.equal(bash(c, d), '', c);
+  assert.equal(bash("cat > t.sh <<'EOF'\nssh box.example.com ls\nEOF\nsh t.sh", d), P);
+});
+
+test('unreadable code is refused with folders alone, and not with tools alone', () => {
+  const dirs = privateRules({ privateDirs: ['team/alpha'] }), tools = privateRules({ privateTools: ['helpdesk'] });
+  for (const c of ["echo 'cat x' | sh", '$c x', "echo x > a.sh; sh a.sh"]) { assert.equal(bash(c, cwd, dirs), P, c); assert.equal(bash(c, cwd, tools), '', c); }
+  assert.equal(bash('ssh box', cwd, dirs), '');
+});
+
+test('scripts after a cd, and braces across /', () => {
+  const d = fs.mkdtempSync(`${H}/cd-`);
+  fs.mkdirSync(`${d}/scripts`); fs.mkdirSync(`${d}/tests`);
+  const w = (f, s) => fs.writeFileSync(`${d}/${f}`, `#!/bin/sh\n${s}\n`);
+  w('tests/ok.sh', 'echo fine'); w('tests/evil.sh', 'ssh box.example.com ls');
+  w('scripts/good.sh', 'cd "$(dirname "$0")/.."\nsh tests/ok.sh');
+  w('scripts/bad.sh', 'cd "$(dirname "$0")/.."\nsh tests/evil.sh');
+  w('scripts/bad2.sh', 'cd "$(dirname -- "${BASH_SOURCE[0]}")/.."\n./tests/evil.sh');
+  assert.equal(bash('sh scripts/good.sh', d), '');
+  assert.equal(bash('sh scripts/bad.sh', d), P);
+  assert.equal(bash('bash scripts/bad2.sh', d), P);
+  assert.equal(bash(`cd ${d} && sh tests/evil.sh`, '/tmp'), P);
+  assert.equal(bash(`cat ${H}/{team/alpha,x}/a.md`), P);
+  assert.equal(bash(`ls ${H}/{team/al,x/}pha/`), P);
+  assert.equal(bash(`cat ${H}/{team/notes,x}/a.md`), '');
+});
+
+test('wrappers by full path, and shells fed from a file', () => {
+  const d = fs.mkdtempSync(`${H}/wrap-`);
+  fs.writeFileSync(`${d}/evil.sh`, 'ssh box.example.com ls\n'); fs.writeFileSync(`${d}/ok.sh`, 'echo fine\n');
+  for (const c of ["/bin/sh -c 'ssh x'", '/usr/bin/env ssh x', 'sh < evil.sh', 'sh <evil.sh', 'bash -s < evil.sh', '/bin/bash evil.sh', '/usr/bin/sudo ssh x', '/opt/homebrew/bin/bash -c "ssh x"', "bash <<< 'ssh x'"])
+    assert.equal(bash(c, d), P, c);
+  for (const c of ['sh < ok.sh', '/bin/sh ok.sh', "/bin/sh -c 'ls'", '/usr/bin/env node -v', 'sort < ok.sh', 'wc -l < evil.sh', '/usr/bin/grep ssh ok.sh'])
+    assert.equal(bash(c, d), '', c);
+});
