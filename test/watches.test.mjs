@@ -210,3 +210,36 @@ test('the approve route refuses a squiggle and needs the unlocked owner before i
   const refuse = r.indexOf('if (who)'), gate = r.indexOf('pass.owner(req)'), go = r.indexOf('watches.approve(');
   assert.ok(refuse >= 0 && refuse < gate && gate < go);
 });
+
+// --ignore runs on the server's main thread, so a catastrophic regex must not hang the room.
+test('a catastrophic --ignore pauses the watch inside a second and tells the owner', async () => {
+  const { W, done } = setup();
+  try {
+    const w = W.add({ owner: 'alpha', cmd: 'echo hi', cwd: '/tmp', ignore: '(a+)+$' });
+    W.approve(w.id, w.hash);
+    const t = Date.now();
+    const wakes = await W.tick({ exec: execOf([{ code: 0, out: `${'a'.repeat(40)}!` }]) });
+    assert.ok(Date.now() - t < 1000, `took ${Date.now() - t} ms`);
+    const after = W.list({ owner: 'alpha' })[0];
+    assert.equal(after.state, 'paused');
+    assert.match(after.why, /--ignore/);
+    assert.equal(wakes.length, 1);
+    assert.match(wakes[0].prompt, /--ignore/);
+  } finally { done(); }
+});
+
+test('a slow --ignore on the old output also pauses, with no crash', async () => {
+  const { W, clock, done } = setup();
+  try {
+    const w = W.add({ owner: 'alpha', cmd: 'echo hi', cwd: '/tmp', ignore: '(a+)+$' });
+    W.approve(w.id, w.hash);
+    const exec = execOf([{ code: 0, out: 'fine' }, { code: 0, out: `${'a'.repeat(40)}!` }]);
+    await W.tick({ exec });
+    assert.equal(W.list({ owner: 'alpha' })[0].state, 'on', 'harmless output passes');
+    clock.step(31 * 6e4);
+    const t = Date.now();
+    await W.tick({ exec });
+    assert.ok(Date.now() - t < 1000, `took ${Date.now() - t} ms`);
+    assert.equal(W.list({ owner: 'alpha' })[0].state, 'paused');
+  } finally { done(); }
+});

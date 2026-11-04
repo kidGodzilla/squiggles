@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import vm from 'node:vm';
 import { execFile } from 'node:child_process';
 import { askHash, mask } from './asks.mjs';
 import { commandReason, privateCheck } from './fence.mjs';
@@ -23,10 +24,13 @@ export function guardReason(owner, cmd, cwd, data = dataDir()) {
   return commandReason(cmd, cwd) || (claudeCaller(owner, data) ? '' : privateCheck('bash', { command: cmd }, cwd, os.homedir(), data));
 }
 // What counts as the answer: output minus --ignore matches, plus the exit code.
+// The regex runs on the server's main thread, so it gets a time limit: (a+)+$ would otherwise hang the whole server.
+export const IGNORE_MS = 250;
 export function normalize(out, ignore) {
-  let t = String(out ?? '');
-  if (ignore) t = t.replace(new RegExp(ignore, 'g'), '');
-  return t;
+  const t = String(out ?? '');
+  if (!ignore) return t;
+  try { return vm.runInNewContext('t.replace(re, "")', { t, re: new RegExp(ignore, 'g') }, { timeout: IGNORE_MS }); }
+  catch (e) { throw e.code === 'ERR_SCRIPT_EXECUTION_TIMEOUT' ? err(`--ignore took over ${IGNORE_MS} ms`, 'ignore-slow') : e; }
 }
 export const sigOf = (out, exit, ignore) => crypto.createHash('sha1').update(`${exit}\u0000${normalize(out, ignore)}`).digest('hex');
 // Lines gone and lines new, in order, capped. Plenty for a wake prompt; no need for a real LCS.
@@ -127,11 +131,17 @@ export function createWatches({ file, outDir, now = () => Date.now(), data = dat
         save(s); return;
       }
       const recovered = w.state === 'failing'; w.fails = 0; w.state = 'on';
-      const sig = sigOf(r.out, r.exit, w.ignore), f = outFile(w);
+      let sig, a, b; const f = outFile(w);
+      try {
+        sig = sigOf(r.out, r.exit, w.ignore);
+        if (sig !== w.lastSig) { let old = null; try { old = fs.readFileSync(f, 'utf8'); } catch {} a = normalize(old, w.ignore); b = normalize(r.out, w.ignore); }
+      } catch (e) {
+        if (e.code !== 'ignore-slow') throw e;
+        Object.assign(w, { state: 'paused', why: e.message }); save(s);
+        out(wake(w, `Watch ${w.id} is paused: ${e.message}. Drop it and add a simpler one.`)); return;
+      }
       if (sig !== w.lastSig) {
-        let old = null; try { old = fs.readFileSync(f, 'utf8'); } catch {}
         fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, r.out);
-        const a = normalize(old, w.ignore), b = normalize(r.out, w.ignore);
         if (w.lastSig && w.added) { const nl = addedLines(a, b); if (nl.length) out(wake(w, `Watch ${w.id} has ${nl.length} new line${nl.length > 1 ? 's' : ''} (\`${w.cmd}\`, exit ${r.exit}).\n${mask(lineDiff('', nl.join('\n')))}`)); }
         else if (w.lastSig) out(wake(w, `Watch ${w.id} changed (\`${w.cmd}\`, exit ${r.exit}).\n${mask(lineDiff(a, b))}`));
         w.lastSig = sig; w.changed = now();
