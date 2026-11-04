@@ -20,6 +20,7 @@ import { quietSig, skipWake, alwaysWakes, ownEnd } from './quiet.mjs';
 import { HOME_FENCE } from './fence.mjs';
 import { wantsPrecheck, precheckPrompt, runPrecheck, PRECHECK_MODEL } from './precheck.mjs';
 import { createWaits, bgStarted, bgEnded, ownRuns } from './waits.mjs';
+import { createWatches } from './watches.mjs';
 import { mimeFor } from './mime.mjs';
 import { trustLevel, trustOf, trustRules, updateRefusal, createRefusal, quitRefusal, slotsRefusal, shareRefusal, fileRmRefusal, fileBy, charterDiff, charterEdit, charterStart } from './trust.mjs';
 import { KEYS, DEFAULT_SLOTS, slotKey, rankOf, limitOf, enqueue, drain, leave, checkSlots } from './slots.mjs';
@@ -183,6 +184,7 @@ const tilde = (v) => path.resolve(String(v).replace(/^~(?=\/|$)/, os.homedir()))
 const asks = createAsks({ file: path.join(RUNS, 'asks.json'), log: path.join(RUNS, 'asks.log') });
 const picks = createPicks({ file: path.join(RUNS, 'picks.json') });
 const waits = createWaits({ file: path.join(RUNS, 'waits.json') });
+const watches = createWatches({ file: path.join(RUNS, 'watches.json'), outDir: (o) => path.join(SQ, o, 'state') });
 // Lead lines pointing the user at an ask that already ran or a Merge no longer in review are dropped; kept in a log event.
 const ledger = createLedger(path.join(RUNS, 'cost.jsonl'));
 const unstale = (id, text) => {
@@ -291,7 +293,7 @@ function launch(s) {
   if (s.lead) args.push('--allowedTools', `Bash(${cli} *)`, 'Read', 'Grep', 'Glob', `Edit(${SQ}/**)`, `Write(${SQ}/**)`, `Edit(${DATA}/goals.json)`, `Edit(${DATA}/config.json)`);
   // A squiggle may see the team and rewrite its own responsibility and journal, nobody else's.
   else args.push('--allowedTools', `Bash(${cli} list)`, `Bash(${cli} charter ${s.id} *)`, `Bash(${cli} charter ${s.id})`, `Edit(${sqDir(s.id)}/journal.md)`,
-    `Bash(${cli} tasks*)`, `Bash(${cli} task *)`, `Bash(${cli} goals)`, `Bash(${cli} wait *)`, `Bash(${cli} waits*)`, `Bash(${cli} restart)`, `Bash(${cli} room reload)`);
+    `Bash(${cli} tasks*)`, `Bash(${cli} task *)`, `Bash(${cli} goals)`, `Bash(${cli} wait *)`, `Bash(${cli} waits*)`, `Bash(${cli} watch *)`, `Bash(${cli} watches*)`, `Bash(${cli} restart)`, `Bash(${cli} room reload)`);
   const settings = path.join(sqDir(s.id), 'settings.json');
   // The squiggle's own settings plus the fence hook, as one JSON. Unreadable settings still get the hook.
   let own = {}; if (fs.existsSync(settings)) try { own = JSON.parse(readText(settings, '{}')); } catch {}
@@ -1650,6 +1652,27 @@ const server = http.createServer(async (req, res) => {
           const w = waits.drop(String(b.id || ''), { by: who || 'owner', boss }); broadcast('*room', { k: 'room', action: 'waits' }); return json(res, w);
         }
         return json(res, { error: 'op must be add or drop' }, 400);
+      } catch (e) { return json(res, { error: e.message }, e.code || 400); }
+    }
+    // Watches: a squiggle files its own (pending until the owner approves); it, the lead or the owner drops one.
+    if (url.pathname === '/api/watches' && req.method === 'GET') return json(res, watches.list({ all: url.searchParams.get('all') === '1', owner: url.searchParams.get('owner') || undefined }));
+    if (url.pathname === '/api/watches' && req.method === 'POST') {
+      const b = await body(req, res), who = await callerSquiggle(req);
+      try {
+        if (b.op === 'add') {
+          if (!who) return json(res, { error: 'a squiggle files its own watch' }, 403);
+          if (b.task && !board.tasks().some((t) => t.id === b.task)) return json(res, { error: `no task ${b.task}` }, 404);
+          const w = watches.add({ owner: who, cmd: b.cmd, cwd: b.cwd ? path.resolve(home(String(b.cwd))) : home(loadSquiggle(who)?.cwd || '~'), every: b.every, ignore: b.ignore, task: b.task, timeout: b.timeout, added: !!b.added });
+          broadcast('*room', { k: 'room', action: 'watches' }); return json(res, w);
+        }
+        if (b.op === 'drop') { const boss = !who || !!loadSquiggle(who)?.lead; const w = watches.drop(String(b.id || ''), { by: who || 'owner', boss }); broadcast('*room', { k: 'room', action: 'watches' }); return json(res, w); }
+        // Approving runs a command unattended: the owner only, from an unlocked browser (same gate as Run on an ask).
+        if (b.op === 'approve') {
+          if (who) return json(res, { error: `only ${USER} approves a watch, on the Team tab` }, 403);
+          try { pass.owner(req); } catch (e) { return json(res, { error: e.message, ...(e.unlock && { unlock: true }) }, e.code || 401); }
+          const w = watches.approve(String(b.id || ''), String(b.hash || '')); broadcast('*room', { k: 'room', action: 'watches' }); return json(res, w);
+        }
+        return json(res, { error: 'op must be add, approve or drop' }, 400);
       } catch (e) { return json(res, { error: e.message }, e.code || 400); }
     }
     if (url.pathname === '/api/needs' && req.method === 'GET') return json(res, needsList({ asks: asks.list({}), picks: picks.list({}), merges: await board.merges().catch(() => []), squiggles: listSquiggles().map(view), tasks: board.tasks() }));

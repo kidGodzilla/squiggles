@@ -203,3 +203,10 @@ test('--added wakes when output gains lines, not when it empties; the flag is in
     assert.deepEqual(wakes, [0, 0, 1, 1, 0], 'baseline, emptied, b new, c new, emptied');
   } finally { done(); }
 });
+
+test('the approve route refuses a squiggle and needs the unlocked owner before it approves', () => {
+  const src = fs.readFileSync(new URL('../server.mjs', import.meta.url), 'utf8');
+  const r = src.slice(src.indexOf("if (b.op === 'approve') {\n          if (who) return json(res, { error: `only ${USER} approves a watch"));
+  const refuse = r.indexOf('if (who)'), gate = r.indexOf('pass.owner(req)'), go = r.indexOf('watches.approve(');
+  assert.ok(refuse >= 0 && refuse < gate && gate < go);
+});
