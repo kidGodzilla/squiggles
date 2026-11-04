@@ -226,7 +226,7 @@ const WRAPS = ['sudo', 'exec', 'env', 'nohup', 'time', 'command', 'builtin', 'xa
   'do', 'then', 'else', 'elif', 'if', 'while', 'until', '{', ')', '!'];
 // Code hidden from the word-by-word check below. LEAD is what may stand before a program, as in that check's wrapper loop.
 const SHELL = `(?:\\S*/)?(?:${SHELLS.join('|')})`;
-const LEAD = `(?:(?:\\w+=\\S*|-\\S+|\\d+[smh]?|(?:\\S*/)?(?:${WRAPS.map((w) => w.replace(/[.{)!]/, '\\$&')).join('|')}))\\s+)*`;
+const LEAD = `(?:(?:\\w+=(?:"[^"\\n]*"|[^\\s"])*|-\\S+|\\d+[smh]?|(?:\\S*/)?(?:${WRAPS.map((w) => w.replace(/[.{)!]/, '\\$&')).join('|')}))\\s+)*`;
 // `echo 'ssh x' | nohup sh`, `| sh -s -- a`: the script is only on the pipe.
 const PIPED = new RegExp(`\\|&?\\s*${LEAD}${SHELL}(?:(?:\\s+-\\S+)*\\s*(?:$|[;&|)])|(?:\\s+-\\S+)*\\s+-\\w*s\\b)`, 'm');
 // `$(echo ssh) box`, `sh <(echo x)`, `sh -c "$(cat x)"`: the program or script only exists once it runs. Not `x=$(date)`.
@@ -234,6 +234,57 @@ const BUILT = new RegExp(`(?:^|[;&|\\n(]|\\$\\()\\s*${LEAD}(?:<+\\s*)?[^\\s=]*(?
 // Quoted text is data, unless it runs something: 'a|sh' goes, 's'h and "$(x)" stay.
 const masked = (raw) => raw.replace(/\\\n/g, '').replace(/'[^']*'|"(?:[^"\\]|\\.)*"/g, (q) =>
   q[0] === '"' && /\$\(|`/.test(q) ? q : /[\s|;&()<>]/.test(q) ? 'Q' : q.slice(1, -1));
+// A line feeding its heredoc to something that runs it: `bash <<'E'`, `$(sh <<'E'`, or a compound's closing `done <<'E'`.
+const FED = new RegExp(`(?:^|[\\s;&|(/\`])(?:${[...SHELLS, 'source', 'eval', 'xargs', '\\.'].join('|')})(?=[\\s;&|)<\`]|$)|^\\s*(?:done|fi|esac|[})])`);
+const HEREDOC = /<<(-?)\s*(?:'([\w.-]+)'|"([\w.-]+)"|\\([\w.-]+)|([\w.-]+))(?=[\s;&|<>]|$)/y;
+// The command without the text the shell treats as data: `;&|(` in double quotes, and bodies of quoted heredocs nothing runs.
+// Walks quotes as the shell does, so `echo '<<E'` or `# <<E` can't hide the lines after it. Anything unsure comes back whole.
+function plain(raw) {
+  if (/\(\(|\bcase\s+\S+\s+in\b/.test(raw)) return raw;
+  const stack = [], waiting = [];
+  let out = '', i = 0;
+  while (i < raw.length) {
+    const c = raw[i], top = stack.at(-1), two = raw.slice(i, i + 2);
+    if (c === '\\') { out += two; i += 2; continue; }
+    if (c === top) { stack.pop(); out += c; i++; continue; }
+    if (two === '$(' || two === '${') { stack.push(two === '$(' ? ')' : '}'); out += two; i += 2; continue; }
+    if (c === '`') { stack.push(c); out += c; i++; continue; }
+    if (top === '"') { out += /[;&|\n(]/.test(c) ? ' ' : c; i++; continue; }
+    if (c === "'" || two === "$'") {
+      let end = i + (c === "'" ? 1 : 2);
+      while (end < raw.length && raw[end] !== "'") end += c !== "'" && raw[end] === '\\' ? 2 : 1;
+      out += raw.slice(i, end + 1); i = end + 1; continue;
+    }
+    if (c === '"' || c === '(') { stack.push(c === '"' ? c : ')'); out += c; i++; continue; }
+    if (top !== '}' && c === '#' && (!i || /[\s;&|(]/.test(raw[i - 1]))) {
+      const end = raw.indexOf('\n', i);
+      if (end < 0) return out + raw.slice(i);
+      out += raw.slice(i, end); i = end; continue;
+    }
+    if (top !== '}' && two === '<<') {
+      if (raw[i + 2] === '<') { out += '<<<'; i += 3; continue; }
+      HEREDOC.lastIndex = i;
+      const m = HEREDOC.exec(raw);
+      if (!m || waiting.length > 7) return raw;
+      const line = raw.slice(raw.lastIndexOf('\n', i) + 1, (raw.indexOf('\n', i) + 1 || raw.length + 1) - 1);
+      waiting.push({ tabs: !!m[1], end: m[2] ?? m[3] ?? m[4] ?? m[5], data: m[5] === undefined && !FED.test(unquote(line)) });
+      out += m[0]; i += m[0].length; continue;
+    }
+    out += c; i++;
+    if (c === '\n') for (const h of waiting.splice(0)) {
+      let from = i, found = false;
+      while (from < raw.length && !found) {
+        const stop = raw.indexOf('\n', from), next = stop < 0 ? raw.length : stop;
+        found = raw.slice(from, next).replace(h.tabs ? /^\t+/ : '', '') === h.end;
+        from = next + 1;
+      }
+      if (!found) return raw;
+      if (!h.data) out += raw.slice(i, from);
+      i = from;
+    }
+  }
+  return out;
+}
 // `p=dumps; cat ~/$p/a.txt`, `for p in a b`: the command read again with the values it set.
 function expanded(text) {
   const sets = new Map(), add = (k, v) => sets.set(k, [...(sets.get(k) || []), ...v]);
@@ -343,8 +394,8 @@ function privateCommand(cmd, cwd, home, o, depth) {
   const raw = String(cmd), text = inlineHelpers(unquote(raw)), here = [...new Set(places(text, cwd, home))];
   // Code the fence can't read is refused once there is a folder or machine to protect. Tools alone are matched by name.
   const strict = o.remote || o.dirs.length > 0;
-  const code = masked(raw);
-  if (strict && (PIPED.test(raw) || PIPED.test(code) || BUILT.test(code))) return true;
+  const bare = strict ? plain(raw) : raw, code = masked(bare);
+  if (strict && (PIPED.test(bare) || PIPED.test(code) || BUILT.test(code))) return true;
   const values = strict ? expanded(text) : [];
   if (values.some((t) => privateCommand(t, cwd, home, o, depth))) return true;
   if (o.remote) {

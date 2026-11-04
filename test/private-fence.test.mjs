@@ -166,6 +166,23 @@ test('shell forms the fence cannot read are refused; everyday ones pass', () => 
     assert.equal(bash(c), '', c);
 });
 
+test('text the shell treats as data passes; code dressed as data does not', () => {
+  const body = '`fence.mjs` changed\n$(date) is literal\n';
+  for (const c of [`cat > notes.md <<'E'\n${body}E`, `cat > notes.md <<"E"\n${body}E`, `cat > notes.md <<\\E\n${body}E\necho done`, `cat <<-'E'\n${body}\tE`,
+    `git commit -m "$(cat <<'EOF'\n${body}EOF\n)"`, `git commit -m "$(cat <<'EOF'\nit's\n${body}EOF\n)"`, `cat <<'A' <<'B'\n${body}A\n${body}B`,
+    'echo "a; $(date)"', 'echo "a | $(date)"', 'echo "a & `date`"', 'echo "(a) $(date); $(date)"', 'x="a; $(date)"; echo hi', 'echo "a\n$(date)"'])
+    assert.equal(bash(c), '', c);
+  const code = '$(echo ssh) box\n';
+  for (const c of [`bash <<'E'\n${code}E`, `/bin/sh <<'E'\n${code}E`, `sudo dash <<'E'\n${code}E`, `'sh' <<'E'\n${code}E`, `sh<<'E'\n${code}E`, `source /dev/stdin <<'E'\n${code}E`,
+    `{\n  sh\n} <<'E'\n${code}E`, `while read l; do\n  sh\ndone <<'E'\n${code}E`, `sh -c "$(cat <<'E'\n${code}E\n)"`,
+    `cat <<'E'\n${code}`, `cat <<E\n${code}E`, `cat <<'E'O\nEO\n${code}E`, `cat <<'E'\nE\n${code}`, `echo '<<E'\n${code}E`, `echo "<<'E'"\n${code}E`, `# <<'E'\n${code}E`,
+    `echo $'a\\' <<'E'\n${code}E`, `echo \${x:-<<'E'}\n${code}E`, `echo $((1 <<'E' ))\n${code}E`, `echo "$(case x in a) <<'E'\n${code}E\n;; esac)"`,
+    `cat <<'E'\nit's\nE\necho '\n<<'F'\n${code}F`, `cat <<E\nit's\nE\n${code}`,
+    'echo "$($(echo ssh) box)"', 'echo "a; $($(echo ssh) box)"', 'echo "a"; $(echo ssh) box', 'echo "a" | sh',
+    'x="a b" $(echo ssh) box', 'x="a $(date)" $(echo ssh) box', 'x="$(date)" y="a b" $(echo ssh) box'])
+    assert.equal(bash(c), P, c);
+});
+
 test('merge diffs, plumbing, stash patches and commit searches in a private repo', () => {
   const R = `${H}/repo2`, O = `${H}/plain2`, r = privateRules({ privateDirs: ['repo2/secret'] }), g = (c, at = R) => bash(c, at, r);
   for (const d of [R, O]) { fs.mkdirSync(`${d}/secret`, { recursive: true }); fs.mkdirSync(`${d}/docs`); fs.writeFileSync(`${d}/docs/b.md`, 'y'); execFileSync('git', ['init', '-q'], { cwd: d }); }
