@@ -5,6 +5,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 ## 0.1.2 (unreleased)
 
 ### Security
+- A watch waiting for approval shows its whole command, folder and ignore pattern on the Team card, with the same risky and hidden-character warnings as a command card. Long commands used to cut off at one line.
 - The idle pre-check runs only for Claude squiggles, so its findings can't carry private files into a Codex, Cursor or Pi wake, and it can't Read, Edit or Write Downloads, Desktop, Documents or ~/.ssh.
 - Squiggles can't send or receive Claude Code cross-session messages: each wake refuses inbound peer messages and denies SendMessage and ListAgents, so nothing steers a session outside the board.
 - The fence catches a fenced folder reached through a brace holding the home path or the folder itself ({~,/x}/.ssh, {~/.ssh,/x}/*) or a glob above home (/home/*/.ssh, /*/*/Downloads), for every provider.

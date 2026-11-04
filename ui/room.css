@@ -534,7 +534,8 @@ html[data-theme=clean] .mrow .mres { color: var(--dim) } html[data-theme=clean] 
 .tm dl { display: grid; grid-template-columns: 84px 1fr; gap: 4px 10px; margin: 0; font-size: 12.5px }
 .tm dt { color: var(--dim) } .tm dd { margin: 0; min-width: 0 }
 .tmw { border-top: 1px solid var(--line); padding-top: 8px; font-size: 12.5px } .tmw h5 { margin: 0 0 4px; font-size: 12px; font-weight: 600; color: var(--dim) }
-.tmwr { display: flex; align-items: center; gap: 8px } .tmwr > div { flex: 1; min-width: 0 } .tmwr code { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.tmwr { display: flex; align-items: center; gap: 8px } .tmwr > div { flex: 1; min-width: 0 } .tmwr > div > code { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.tmwr.pend { flex-wrap: wrap } .tmwr.pend > div { flex-basis: 100% }
 .tmwr small { display: block; color: var(--dim) } .tmwr small code { display: inline } .tmwr button { min-height: 44px; min-width: 44px; padding: 0 12px; border-radius: 8px; background: var(--panel2); border: 1px solid var(--line) }
 .tm .acts { display: flex; gap: 6px; margin-top: auto; padding-top: 4px }
 .tm .acts button { height: 28px; padding: 0 12px; border-radius: 8px; background: var(--panel2); border: 1px solid var(--line); font-size: 12.5px }

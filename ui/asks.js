@@ -56,6 +56,19 @@ async function askSha(cwd, cmd) {
 const askWho = (id) => S.sq[id]?.name || id;
 const askTime = (t) => new Date(t).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 
+// What a card says before you approve a command (shared with the watch card). `more`: hidden characters elsewhere on the card.
+const askWarn = (c, more, r) => `${r.length ? `<p class="askrisk">Careful: ${esc(r.join(', '))}.</p>` : ''}
+    ${c.hidden || more ? `<p class="askrisk">Contains ${c.hidden + more} hidden or control character${c.hidden + more === 1 ? '' : 's'}, shown in brackets.</p>` : ''}
+    ${c.blank || c.pad ? `<p class="askrisk">Padded with ${c.blank ? `${c.blank} blank lines in a row` : 'long runs of spaces'}, shown in brackets.</p>` : ''}
+    ${c.other ? `<p class="asknote">Contains ${c.other} non-ASCII character${c.other === 1 ? '' : 's'}.</p>` : ''}`;
+// A pending watch runs by itself once approved, so its card shows everything the hash covers, uncut (t3738).
+function watchBody(w) {
+  const c = showCmd(w.cmd), d = showCmd(w.cwd || ''), i = showCmd(w.ignore || '');
+  return `${askWarn(c, d.hidden + i.hidden, risky(w.cmd))}
+    <pre class="askcmd"><code>${c.html}</code></pre>
+    <p class="asknote">Runs in <code>${d.html}</code></p>
+    ${w.ignore ? `<p class="asknote">Ignores lines matching <code>${i.html}</code></p>` : ''}`;
+}
 function askCard(a) {
   ASK.shown[a.id] = { cwd: a.cwd, cmd: a.cmd };
   const c = showCmd(a.cmd), d = showCmd(a.cwd), r = risky(a.cmd);
@@ -65,10 +78,7 @@ function askCard(a) {
   return `<div class="ask" data-id="${esc(a.id)}" data-ts="${+new Date(a.created)}">
     <div class="askh"><button class="rvwho" type="button" data-one="${esc(a.by)}" title="Open ${esc(askWho(a.by))}'s 1:1">${esc(askWho(a.by))}</button> asks to run this <small>${esc(a.id)}, ${esc(askTime(a.created))}, in <code>${d.html}</code>${c.lines > 1 ? `, ${c.lines} lines` : ''}</small></div>
     ${a.why ? `<p class="askwhy">${esc(a.why)}</p>` : ''}
-    ${r.length ? `<p class="askrisk">Careful: ${esc(r.join(', '))}.</p>` : ''}
-    ${c.hidden || d.hidden ? `<p class="askrisk">Contains ${c.hidden + d.hidden} hidden or control character${c.hidden + d.hidden === 1 ? '' : 's'}, shown in brackets.</p>` : ''}
-    ${c.blank || c.pad ? `<p class="askrisk">Padded with ${c.blank ? `${c.blank} blank lines in a row` : 'long runs of spaces'}, shown in brackets.</p>` : ''}
-    ${c.other ? `<p class="asknote">Contains ${c.other} non-ASCII character${c.other === 1 ? '' : 's'}.</p>` : ''}
+    ${askWarn(c, d.hidden, r)}
     <pre class="askcmd"><code>${c.html}</code></pre>
     <div class="askb"><button class="chip" data-a="copy">Copy</button>${run}<button class="chip" data-a="deny">Deny</button></div>
   </div>`;
