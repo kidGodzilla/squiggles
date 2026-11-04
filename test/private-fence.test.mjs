@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { REASONS, privateReason, privateRules } from '../fence.mjs';
 
 const H = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'pf-'))), P = REASONS.private, cwd = `${H}/app`;
@@ -144,4 +145,31 @@ test('wrappers by full path, and shells fed from a file', () => {
     assert.equal(bash(c, d), P, c);
   for (const c of ['sh < ok.sh', '/bin/sh ok.sh', "/bin/sh -c 'ls'", '/usr/bin/env node -v', 'sort < ok.sh', 'wc -l < evil.sh', '/usr/bin/grep ssh ok.sh'])
     assert.equal(bash(c, d), '', c);
+});
+
+test('git history in a repo holding a private folder', () => {
+  const R = `${H}/repo`, O = `${H}/plain`, r = privateRules({ privateDirs: ['repo/secret'] }), g = (c, at = R) => bash(c, at, r);
+  for (const d of [R, O]) {
+    fs.mkdirSync(`${d}/secret`, { recursive: true }); fs.mkdirSync(`${d}/docs`); fs.writeFileSync(`${d}/secret/a.md`, 'x'); fs.writeFileSync(`${d}/docs/b.md`, 'y');
+    execFileSync('git', ['init', '-q'], { cwd: d });
+  }
+  for (const c of ['git show HEAD:secret/a.md', 'git cat-file -p HEAD:secret/a.md', 'git log -p', 'git log --patch', 'git log -U3', 'git log --word-diff', 'git log --patch-with-stat',
+    'git log -Sword', 'git show', 'git show abc123', 'git show HEAD --stat -p', 'git show HEAD:docs/b.md abc123', 'git diff', 'git diff HEAD~1', 'git grep word', 'git grep word HEAD',
+    'git cat-file -p abc123', 'git cat-file --batch', 'git format-patch -1', 'git archive HEAD', 'git bundle create x HEAD', 'git fast-export HEAD', 'git log -p -- secret',
+    'git log -p -- "*.md"', 'git log -p -- :/secret', 'git -c a=b log -p', 'git diff -- docs secret'])
+    assert.equal(g(c), P, c);
+  // Inside the repo from elsewhere, or a folder it can't read.
+  for (const c of [`git -C ${R} log -p`, `git -C ${R} show HEAD:secret/a.md`, `git --git-dir=${R}/.git log -p`, `cd ${R} && git log -p`, 'git -C $X log -p', 'git -C $X show HEAD:a.md'])
+    assert.equal(g(c, cwd), P, c);
+  assert.equal(g('git log -p', `${R}/secret`), P);
+  for (const c of ['git status', 'git log --oneline', 'git log --stat', 'git log -5', 'git show --stat', 'git show -s HEAD', 'git show --name-only HEAD', 'git diff --stat', 'git diff --name-only',
+    'git show HEAD:docs/b.md', 'git cat-file -p HEAD:docs/b.md', 'git cat-file -t abc123', 'git log -p -- docs', 'git log -p docs', 'git diff -- docs', 'git diff docs', 'git grep word -- docs',
+    'git add docs', 'git commit -m x', 'git branch', 'git fetch origin'])
+    assert.equal(g(c), '', c);
+  // Any other repo, and no repo at all.
+  for (const c of ['git log -p', 'git show', 'git diff', 'git grep word', 'git show HEAD:secret/a.md', 'git archive HEAD', 'git cat-file -p abc123']) {
+    assert.equal(g(c, O), '', c);
+    assert.equal(g(c, cwd), '', c);
+    assert.equal(bash(c, R, privateRules({ privateTools: ['helpdesk'] })), '', c);
+  }
 });

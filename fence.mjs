@@ -280,6 +280,36 @@ const writes = (cmd, base) => { const re = new RegExp(`(?:>|\\btee\\s+(?:-a\\s+)
   return !!base && cmd.split('\n').some((l) => re.test(l) && !l.includes('<<')); };
 // /bin/sh is sh. System folders only: ~/bin/sh is a script and gets read as one.
 const sysBin = (w) => w.replace(/^\/(?:usr\/(?:local\/)?|opt\/homebrew\/)?s?bin\/(?=[^/]+$)/, '');
+// Git reads private files out of history or the index without naming them: git log -p, git show <rev>, git grep, git diff, git cat-file,
+// HEAD:private/a.md. So in a repo holding a private folder (or inside one) those are refused unless the output can't hold file
+// contents or is limited to paths outside the fence. Other repos are untouched. Rough: a copy or clone first gets round it.
+const repoRoot = (dir) => { for (let d = real(dir); ; d = path.dirname(d)) { if (fs.existsSync(path.join(d, '.git'))) return d; if (d === path.dirname(d)) return ''; } };
+const holds = (root, dirs) => { const r = root.toLowerCase(); return !!r && dirs.some((d) => d === r || d.startsWith(r + '/') || r.startsWith(d + '/')); };
+const NAMES_ONLY = /^(-s|--no-patch|--stat|--shortstat|--numstat|--name-only|--name-status|--summary)$/;
+const PATCH = /^(-\w*[pu]\w*|-U\d*|--patch\S*|--unified\S*|--cc|--word-diff\S*|--color-words\S*|--full-diff|-W|--function-context|-[GSL].*)$/;
+const REV_PATH = /^[^:]*:(?!\/\/)(.+)$/;
+function gitHistory(ws, here, home, o) {
+  let dirs = here, blind = false, i = 1;
+  for (; ws[i]?.startsWith('-'); i++) {
+    const m = ws[i].match(/^(-[Cc]|--git-dir|--work-tree)(?:=(.*))?$/); if (!m) continue;
+    const v = (m[2] ?? ws[++i] ?? '').replace(homeArg(home), home); if (m[1] === '-c') continue;
+    if (/\$|^~/.test(v)) blind = true; else dirs = dirs.map((d) => path.resolve(d, v));
+  }
+  const sub = ws[i], rest = ws.slice(i + 1), roots = dirs.map(repoRoot), inside = dirs.filter((d, k) => holds(roots[k], o.dirs));
+  // rev:path starts at the repo root, not the cwd.
+  if (rest.some((w) => { const p = w.match(REV_PATH)?.[1]; return p && [...dirs, ...roots.filter(Boolean)].some((d) => o.hit(p, d)); })) return true;
+  if (!inside.length && !blind) return false;
+  if (['format-patch', 'archive', 'bundle', 'fast-export'].includes(sub)) return true;
+  // Only rev:path words: each was just checked. git show HEAD:a <rev> still shows <rev>.
+  const named = rest.filter((w) => !w.startsWith('-')), revOnly = !blind && named.length > 0 && named.every((w) => REV_PATH.test(w));
+  if (sub === 'cat-file') return !revOnly && !rest.some((w) => /^-[est]$/.test(w));
+  const logs = ['log', 'whatchanged', 'reflog'].includes(sub);
+  if (logs ? !rest.some((w) => PATCH.test(w)) : !['show', 'diff', 'grep'].includes(sub)) return false;
+  if (sub !== 'grep' && !rest.some((w) => PATCH.test(w)) && (rest.some((w) => NAMES_ONLY.test(w)) || !logs && revOnly)) return false;
+  const dash = rest.indexOf('--'), operands = named.slice(sub === 'grep' ? 1 : 0);
+  const paths = dash >= 0 ? rest.slice(dash + 1) : operands.filter((w) => inside.some((d) => fs.existsSync(path.resolve(d, w))));
+  return blind || !paths.length || paths.some((p) => /[*?[:]/.test(p) || inside.some((d) => o.hit(p, d) || o.reach(p, d)));
+}
 function privateCommand(cmd, cwd, home, o, depth) {
   const raw = String(cmd), text = inlineHelpers(unquote(raw)), here = [...new Set(places(text, cwd, home))];
   // Code the fence can't read is refused once there is a folder or machine to protect. Tools alone are matched by name.
@@ -313,6 +343,7 @@ function privateCommand(cmd, cwd, home, o, depth) {
       if (['rsync', 'git', 'unison'].includes(prog) && rest.some((w) => { const m = w.match(HOST_ARG); return m && !CODE_HOSTS.test(m[1]) && !/^[a-z]$/i.test(m[1]) && /[.@]/.test(m[0] + m[1]); })) return true;
     }
     if (o.dirs.length) {
+      if (prog === 'git' && gitHistory(ws, here, home, o)) return true;
       // grep -r ~/work, find ~: a walk from a parent reaches the private folders under it.
       const flags = rest.filter((w) => /^-/.test(w)).join(' '), args = rest.filter((w) => !/^-/.test(w));
       const walks = WALKERS.includes(prog) || /(^|\s)--recursive\b/.test(flags)
