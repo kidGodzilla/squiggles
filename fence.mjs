@@ -227,8 +227,8 @@ const WRAPS = ['sudo', 'exec', 'env', 'nohup', 'time', 'command', 'builtin', 'xa
 // Code hidden from the word-by-word check below. LEAD is what may stand before a program, as in that check's wrapper loop.
 const SHELL = `(?:\\S*/)?(?:${SHELLS.join('|')})`;
 const LEAD = `(?:(?:\\w+=(?:"[^"\\n]*"|[^\\s"])*|-\\S+|\\d+[smh]?|(?:\\S*/)?(?:${WRAPS.map((w) => w.replace(/[.{)!]/, '\\$&')).join('|')}))\\s+)*`;
-// `echo 'ssh x' | nohup sh`, `| sh -s -- a`: the script is only on the pipe.
-const PIPED = new RegExp(`\\|&?\\s*${LEAD}${SHELL}(?:(?:\\s+-\\S+)*\\s*(?:$|[;&|)])|(?:\\s+-\\S+)*\\s+-\\w*s\\b)`, 'm');
+// `echo 'ssh x' | nohup sh`, `| sh -s -- a`, `| sh 2>&1`, `| sh -`: the script is only on the pipe.
+const PIPED = new RegExp(`\\|&?\\s*${LEAD}${SHELL}(?:(?:\\s+-\\S*|\\s*\\d*&?[<>]+&?\\s*[^\\s;&|)'"]+)*(?:\\s+#.*)?\\s*(?:$|[;&|)])|(?:\\s+-\\S+)*\\s+-\\w*s\\b)`, 'm');
 // `$(echo ssh) box`, `sh <(echo x)`, `sh -c "$(cat x)"`: the program or script only exists once it runs. Not `x=$(date)`.
 const BUILT = new RegExp(`(?:^|[;&|\\n(]|\\$\\()\\s*${LEAD}(?:<+\\s*)?[^\\s=]*(?:\\$\\(|\`|<\\()`, 'm');
 // Quoted text is data, unless it runs something: 'a|sh' goes, 's'h and "$(x)" stay.
@@ -293,7 +293,10 @@ function expanded(text) {
   let out = [text];
   for (const [k, vals] of sets) {
     const use = new RegExp(`\\$(?:${k}\\b|\\{${k}\\})`, 'g');
-    if (out.some((t) => t.search(use) >= 0)) out = out.flatMap((t) => vals.map((v) => t.replace(use, () => v))).slice(0, 32);
+    if (!out.some((t) => t.search(use) >= 0)) continue;
+    out = out.flatMap((t) => vals.map((v) => t.replace(use, () => v)));
+    // Past the cap the values aren't all read, so the command is judged with $p unknown, not on the first 32. t3824
+    if (out.length > 32) return [];
   }
   return out[0] === text ? [] : out;
 }

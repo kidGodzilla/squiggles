@@ -221,3 +221,10 @@ test('git history in a repo holding a private folder', () => {
     assert.equal(bash(c, R, privateRules({ privateTools: ['helpdesk'] })), '', c);
   }
 });
+
+test('a for list past the cap is judged as unknown, and a pipe to a shell may have a tail', () => {
+  const names = Array.from({ length: 33 }, (_, i) => `n${i}`).join(' ');
+  for (const c of [`for p in ${names} dumps; do cat ~/$p/a.txt; done`,
+    'echo x | sh 2>/dev/null', 'echo x | bash 2>&1', 'echo x | sh > o', 'echo x | sh -', 'echo x | sh # c']) assert.equal(bash(c), P, c);
+  for (const c of [`for p in ${names}; do echo $p; done`, "grep 'a| sh > o' x.txt", 'echo x | shasum > o']) assert.equal(bash(c), '', c);
+});
