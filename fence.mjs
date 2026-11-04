@@ -221,8 +221,33 @@ const DB_DRIVER = /\b(?:pymongo|MongoClient|psycopg2?|mongoose\.connect|pg\.(?:C
 const LOCAL = /^(localhost|127\.\d+\.\d+\.\d+|::1|\[::1\]|0\.0\.0\.0)$/i;
 const HOST_ARG = /^(?:[\w.-]+@)?([\w.-]+):(?!\/\/)/;
 const CODE_HOSTS = /^(github|gitlab|bitbucket)\.(com|org)$/i;
-const WRAPS = ['sudo', 'exec', 'env', 'nohup', 'time', 'command', 'builtin', 'xargs', 'timeout', 'nice', 'sh', 'bash', 'zsh', 'source', '.',
+const SHELLS = ['sh', 'bash', 'zsh', 'dash', 'ksh', 'ash', 'csh', 'tcsh', 'fish'];
+const WRAPS = ['sudo', 'exec', 'env', 'nohup', 'time', 'command', 'builtin', 'xargs', 'timeout', 'nice', ...SHELLS, 'source', '.',
   'do', 'then', 'else', 'elif', 'if', 'while', 'until', '{', ')', '!'];
+// Code hidden from the word-by-word check below. LEAD is what may stand before a program, as in that check's wrapper loop.
+const SHELL = `(?:\\S*/)?(?:${SHELLS.join('|')})`;
+const LEAD = `(?:(?:\\w+=\\S*|-\\S+|\\d+[smh]?|(?:\\S*/)?(?:${WRAPS.map((w) => w.replace(/[.{)!]/, '\\$&')).join('|')}))\\s+)*`;
+// `echo 'ssh x' | nohup sh`, `| sh -s -- a`: the script is only on the pipe.
+const PIPED = new RegExp(`\\|&?\\s*${LEAD}${SHELL}(?:(?:\\s+-\\S+)*\\s*(?:$|[;&|)])|(?:\\s+-\\S+)*\\s+-\\w*s\\b)`, 'm');
+// `$(echo ssh) box`, `sh <(echo x)`, `sh -c "$(cat x)"`: the program or script only exists once it runs. Not `x=$(date)`.
+const BUILT = new RegExp(`(?:^|[;&|\\n(]|\\$\\()\\s*${LEAD}(?:<+\\s*)?[^\\s=]*(?:\\$\\(|\`|<\\()`, 'm');
+// Quoted text is data, unless it runs something: 'a|sh' goes, 's'h and "$(x)" stay.
+const masked = (raw) => raw.replace(/\\\n/g, '').replace(/'[^']*'|"(?:[^"\\]|\\.)*"/g, (q) =>
+  q[0] === '"' && /\$\(|`/.test(q) ? q : /[\s|;&()<>]/.test(q) ? 'Q' : q.slice(1, -1));
+// `p=dumps; cat ~/$p/a.txt`, `for p in a b`: the command read again with the values it set.
+function expanded(text) {
+  const sets = new Map(), add = (k, v) => sets.set(k, [...(sets.get(k) || []), ...v]);
+  for (const m of text.matchAll(/(?:^|[\s;&|(])(\w+)=([^\s;&|`$()<>]+)(?=[\s;&|)]|$)/gm)) add(m[1], [m[2]]);
+  for (const m of text.matchAll(/\bfor\s+(\w+)\s+in\s+([^;\n$`]+)/g)) add(m[1], m[2].trim().split(/\s+/));
+  let out = [text];
+  for (const [k, vals] of sets) {
+    const use = new RegExp(`\\$(?:${k}\\b|\\{${k}\\})`, 'g');
+    if (out.some((t) => t.search(use) >= 0)) out = out.flatMap((t) => vals.map((v) => t.replace(use, () => v))).slice(0, 32);
+  }
+  return out[0] === text ? [] : out;
+}
+// A variable or $(...) further along a path stands for anything, so it counts as a glob. `$root/x` at the start doesn't.
+const starred = (p) => p.replace(/(?<=.)\$(?:\{[^}]*\}|\w+|$)/g, '*');
 const WALKERS = ['rg', 'ag', 'fd', 'find', 'tree', 'tar', 'zip', 'du', '7z'];
 const isGlob = (s) => /[*?[{]/.test(s);
 export function privateReason(tool, input = {}, cwd = process.cwd(), home = os.homedir(), rules = {}) {
@@ -318,8 +343,10 @@ function privateCommand(cmd, cwd, home, o, depth) {
   const raw = String(cmd), text = inlineHelpers(unquote(raw)), here = [...new Set(places(text, cwd, home))];
   // Code the fence can't read is refused once there is a folder or machine to protect. Tools alone are matched by name.
   const strict = o.remote || o.dirs.length > 0;
-  // `echo 'ssh x' | sh`: the script is only on the pipe. Read from raw so grep 'a|sh' stays a pattern.
-  if (strict && !depth && /\|\s*(?:sudo\s+|env\s+)?(?:\S*\/)?(?:sh|bash|zsh)(?:\s+-\w+)*\s*(?:$|[;&|)])/m.test(raw)) return true;
+  const code = masked(raw);
+  if (strict && (PIPED.test(raw) || PIPED.test(code) || BUILT.test(code))) return true;
+  const values = strict ? expanded(text) : [];
+  if (values.some((t) => privateCommand(t, cwd, home, o, depth))) return true;
   if (o.remote) {
     if (DB_DRIVER.test(raw)) return true;
     for (const m of text.matchAll(DB_URL)) if (!LOCAL.test(m[1])) return true;
@@ -328,13 +355,14 @@ function privateCommand(cmd, cwd, home, o, depth) {
   for (const seg of text.split(/[;&|`\n(]|\$\(/)) {
     const ws = seg.trim().split(/\s+/).filter(Boolean); let viaShell = false;
     while (ws.length && (/^\w+=/.test(ws[0]) || WRAPS.includes(sysBin(ws[0])) || /^-/.test(ws[0]) || /^\d+[smh]?$/.test(ws[0]))) {
-      if (['sh', 'bash', 'zsh', 'source', '.'].includes(sysBin(ws[0]))) viaShell = true;
+      if ([...SHELLS, 'source', '.'].includes(sysBin(ws[0]))) viaShell = true;
       ws.shift();
       // `sh < x.sh`, `bash <<< 'ssh x'`: what follows is the script.
       if (viaShell && ws[0]?.startsWith('<')) { ws[0] = ws[0].replace(/^<+/, ''); if (!ws[0]) ws.shift(); }
     }
     if (!ws.length) continue;
     const prog = ws[0].split('/').pop(), rest = ws.slice(1);
+    if (strict && (prog === 'eval' || viaShell && /^\/dev\/(?:stdin|fd\/0)$/.test(ws[0]))) return true;
     // `$c "ls"`: a program held in a variable can't be checked. `sh $D/x.sh` too, in the command itself:
     // inside a script `$DIR/lib.sh` is everyday, and refusing it would stop ordinary scripts.
     if (strict && (/^\$/.test(prog) || !depth && /^\$/.test(ws[0].replace(/^\$\{?HOME\}?(?=\/)/, '')))) return true;
@@ -364,7 +392,7 @@ function privateCommand(cmd, cwd, home, o, depth) {
       for (const f of new Set(here.map((dir) => path.resolve(dir, rel)))) {
         let body = '';
         try { if (fs.statSync(f).size < 256 * 1024) body = fs.readFileSync(f, 'utf8'); } catch {}
-        if (!body || body.includes('\0') || !(viaShell || /^#!.*\b(sh|bash|zsh)\b/.test(body))) continue;
+        if (!body || body.includes('\0') || !(viaShell || new RegExp(`^#!.*\\b(${SHELLS.join('|')})\\b`).test(body))) continue;
         body = body.replace(/\$\(\s*dirname\s+(?:--\s+)?["']?\$\{?(?:0|BASH_SOURCE(?:\[0\])?)\}?["']?\s*\)|\$\{(?:0|BASH_SOURCE(?:\[0\])?)%\/\*\}/g, () => path.dirname(f));
         if (privateCommand(body, path.dirname(f), home, o, depth + 1)) return true;
       }
@@ -372,7 +400,10 @@ function privateCommand(cmd, cwd, home, o, depth) {
   }
   if (!o.dirs.length) return false;
   const words = text.split(/[\s;|&()<>`]+/).filter(Boolean).flatMap((w) => braces(w));
-  return here.some((dir) => words.some((w) => w.split('=').some((part) => part && (o.hit(part, dir) || (isGlob(part) && o.reach(part, dir) === 'in')))));
+  return here.some((dir) => words.some((w) => w.split('=').some((part) => {
+    const p = values.length ? part : starred(part);
+    return p && (o.hit(p, dir) || (isGlob(p) && o.reach(p, dir) === 'in'));
+  })));
 }
 // What the codex, cursor and pi guards call: the rules from <data dir>/config.json, read on every call so a change applies
 // at once. No file: off. A file that can't be read: blocked, since the rules are unknown.

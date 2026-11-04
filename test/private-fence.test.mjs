@@ -147,6 +147,25 @@ test('wrappers by full path, and shells fed from a file', () => {
     assert.equal(bash(c, d), '', c);
 });
 
+test('shell forms the fence cannot read are refused; everyday ones pass', () => {
+  for (const c of ["eval 'ssh box'", 'eval "$c"', 'command eval ssh box', '$(echo ssh) box', '"$(echo ssh)" box', '`echo ssh` box', 'sudo $(echo ssh) box', '/usr/bin/$(echo ssh) box',
+    "sh <(echo 'ssh x')", "source <(echo 'ssh x')", ". <(echo 'ssh x')", 'sh -c "$(echo ssh x)"', 'bash <<< $(echo ssh x)',
+    "echo 'ssh x' | nohup sh", "echo 'ssh x' | exec sh", "echo 'ssh x' | dash", "echo 'ssh x' | /usr/bin/env bash", "echo 'ssh x' | sh -s --", "echo 'ssh x' | sh -s -- a",
+    "echo 'ssh x' | 'sh'", "echo 'ssh x' |& sh", "echo 'ssh x' | timeout 5 sh", "echo 'ssh x' | sh /dev/stdin", "dash -c 'ssh box'",
+    'p=dumps; cat ~/$p/a.txt', 'p=dumps; cat ~/${p}/a.txt', 'a=du; b=mps; cat ~/$a$b/a.txt', 'for p in x dumps; do cat ~/$p/a.txt; done', 'p=$(echo dumps); cat ~/$p/a.txt',
+    'cat ~/${p:-dumps}/a.txt', 'cat ~/$(echo dumps)/a.txt'])
+    assert.equal(bash(c), P, c);
+  fs.mkdirSync(`${H}/app/sub`, { recursive: true });
+  for (const [f, body] of [['e.sh', "eval 'ssh box'\n"], ['b.sh', '$(echo ssh) box\n'], ['p.sh', "echo 'ssh x' | nohup sh\n"]]) {
+    fs.writeFileSync(`${H}/app/sub/${f}`, body);
+    assert.equal(bash(`sh sub/${f}`), P, f);
+  }
+  for (const c of ["grep -E 'a|sh' x.txt", 'x=$(date)', 'x=`date`', 'x=$(date); echo $x', 'FOO=$(date) node app.js', 'echo $(date)', 'echo `date`', 'echo `a` `b`',
+    'cd $(git rev-parse --show-toplevel)', 'for f in $(ls); do echo $f; done', 'while read l; do echo $l; done < <(ls)', 'cat <(ls)', 'bash -c "echo $(date)"',
+    'cat a.txt | grep sh', "echo 'a | sh'", 'cat a | shellcheck -', 'p=docs; cat ~/$p/a.txt', 'cat ~/notes/$f', 'root=$(pwd); cat $root/a.txt', 'grep eval x.js', 'echo eval', 'evaluate x'])
+    assert.equal(bash(c), '', c);
+});
+
 test('merge diffs, plumbing, stash patches and commit searches in a private repo', () => {
   const R = `${H}/repo2`, O = `${H}/plain2`, r = privateRules({ privateDirs: ['repo2/secret'] }), g = (c, at = R) => bash(c, at, r);
   for (const d of [R, O]) { fs.mkdirSync(`${d}/secret`, { recursive: true }); fs.mkdirSync(`${d}/docs`); fs.writeFileSync(`${d}/docs/b.md`, 'y'); execFileSync('git', ['init', '-q'], { cwd: d }); }
