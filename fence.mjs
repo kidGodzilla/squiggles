@@ -23,7 +23,18 @@ export function hookMain(check, allow = '') {
 }
 const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 // Follows symlinks through the part of the path that exists, and compares without case (APFS ignores it by default).
-const real = (abs) => { let p = abs, rest = ''; while (true) { try { return path.join(fs.realpathSync(p), rest); } catch { const up = path.dirname(p); if (up === p) return abs; rest = path.join(path.basename(p), rest); p = up; } } };
+// A prefix that resolves has parents that do, so the longest one is found by halving: walking up one folder at a time is quadratic in a long word.
+// memo holds what one command's walk has resolved: a command of many words asks for home and each folder over and over.
+let memo = null;
+const real = (abs) => {
+  if (memo?.has(abs)) return memo.get(abs);
+  const segs = path.resolve(abs).split('/'), at = (k) => { try { return fs.realpathSync(segs.slice(0, k).join('/') || '/'); } catch { return null; } };
+  let lo = 1, hi = segs.length, base = '/';
+  while (lo <= hi) { const k = (lo + hi) >> 1, r = at(k); if (r === null) hi = k - 1; else { base = r; lo = k + 1; } }
+  const r = path.join(base, segs.slice(hi).join('/'));
+  memo?.set(abs, r);
+  return r;
+};
 const under = (names, p, cwd, home) => {
   const abs = path.resolve(cwd, String(p).replace(/^~(?=\/|$)/, home)), h = real(home).toLowerCase();
   return [abs, real(abs)].some((a) => { a = a.toLowerCase(); return names.some((d) => a === path.join(h, d) || a.startsWith(path.join(h, d) + '/')); });
@@ -108,14 +119,14 @@ const globReason = (cur, g, home) => {
 // folders; a .. after it cancels the segment before it (/tmp/*/../../home/m*/.ssh).
 const wordReason = (w, dir, home) => {
   for (const x of braces(w)) {
-    const segs = homeWord(x, home).split('/'), g = [];
-    let cur = segs[0] === '' ? '/' : dir;
+    const segs = homeWord(x, home).split('/'), g = [], lit = path.resolve(segs[0] === '' ? '/' : dir).split('/').filter(Boolean);
     for (const seg of segs) {
       if (!seg || seg === '.') continue;
-      if (seg === '..') { if (g.length) g.pop(); else cur = path.dirname(cur); }
+      if (seg === '..') { if (g.length) g.pop(); else lit.pop(); }
       else if (g.length || /[*?[{]/.test(seg)) g.push(seg);
-      else cur = path.resolve(cur, seg);
+      else lit.push(seg);
     }
+    const cur = `/${lit.join('/')}`;
     // Literal segments may already be inside a fenced folder before the glob ({~/.ssh,/x}/*).
     const r = pathReason(cur, cur, home) || (g.length ? globReason(cur, g, home) : '');
     if (r) return r;
@@ -124,18 +135,21 @@ const wordReason = (w, dir, home) => {
 };
 // Each word (Desktop, ../.ssh/config, ../D*) resolved from each folder the command may run in.
 function relReason(cmd, cwd, home) {
-  const h = home.toLowerCase(), words = cmd.split(/[\s;|&()<>=`]+/).filter(Boolean);
-  for (const d of places(cmd, cwd, home)) for (const w of words) {
-    const r = wordReason(w, d, home); if (r) return r;
-    const abs = path.resolve(d, w.replace(homeArg(home), home)), parts = abs.split('/');
-    if (fencedPath(abs, d, home)) return REASONS.dirs;
-    if (sshPath(abs, d, home)) return REASONS.ssh;
-    for (let k = 1; k < parts.length; k++) if (parts.slice(0, k).join('/').toLowerCase() === h) {
-      if (globHits(parts[k])) return REASONS.dirs;
-      if (globHits(parts[k], ['.ssh'])) return REASONS.ssh;
+  const h = home.toLowerCase(), depth = h.split('/').length, words = new Set(cmd.split(/[\s;|&()<>=`]+/).filter(Boolean));
+  memo = new Map();
+  try {
+    for (const d of places(cmd, cwd, home)) for (const w of words) {
+      const r = wordReason(w, d, home); if (r) return r;
+      const abs = path.resolve(d, w.replace(homeArg(home), home)), parts = abs.split('/');
+      if (fencedPath(abs, d, home)) return REASONS.dirs;
+      if (sshPath(abs, d, home)) return REASONS.ssh;
+      if (depth < parts.length && parts.slice(0, depth).join('/').toLowerCase() === h) {
+        if (globHits(parts[depth])) return REASONS.dirs;
+        if (globHits(parts[depth], ['.ssh'])) return REASONS.ssh;
+      }
     }
-  }
-  return '';
+    return '';
+  } finally { memo = null; }
 }
 // A shell command, also: each word walked as a path from every folder the command runs in (cd ~ && cat Downloads/x), so prose
 // like 'documents retirement' outside home passes, and, run from home, a bare glob (D*).
@@ -205,7 +219,8 @@ const WATCH_WRITES = [
   /\b(?:g?sed|perl|ruby)\b[^\n;|&]*\s-\w*i\S*\s[^\n;|&]*watches\.json/i,
   /\b(?:node|bun|deno|python[\d.]*|ruby|perl|php|osascript)\b[^\n;|&]*(?:\s-\w*[ecp]\b|\s--eval\b|\s--print\b|\s-(?:\s|$)|<<)[\s\S]*watches\.json/im,
 ];
-const watchWrite = (cmd) => WATCH_WRITES.some((re) => re.test(cmd));
+// The name first: the patterns are quadratic on a long run of > or -e, and a command that never names the file needs none of them.
+const watchWrite = (cmd) => /watches\.json/i.test(cmd) && WATCH_WRITES.some((re) => re.test(cmd));
 export const watchesPath = (p) => /(?:^|[\\/])watches\.json$/i.test(String(p).trim());
 // Edit and write tools: a path argument that is the file. Contents that name it pass.
 export const editReason = (tool, input = {}) => /edit|write|patch|replace|create/i.test(tool || '') && Object.entries(input || {}).some(([k, v]) => /path|file|target/i.test(k) && typeof v === 'string' && watchesPath(v)) ? REASONS.watches : '';
