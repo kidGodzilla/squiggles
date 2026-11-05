@@ -170,3 +170,12 @@ test('fence: git push with a quoted, escaped or separate option value', () => {
   for (const c of ['git commit -m "push fix"', 'git -C "my repo" status', 'git --work-tree . log push.md'])
     assert.equal(commandReason(c, '/tmp'), '', c);
 });
+
+test('fence: a push behind a separate shallow-file, a command substitution or nested quotes', () => {
+  const P = 'push', cwd = '/tmp/fence-home/work', home = '/tmp/fence-home';
+  for (const c of [`git --shallow-file x ${P}`, `git --shallow-file "a b" ${P}`, `git "-C" "a b" ${P}`, `git -C \`pwd -P\` ${P}`, `git -C $(pwd -P) ${P}`, `git -C $(dirname $(pwd -P)) ${P}`, `echo $(git -C $(pwd -P) ${P})`,
+    `sh -c 'git -C "a b" ${P}'`, `bash -c "git -C 'a b' ${P}"`, `bash -c "git -C \\"a b\\" ${P}"`, `bash -lc 'git --work-tree "a b" ${P}'`, `zsh -c 'cd x; git -C "a b" ${P}'`, `sh -c "bash -c 'git -C \\"a b\\" ${P}'"`]) {
+    assert.match(commandReason(c, cwd, home), /git push/, c);
+  }
+  for (const c of [`git -C $(pwd -P) log`, `git log $(echo a b) --grep ${P}`, `sh -c 'git -C "a b" status'`, `echo $(git log) ${P}`, `git commit -m "${P} the fix"`]) assert.equal(commandReason(c, cwd, home), '', c);
+});

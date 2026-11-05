@@ -63,6 +63,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - An ask cut off by a server restart is marked interrupted at boot and its filer is told; its output is lost.
 - Private data fence (off until configured): config `privateDirs`, `privateTools` and `privateRemote` name folders, tools and remote reach that only Claude squiggles get. Codex, Cursor and Pi guards refuse them, including walks from a parent folder, symlinks and globs; config is read each call and an unreadable config refuses. `notes` leaves private folders out for those squiggles.
 - Every squiggle's `private/` folder is closed to the others on every provider, and `private <id> on` closes its transcript and journal too. The lead and you still read them, and `notes` and the screen follow the same rule. It keeps honest squiggles out; it isn't a sandbox.
+- The folder fence sees a git push behind a separate `--shallow-file` value, a command substitution (`git -C $(pwd) push`) or a quoted shell string (`sh -c 'git -C "a b" push'`).
 
 ### Added
 - Private column in Settings and `private <id> on|off` (you and the lead only).

@@ -140,7 +140,7 @@ export function fencedCommand(cmd, cwd = process.cwd(), home = os.homedir()) {
 export const mentionReason = (text, home = os.homedir()) => mentionsHome(text, home) ? REASONS.dirs : mentionsSsh(text, home) ? REASONS.ssh : '';
 // git [-C dir] [-c k=v] [--work-tree dir] [--flags] push, anywhere in a chain or subshell.
 // Also git send-pack, subtree or lfs push, an alias set to push, and push reached through a variable or eval (c=push; git $c).
-export const pushes = (cmd) => /\bgit\b(\s+(-[Cc]\s+\S+|--(git-dir|work-tree|namespace|exec-path|config-env|super-prefix|attr-source)\s+\S+|--?[\w-]+(=\S+)?))*\s+push\b/.test(cmd) || /\bgit\b.*\bsend-pack\b/.test(cmd) || /\bgit\b[^;&|\n]*\b(subtree|lfs)\b[^;&|\n]*\bpush\b/.test(cmd)
+export const pushes = (cmd) => /\bgit\b(\s+(-[Cc]\s+\S+|--(git-dir|work-tree|namespace|exec-path|config-env|super-prefix|attr-source|shallow-file)\s+\S+|--?[\w-]+(=\S+)?))*\s+push\b/.test(cmd) || /\bgit\b.*\bsend-pack\b/.test(cmd) || /\bgit\b[^;&|\n]*\b(subtree|lfs)\b[^;&|\n]*\bpush\b/.test(cmd)
   || /\balias\.[\w-]+[\s=]+!?(git\s+)?push\b/.test(cmd) || (/\bpush\b/.test(cmd) && (/\$\{?\w|\beval\b/.test(cmd) || /\bxargs\b[^;&|\n]*\bgit\b/.test(cmd)) && /\bgit\b/.test(cmd));
 // Recursive reads and copies (grep -r, rg, find, cp -r, tar, du, ls -R, rsync -a, zip -r, tree) rooted at home or above reach
 // every fenced folder at once. Each simple command is checked from the folder it runs in, following cd and env -C; no path means that folder.
@@ -204,13 +204,21 @@ export const editReason = (tool, input = {}) => /edit|write|patch|replace|create
 export function pathReason(p, cwd = process.cwd(), home = os.homedir()) {
   return fencedPath(p, cwd, home) ? REASONS.dirs : sshPath(p, cwd, home) ? REASONS.ssh : '';
 }
-// Quoted strings as one word each, for option values: unquoted, git -C "my repo" push reads as git -C my repo push.
-const collapse = (cmd) => String(cmd).replace(/\\\n/g, '').replace(/"(?:[^"\\]|\\.)*"|'[^']*'/g, 'Q').replace(/\\./g, '_');
+// Each quoted string or escaped space as one word, quotes gone: unquoted, git -C "my repo" push reads as git -C my repo push.
+const oneWord = (cmd) => String(cmd).replace(/\\\n/g, '').replace(/"((?:[^"\\]|\\.)*)"|'([^']*)'|\\(.)/gs, (m, a, b, c) => (a ?? b ?? c).replace(/\\/g, '').replace(/\s/g, '_'));
+// Then with each command substitution as one word (git -C $(pwd -P) push), innermost first, then inside every quoted string
+// (sh -c 'git -C "a b" push'). A string that holds a push is refused as text, same as the plain form.
+const quotedBodies = (cmd) => [...String(cmd).matchAll(/"((?:[^"\\]|\\.)*)"|'([^']*)'/gs)].map((m) => m[2] ?? m[1].replace(/\\(["\\$`])/g, '$1'));
+function pushesInside(cmd) {
+  let w = oneWord(cmd), was;
+  do { if (pushes(w)) return true; was = w; w = w.replace(/\$\([^()]*\)|`[^`]*`/g, '_'); } while (w !== was);
+  return quotedBodies(cmd).some(pushesInside);
+}
 export function commandReason(cmd, cwd = process.cwd(), home = os.homedir()) {
   if (fencedCommand(cmd, cwd, home)) return REASONS.dirs;
   const raw = cmd; cmd = unquote(cmd);
   if (mentionsSsh(cmd, home) || (startsHome(cmd, cwd, home) && /(^|[\s=;&|(`])\.ssh\b/i.test(cmd)) || relReason(cmd, cwd, home) === REASONS.ssh) return REASONS.ssh;
-  return treeReason(cmd, cwd, home) || (pushes(cmd) || pushes(collapse(raw)) ? REASONS.push : '') || (watchWrite(cmd) ? REASONS.watches : '');
+  return treeReason(cmd, cwd, home) || (pushes(cmd) || pushesInside(raw) ? REASONS.push : '') || (watchWrite(cmd) ? REASONS.watches : '');
 }
 
 // Private data (config privateDirs, privateTools, privateRemote): folders, tools and remote machines only Claude squiggles may
