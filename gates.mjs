@@ -2,7 +2,7 @@
 // caller: the squiggle whose process tree it came from, '' for none. page: a person's page (pass.page).
 // Neither: the owner's terminal or a detached process, which look alike, so neither may speak as the owner or the lead.
 import fs from 'node:fs';
-import { pathReason, peerReason, privateCheck } from './fence.mjs';
+import { pathReason, secretReason, peerReason, privateCheck } from './fence.mjs';
 
 const UNLOCK = { status: 403, error: 'Unlock with the room passcode first', unlock: true };
 // No code to type, so a terminal isn't asked for one.
@@ -58,13 +58,13 @@ export function labelled(text, { from, who, leadId, name }) {
   return !name || from === leadId ? text : `Sent by ${name}, not a person: ${text}`;
 }
 
-// file is resolved. Everyone gets the fence: the page never pins a file and a shared session has no reason to read the fenced folders.
+// file is resolved. Everyone gets the fence and the credentials list: the page never pins a file and a shared session has no reason to read the fenced folders.
 // The private-data fence binds non-Claude squiggles, so only a Claude squiggle passes it, as with its own Read tool.
 export function screenRefusal({ id, kind, file, caller = '', lead = false, claude = false, config = '' }, { cwd, home, dir } = {}) {
   if (caller && !lead && caller !== id) return { status: 403, error: `${caller} can only use its own screen` };
   if (kind !== 'file') return null;
   if (config && real(file) === real(config)) return { status: 403, error: 'room.json stays off the screen' };
-  const why = pathReason(file, cwd, home) || (caller && !lead ? peerReason('read', { path: file }, { self: caller, cwd, home, root: dir }) : '') || (caller && claude ? '' : privateCheck('read', { file_path: file }, cwd, home, dir));
+  const why = pathReason(file, cwd, home) || secretReason(file, cwd, home) || (caller && !lead ? peerReason('read', { path: file }, { self: caller, cwd, home, root: dir }) : '') || (caller && claude ? '' : privateCheck('read', { file_path: file }, cwd, home, dir));
   return why ? { status: 403, error: why } : null;
 }
 

@@ -16,6 +16,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Stopping, clearing or removing a squiggle takes a page or the lead. A squiggle can stop or clear itself and nothing else; a terminal asks for the room passcode.
 - People and room settings (add or edit a person, reactions, characters, lock, quit) need a page or the lead, never a plain squiggle or terminal; only you edit you. With a passcode the CLI asks for it; with none, use the page.
 - The screen fence binds every caller, the lead and pages included: fenced folders and room.json never show, private folders only to Claude squiggles, and a squiggle can't take another's screen.
+- Credentials never reach the screen, for any caller: cloud, registry and agent logins, key files, `.env` files (not their examples) and shell history, also through a link.
 - Turning tailnet sharing on takes you, from an unlocked page or your terminal with the room passcode, like Cloudflare sharing: a squiggle or a plain terminal can't.
 - With no room passcode only this computer opens the room: a remote device gets the lock screen and nothing else. Tailnet sharing needs a passcode of 8+ characters, like Cloudflare, so a device on the tailnet can't reach an unlocked room. A room already shared with a shorter code stays behind its lock until you set a new one.
 - New passcodes need 8+ characters: a leaked hash cracks a 4-digit code in minutes. Existing shorter codes still unlock.

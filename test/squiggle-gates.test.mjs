@@ -43,6 +43,39 @@ test('screen: the fence binds every caller', () => {
   }
 });
 
+test('screen: credentials never show, for any caller', () => {
+  const callers = [{}, { caller: 'lead', lead: true, claude: true }, { caller: 'ann', claude: true }, { caller: 'ann', claude: false }];
+  const secrets = ['.aws/credentials', '.AWS/Credentials', '.aws/config', '.azure/x', '.netrc', '.git-credentials', '.npmrc', '.pgpass', '.gnupg/secring.gpg', '.kube/config', '.docker/config.json', '.config/gh/hosts.yml', '.config/gcloud/credentials.db',
+    'work/.env', 'work/.env.production', 'work/.envrc', 'work/config.json.bak-2026', 'work/site.key',
+    '.pi/agent/auth.json', '.codex/auth.json', '.claude.json', '.claude.json.backup.1',
+    '.sentryclirc', '.emulator_console_auth_token', '.asc/x', '.appstoreconnect/x', '.config/rclone/rclone.conf', '.config/1password/x', '.config/anthropic/x', '.zsh_history', '.zsh_history.bak',
+    'work/a.key', 'work/a.pem', 'work/AuthKey_1.p8', 'work/a.p12', 'work/a.pfx', 'work/prod.env', 'work/secrets.env', 'work/.env-prod', 'work/.env_local'];
+  for (const who of callers) for (const s of secrets) assert.equal(screenRefusal({ id: who.caller || 'ann', kind: 'file', file: `${H}/${s}`, ...who })?.status, 403, `${s} ${JSON.stringify(who)}`);
+  for (const s of ['work/docs/handoff.md', 'work/.env.example', 'work/.env-sample', 'work/example.env', 'work/.environment.md', 'work/keys.md', 'work/notes.md', '.config/other/x.json']) assert.equal(screenRefusal({ id: 'ann', kind: 'file', file: `${H}/${s}`, caller: 'ann', claude: true }), null, s);
+});
+
+test('screen: a very long path costs no real time, on the main thread', () => {
+  for (const tail of ['', '/x']) for (const word of ['.env', '/.env', '.key', '.env-', 'a.']) {
+    const file = `/tmp/${word.repeat(50000)}${tail}`, was = process.cpuUsage();
+    screenRefusal({ id: 'ann', kind: 'file', file, caller: 'ann', claude: true });
+    const { user, system } = process.cpuUsage(was);
+    assert.ok(user + system < 1e6, `${word}${tail}: ${(user + system) / 1e3} ms of CPU`);
+  }
+});
+
+test('screen: a line break in a name hides no credential', () => {
+  for (const name of ['a\n.env', 'a\n.pem', '.env.\nprod', '.claude.json.\nx']) assert.equal(screenRefusal({ id: 'ann', kind: 'file', file: `/tmp/${name}`, caller: 'ann', claude: true })?.status, 403, JSON.stringify(name));
+});
+
+test('screen: a link to credentials is refused by where it lands', () => {
+  const d = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'screen-secret-')));
+  try {
+    fs.mkdirSync(path.join(d, '.aws')); fs.writeFileSync(path.join(d, '.aws/credentials'), 'x');
+    const link = path.join(d, 'notes.txt'); fs.symlinkSync(path.join(d, '.aws/credentials'), link);
+    assert.equal(screenRefusal({ id: 'ann', kind: 'file', file: link, caller: 'ann', claude: true }, { home: d })?.status, 403);
+  } finally { fs.rmSync(d, { recursive: true, force: true }); }
+});
+
 test('screen: private folders are refused for non-Claude squiggles and pages, allowed for Claude squiggles', () => {
   const d = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'priv-')));
   try {

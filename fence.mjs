@@ -12,6 +12,7 @@ export const HOME_FENCE = ['Downloads', 'Desktop', 'Documents', '.ssh'].flatMap(
 export const REASONS = { dirs: 'Downloads, Desktop and Documents are off limits', ssh: '~/.ssh is off limits', push: 'git push is off limits: squiggles commit, you push',
   watches: 'watches.json is written only by the watch commands: reading it is fine',
   peer: "that squiggle's transcript, journal and private notes are closed to other squiggles: ask the lead",
+  secret: 'credentials stay off the screen',
   tree: 'a recursive read or copy from home or above reaches Downloads, Desktop, Documents and ~/.ssh: name a folder inside home',
   crash: 'guard could not read the tool call, so it is refused' };
 export const REASON = REASONS.dirs;
@@ -227,6 +228,18 @@ export const editReason = (tool, input = {}) => /edit|write|patch|replace|create
 // The reason a path or shell command is refused, or ''.
 export function pathReason(p, cwd = process.cwd(), home = os.homedir()) {
   return fencedPath(p, cwd, home) ? REASONS.dirs : sshPath(p, cwd, home) ? REASONS.ssh : '';
+}
+// Under home, lower case. Screen only: a pinned file goes to every page, while squiggles can need these to work.
+const SECRETS = ['.aws', '.azure', '.gnupg', '.kube', '.netrc', '.git-credentials', '.npmrc', '.pgpass', '.docker/config.json', '.config/gh', '.config/gcloud', '.config/rclone', '.config/1password', '.config/anthropic',
+  '.pi/agent/auth.json', '.codex/auth.json', '.sentryclirc', '.emulator_console_auth_token', '.asc', '.appstoreconnect'];
+// In any folder. An env file: .env, .envrc, .env.prod, .env-prod, .env_local, prod.env; not its example.
+// Basename only, and none over the longest a file can have: these backtrack on a long word.
+const SECRET_NAME = /^(?:[^/]*\.(?:key|pem|p8|p12|pfx)|\.claude\.json(?:\.[^/]*)?|\.zsh_history[^/]*|config\.json\.bak[^/]*)$/;
+const ENV_FILE = /^(?:[^/]*\.env(?:[._-][^/]*)?|\.envrc)$/, ENV_EXAMPLE = /(?:^|[._-])(?:example|sample|template)(?:\.env)?$/;
+const secretName = (a) => { const n = path.basename(a); return n.length <= 255 && (SECRET_NAME.test(n) || (ENV_FILE.test(n) && !ENV_EXAMPLE.test(n))); };
+export function secretReason(p, cwd = process.cwd(), home = os.homedir()) {
+  const abs = path.resolve(cwd, String(p).replace(/^~(?=\/|$)/, home));
+  return under(SECRETS, p, cwd, home) || [abs, real(abs)].some((a) => secretName(a.toLowerCase())) ? REASONS.secret : '';
 }
 // Each quoted string or escaped space as one word, quotes gone: unquoted, git -C "my repo" push reads as git -C my repo push.
 const oneWord = (cmd) => String(cmd).replace(/\\\n/g, '').replace(/"((?:[^"\\]|\\.)*)"|'([^']*)'|\\(.)/gs, (m, a, b, c) => (a ?? b ?? c).replace(/\\/g, '').replace(/\s/g, '_'));
