@@ -163,3 +163,10 @@ test('fence: a brace or class spelling a fenced folder is caught; one that does 
   for (const c of ['ls ~/{Down,x}loads', 'cat ~/[D]ownloads/x']) assert.equal(commandReason(c, P), REASONS.dirs, c);
   for (const c of ['ls ~/{Agents,proj}', 'ls ~/.[!s]*', 'git log --format={x}']) assert.equal(commandReason(c, P), '', c);
 });
+
+test('fence: git push with a quoted, escaped or separate option value', () => {
+  for (const c of ['git -C "my repo" push origin main', "git -C 'a b' push", 'git -c "user.name=A B" push', 'git -C my\\ repo push', 'git --work-tree . push', 'git --namespace x push', 'git --git-dir ../r/.git push'])
+    assert.equal(commandReason(c, '/tmp'), REASONS.push, c);
+  for (const c of ['git commit -m "push fix"', 'git -C "my repo" status', 'git --work-tree . log push.md'])
+    assert.equal(commandReason(c, '/tmp'), '', c);
+});
