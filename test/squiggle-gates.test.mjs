@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { sender, askerOf, labelled, screenRefusal, humansRefusal, roomRefusal, peersRefusal, squiggleRefusal } from '../gates.mjs';
+import { sender, askerOf, askSeen, labelled, screenRefusal, humansRefusal, roomRefusal, peersRefusal, squiggleRefusal } from '../gates.mjs';
 import { firstFile, isBrowserFile } from '../caller.mjs';
 import { makePasscode } from '../passcode.mjs';
 
@@ -175,4 +175,16 @@ test('the owner keeps a way in from the terminal: the CLI asks for the code', ()
     assert.ok(unlocks.test(`/squiggles/ann/${a}`), a);
     assert.match(src('ui/room.js'), new RegExp('unlocked\\(\\(\\) => api\\(`/squiggles/\\$\\{id\\}/' + a), a);
   }
+});
+
+test('an --asked claim holds only for an ask the server saw', () => {
+  const now = 1e12, day = 864e5, seen = { owner: now - 6 * day, boss: now - day, sam: now - 8 * day };
+  const ok = (claim, turn = []) => askSeen({ claim, turn, seen, leadId: 'boss', now });
+  assert.equal(ok('owner'), true, 'a later turn, inside the week');
+  assert.equal(ok('Owner'), true, 'as a person types it');
+  assert.equal(ok('lead'), true, 'the lead by role');
+  assert.equal(ok('sam'), false, 'past the week');
+  assert.equal(ok('sam', ['sam']), true, 'this turn');
+  for (const c of ['nobody', '__proto__', 'constructor', '', true]) assert.equal(ok(c), false, String(c));
+  assert.equal(askSeen({ claim: 'owner' }), false, 'no record at all');
 });

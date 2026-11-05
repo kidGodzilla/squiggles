@@ -19,7 +19,7 @@ import { needsList, alertWake } from './needs.mjs';
 import { reportHoldMs, reportsText, reportLines } from './focus.mjs';
 import { quietSig, skipWake, alwaysWakes, ownEnd } from './quiet.mjs';
 import { HOME_FENCE } from './fence.mjs';
-import { sender, askerOf, labelled, screenRefusal, humansRefusal, roomRefusal, peersRefusal, squiggleRefusal } from './gates.mjs';
+import { sender, askerOf, askSeen, labelled, screenRefusal, humansRefusal, roomRefusal, peersRefusal, squiggleRefusal } from './gates.mjs';
 import { wantsPrecheck, precheckPrompt, runPrecheck, PRECHECK_MODEL } from './precheck.mjs';
 import { createWaits, bgStarted, bgEnded, ownRuns } from './waits.mjs';
 import { createWatches } from './watches.mjs';
@@ -629,6 +629,7 @@ function send(id, text, from = 'owner', { replay = false, human, images = [], as
   // Who asked this turn (Proactive): the user, a person, the lead, or a non-scheduled wake. Tasks filed while it runs are theirs, not the squiggle's own idea.
   if (!replay && r.status !== 'working') { r.asked = []; charterAtStart(s); } // checked again at turn end
   asker ||= askerOf(from, human, id);
+  if (asker) (r.askedBy ||= {})[asker] = Date.now(); // outlives the turn, so a later turn can still file the ask
   if (s.lead && from === 'owner' && !replay) r.userAt = Date.now(); // team reports hold while the user talks with the lead
   if (asker && !(r.asked ||= []).includes(asker)) r.asked.push(asker);
   // A pending restart waits for everyone to be idle; new turns would starve it (a report wakes the lead, the lead wakes someone).
@@ -1645,7 +1646,7 @@ const server = http.createServer(async (req, res) => {
       const b = await body(req, res);
       // Filed in a turn the user or the lead started: their ask, not the squiggle's own idea (Proactive).
       // Low trust: that squiggle suggests, never files its own ideas (a note for the user's or the lead's ask is fine).
-      if (b.op === 'add') { const c = await callerSquiggle(req), cs = c && loadSquiggle(c); if (cs && !b.asked && R(c).asked?.length) b.asked = R(c).asked[0]; if (cs && !b.asked) b.idea = true; else delete b.idea; if (cs && !cs.lead && !b.asked && trustOf(cs) === 'low') return json(res, { error: `${cs.name}'s trust is Low: suggest it instead` }, 403); }
+      if (b.op === 'add') { const c = await callerSquiggle(req), cs = c && loadSquiggle(c); if (cs && !b.asked && R(c).asked?.length) b.asked = R(c).asked[0]; if (cs && !b.asked) b.idea = true; else delete b.idea; if (cs && !cs.lead && !b.asked && trustOf(cs) === 'low') return json(res, { error: `${cs.name}'s trust is Low: suggest it instead` }, 403); if (cs && !cs.lead && trustOf(cs) === 'low' && !askSeen({ claim: b.asked, turn: R(c).asked, seen: R(c).askedBy, leadId: listSquiggles().find((x) => x.lead)?.id })) return json(res, { error: `${cs.name}'s trust is Low and ${b.asked} hasn't asked lately: suggest it instead` }, 403); }
       // A squiggle's review needs an ask the user can read cold; the user and the UI aren't held to it.
       b.needAsk = b.op === 'move' && b.status === 'review' && !!(await callerSquiggle(req));
       const r = await board.taskOp(b);

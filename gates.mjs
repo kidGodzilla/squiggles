@@ -19,6 +19,13 @@ export function sender({ caller = '', page = false, human, people = [] } = {}) {
 // refusal and allow charter edits.
 export const askerOf = (from, human, id) => (['harness', 'terminal', id].includes(from) ? '' : from === 'owner' ? human || 'owner' : from);
 
+// --asked is a claim in the request body. On a Low trust squiggle it counts only for an ask the server saw: this turn, or in the last week.
+const ASK_TTL = 7 * 864e5;
+export function askSeen({ claim, turn = [], seen = {}, leadId = '', now = Date.now() }) {
+  const who = String(claim).trim().toLowerCase(), id = who === 'lead' ? leadId : who;
+  return turn.includes(id) || now - (seen[id] || 0) < ASK_TTL;
+}
+
 // The owner's or the lead's to do: not a plain squiggle, a terminal or a detached process.
 function controlRefusal({ what, caller = '', lead = false, page = false, passcode = true }) {
   if (caller && !lead) return { status: 403, error: `Only the owner and the lead ${what}` };

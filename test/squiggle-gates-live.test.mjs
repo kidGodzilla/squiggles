@@ -69,6 +69,8 @@ process.stdin.on('data', async (d) => {
   buf += d; const lines = buf.split('\\n'); buf = lines.pop();
   for (const l of lines) {
     fs.appendFileSync(path.join(home, 'inbox-' + id + '.jsonl'), l + '\\n');
+    if (l.includes('claim now')) { const add = (asked) => post('/api/tasks', { op: 'add', title: 'claim', ...(asked && { asked }) }), n = l.match(/claim now (\\w+)/)[1]; fs.writeFileSync(path.join(home, 'claim-' + n + '.json'), JSON.stringify({ owner: await add('owner'), lead: await add('lead'), none: await add() })); }
+    if (id === 'boss' && l.includes('ask meek')) await post('/api/squiggles/meek/send', { text: 'the lead asks' });
     if (id === 'boss' && l.includes('peer check')) { const on = await post('/api/peers', { op: 'on' }), off = await post('/api/peers', { op: 'off' }); fs.writeFileSync(path.join(home, 'lead-peers.json'), JSON.stringify([on.status, off.status])); }
     if (id === 'boss' && l.includes('control check')) { const r = []; for (const a of ['stop', 'clear', 'remove']) r[r.length] = (await post('/api/squiggles/shut/' + a, {})).status; fs.writeFileSync(path.join(home, 'lead-control.json'), JSON.stringify(r)); }
     if (id === 'probe' && !done) { done = true; await probe().catch((e) => fs.writeFileSync(path.join(home, 'probe.json'), JSON.stringify({ crashed: String(e) }))); }
@@ -88,7 +90,7 @@ before(async () => {
   fs.writeFileSync(secretFile, SECRET);
   fs.writeFileSync(path.join(HOME, 'lone.js'), lone);
   fs.mkdirSync(BIN); fs.mkdirSync(path.join(DATA, 'runs'), { recursive: true });
-  for (const [id, extra] of [['boss', { lead: true }], ['probe', {}], ['shut', {}], ['spare', {}]]) {
+  for (const [id, extra] of [['boss', { lead: true }], ['probe', {}], ['shut', {}], ['spare', {}], ['meek', { trust: 'low', paused: false }]]) {
     const d = path.join(DATA, 'squiggles', id); fs.mkdirSync(d, { recursive: true });
     fs.writeFileSync(path.join(d, 'squiggle.json'), JSON.stringify({ name: id[0].toUpperCase() + id.slice(1), role: 'Test', cwd: '~', every: 0, paused: true, permissionMode: 'auto', ...extra }));
     fs.writeFileSync(path.join(d, 'charter.md'), 'Test fixture.\n'); fs.writeFileSync(path.join(d, 'journal.md'), '');
@@ -238,4 +240,24 @@ test('with a passcode, a session is the page; forged headers still are not, loca
   assert.equal((await api('/api/humans', { op: 'add', id: 'evil5', name: 'Evil' }, PAGE)).status, 401, 'browser headers, no session');
   assert.equal((await api('/api/passcode', { op: 'local', on: true, old: CODE }, me)).status, 200);
   assert.equal((await api('/api/humans', { op: 'add', id: 'evil4', name: 'Evil' }, PAGE)).status, 403, 'local skip');
+});
+
+test('Low trust can file for an ask the server saw, never for one it did not', async () => {
+  const cookie = (await api('/api/passcode', { op: 'unlock', code: CODE })).headers.get('set-cookie').split(';')[0];
+  const claims = async (n) => {
+    const f = path.join(HOME, `claim-${n}.json`);
+    assert.equal((await api('/api/squiggles/meek/send', { text: `claim now ${n}` })).status, 200);
+    await until(() => fs.existsSync(f) && fs.statSync(f).size, () => `meek filed: ${log.slice(-400)}`);
+    const r = JSON.parse(fs.readFileSync(f, 'utf8'));
+    return [r.owner.status, r.lead.status, r.none.status];
+  };
+  assert.deepEqual(await claims('before'), [403, 403, 403], 'nobody has asked meek anything');
+  await api('/api/squiggles/meek/send', { text: 'please look at this', from: 'owner', human: 'owner' }, { ...PAGE, cookie });
+  await until(() => inbox('meek').includes('please look at this'), 'the owner asked');
+  await sleep(300);
+  assert.deepEqual(await claims('owner'), [200, 403, 403], 'a later turn files for the owner only');
+  await api('/api/squiggles/boss/send', { text: 'ask meek' });
+  await until(() => inbox('meek').includes('the lead asks'), 'the lead asked');
+  await sleep(300);
+  assert.deepEqual(await claims('lead'), [200, 200, 403], 'and now for the lead');
 });
