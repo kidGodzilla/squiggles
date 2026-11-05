@@ -19,7 +19,7 @@ import { needsList, alertWake } from './needs.mjs';
 import { reportHoldMs, reportsText, reportLines } from './focus.mjs';
 import { quietSig, skipWake, alwaysWakes, ownEnd } from './quiet.mjs';
 import { HOME_FENCE } from './fence.mjs';
-import { sender, askerOf, askSeen, writesNote, noteRefusal, labelled, screenRefusal, humansRefusal, roomRefusal, peersRefusal, squiggleRefusal } from './gates.mjs';
+import { sender, askerOf, askSeen, writesNote, noteRefusal, labelled, screenRefusal, humansRefusal, roomRefusal, peersRefusal, squiggleRefusal, peerRefusal } from './gates.mjs';
 import { wantsPrecheck, precheckPrompt, runPrecheck, PRECHECK_MODEL } from './precheck.mjs';
 import { createWaits, bgStarted, bgEnded, ownRuns } from './waits.mjs';
 import { createWatches } from './watches.mjs';
@@ -279,7 +279,7 @@ const modelFor = (s) => pickModel(s, CONFIG.model);
 // The squiggle's settings.json (allow rules) is in it too: an edit relaunches the idle process on its next message. So is the system prompt.
 // Every tool call re-reads the whole session, so the compaction point sets the cost per call.
 const compactAt = (s) => s.autocompact ?? (s.lead ? 300000 : 120000);
-const launchSig = (s) => JSON.stringify([!!s.chrome, modelFor(s), s.permissionMode, compactAt(s), s.maxTurns, s.effort, s.cwd, readText(path.join(sqDir(s.id), 'settings.json'), ''), 'fence:claude-hook', systemPrompt(s)]);
+const launchSig = (s) => JSON.stringify([!!s.chrome, modelFor(s), s.permissionMode, compactAt(s), s.maxTurns, s.effort, s.cwd, readText(path.join(sqDir(s.id), 'settings.json'), ''), 'fence:peer', systemPrompt(s)]);
 // Busy Mac: every squiggle but the lead runs at nice 10 and its builds and tests inherit it, so the lead and the page stay quick.
 const lowPriority = (s, proc) => { if (!s.lead && proc.pid) try { os.setPriority(proc.pid, 10); } catch {} };
 function launch(s) {
@@ -1822,8 +1822,11 @@ const server = http.createServer(async (req, res) => {
         if (no) return json(res, { error: no.error, ...(no.unlock && { unlock: true }) }, no.status);
       }
       switch (p[3]) {
-        case 'events': return json(res, tailEvents(id, Number(url.searchParams.get('n') || 400)));
-        case 'journal': return json(res, readText(path.join(sqDir(id), 'journal.md')));
+        case 'events': case 'journal': {
+          const c = await callerSquiggle(req), no = peerRefusal({ owner: id, closed: s.private === true, caller: c, lead: !!(c && loadSquiggle(c)?.lead) });
+          if (no) return json(res, { error: no.error }, no.status);
+          return json(res, p[3] === 'events' ? tailEvents(id, Number(url.searchParams.get('n') || 400)) : readText(path.join(sqDir(id), 'journal.md')));
+        }
         case 'send': { const w = await whoSent(req, b.human); send(id, b.text || '', w.from, { human: w.human, images: (b.images || []).slice(0, 8).map(saveImage) }); relayMentions(id, b.text || '', w.from, w.human); return json(res, 'ok'); }
         case 'wake': { const w = await whoSent(req); return json(res, wake(id, b.why || 'asked', askerOf(w.from, w.human, id))); }
         case 'stop': stop(id); return json(res, 'ok');

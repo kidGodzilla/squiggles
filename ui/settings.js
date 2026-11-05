@@ -85,7 +85,7 @@ const TRUST_HINT = 'Low: suggests only. Medium: files its own tasks, writes wait
 const trustOpts = (v) => TRUST_OPTS.map(([k, n]) => `<option value="${k}"${(v || 'medium') === k ? ' selected' : ''}>${n}</option>`).join('');
 function renderSetSqs() {
   const cell = (label, html) => `<td><label class="sqf"><span class="sqlab">${label}</span>${html}</label></td>`;
-  $('#setSqs').innerHTML = `<table class="sqtable"><thead><tr><th scope="col">Squiggle</th><th scope="col">Model</th><th scope="col">Effort</th><th scope="col">Wakes</th><th scope="col">Trust</th><th scope="col">Pack</th><th scope="col">Paused</th></tr></thead><tbody>` + S.order.map((id) => {
+  $('#setSqs').innerHTML = `<table class="sqtable"><thead><tr><th scope="col">Squiggle</th><th scope="col">Model</th><th scope="col">Effort</th><th scope="col">Wakes</th><th scope="col">Trust</th><th scope="col">Pack</th><th scope="col">Paused</th><th scope="col" title="Closes this squiggle's transcript and journal to other squiggles. The lead and you still read them.">Private</th></tr></thead><tbody>` + S.order.map((id) => {
     const s = S.sq[id], own = s.look ? parseLook(s.look).gen : '';
     return `<tr data-sq="${id}"><th scope="row"><span class="sqname"><span class="tile mini">${avatarSVG(P(id), undefined, 'sq' + P(id).gid + '_')}</span><b>${esc(s.name)}</b></span></th>
       ${cell('Model', `<select data-f="model">${modelOpts(s.model, true)}</select>`)}
@@ -93,12 +93,13 @@ function renderSetSqs() {
       ${cell('Wakes', `<select data-f="every">${everyOpts(s.every)}</select>`)}
       ${s.lead ? '<td></td>' : cell('Trust', `<select data-f="trust" title="${esc(TRUST_HINT)}">${trustOpts(s.trust)}</select>`)}
       ${cell('Pack', `<select data-f="look">${opt('', own, 'Room pack')}${Object.values(GENS).map((g) => opt(g.id, own, g.name)).join('')}</select>`)}
-      <td><label class="sqpause"><input data-f="paused" type="checkbox"${s.paused ? ' checked' : ''}><span class="sqlab">Paused</span></label></td></tr>`;
+      <td><label class="sqpause"><input data-f="paused" type="checkbox"${s.paused ? ' checked' : ''}><span class="sqlab">Paused</span></label></td>
+      <td>${s.lead ? '' : `<label class="sqpause"><input data-f="private" type="checkbox"${s.private ? ' checked' : ''}><span class="sqlab">Private</span></label>`}</td></tr>`;
   }).join('') + '</tbody></table>';
 }
 $('#setSqs').onchange = async (e) => {
   const f = e.target.dataset.f, id = e.target.closest('[data-sq]')?.dataset.sq, s = S.sq[id]; if (!f || !s) return;
-  const v = e.target.value, val = f === 'paused' ? e.target.checked : f === 'every' ? Math.max(0, Number(v) || 0)
+  const v = e.target.value, val = f === 'paused' || f === 'private' ? e.target.checked : f === 'every' ? Math.max(0, Number(v) || 0)
     : f === 'look' ? (!v ? '' : s.look && parseLook(s.look).gen === v ? s.look : v) : v || null;
   const r = await unlocked(() => api(`/squiggles/${id}/update`, { [f]: val }), 'Unlock settings');
   if (!r || r.error) return toast(r?.error || 'Not saved');

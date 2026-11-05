@@ -24,8 +24,8 @@ export const trustRules = (s) => RULES[trustOf(s)];
 // squiggle's double-forked child) needs `owner()`, the page's unlocked session, for those fields and for a charter.
 // With no room passcode (`passcode` false) no session can exist: lead and lead-only fields are refused until one is set;
 // a charter stays open. A non-lead squiggle changes only itself.
-export const UPDATE_FIELDS = ['name', 'role', 'cwd', 'every', 'permissionMode', 'paused', 'look', 'lookSeed', 'maxTurns', 'chrome', 'effort', 'model', 'awake', 'autocompact', 'voice', 'trust', 'lead', 'alwaysWake'];
-const LEAD_ONLY = ['permissionMode', 'cwd', 'trust', 'model', 'alwaysWake']; // alwaysWake: wakes that cost usage with nothing new
+export const UPDATE_FIELDS = ['name', 'role', 'cwd', 'every', 'permissionMode', 'paused', 'look', 'lookSeed', 'maxTurns', 'chrome', 'effort', 'model', 'awake', 'autocompact', 'voice', 'trust', 'lead', 'alwaysWake', 'private'];
+const LEAD_ONLY = ['permissionMode', 'cwd', 'trust', 'model', 'alwaysWake', 'private']; // alwaysWake: wakes that cost usage with nothing new. private: closes logs to peers
 export const PERMISSION_MODES = ['auto', 'acceptEdits', 'plan', 'bypassPermissions'];
 const badMode = (b) => 'permissionMode' in b && !PERMISSION_MODES.includes(b.permissionMode) && { status: 400, error: `permissionMode: ${PERMISSION_MODES.join(', ')}` };
 // Hiring: a new squiggle is all lead-only fields, so only the lead or the user's unlocked page creates one.
@@ -60,8 +60,9 @@ export function updateRefusal(meta, s, { caller = '', callerLead = false, charte
   const bad = Object.keys(meta).filter((k) => !UPDATE_FIELDS.includes(k));
   if (bad.length) return { status: 400, error: `can't update ${bad.join(', ')}` };
   if (badMode(meta)) return badMode(meta);
+  if ('private' in meta && typeof meta.private !== 'boolean') return { status: 400, error: 'private: true or false' };
   if (caller && caller !== s.id && !callerLead) return { status: 403, error: `${caller} can't change ${s.id}: ${user} or the lead does` };
-  const changed = (k) => k in meta && (k === 'trust' ? trustOf(meta) !== trustOf(s) : k === 'lead' ? !!meta.lead !== !!s.lead : meta[k] !== s[k]);
+  const changed = (k) => k in meta && (k === 'trust' ? trustOf(meta) !== trustOf(s) : k === 'lead' || k === 'private' ? !!meta[k] !== !!s[k] : meta[k] !== s[k]);
   if (!caller) {
     const what = changed('lead') ? 'lead' : LEAD_ONLY.find(changed) || (charter && 'charter');
     if (!what) return null;

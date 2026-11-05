@@ -7,10 +7,11 @@ import path from 'node:path';
 
 export const DIRS = ['downloads', 'desktop', 'documents'];
 // Home folders no squiggle or pre-check may Read, Edit or Write (claude --disallowedTools). Bash, Grep and Glob go through
-// claude/guard.mjs; Read has no hook, so this list is its only fence.
+// claude/guard.mjs; Read's hook checks peers only (peerReason), so this list is its home fence.
 export const HOME_FENCE = ['Downloads', 'Desktop', 'Documents', '.ssh'].flatMap((d) => [`Read(~/${d}/**)`, `Edit(~/${d}/**)`, `Write(~/${d}/**)`]);
 export const REASONS = { dirs: 'Downloads, Desktop and Documents are off limits', ssh: '~/.ssh is off limits', push: 'git push is off limits: squiggles commit, you push',
   watches: 'watches.json is written only by the watch commands: reading it is fine',
+  peer: "that squiggle's transcript, journal and private notes are closed to other squiggles: ask the lead",
   tree: 'a recursive read or copy from home or above reaches Downloads, Desktop, Documents and ~/.ssh: name a folder inside home' };
 export const REASON = REASONS.dirs;
 const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -53,6 +54,7 @@ const unquote = (cmd) => String(cmd).replace(/\\\n/g, '').replace(/["'\\]/g, '')
 // from the last (cd .., pushd ~ >/dev/null). A target it can't read (cd -, cd $DIR, cd ~someone) counts as home.
 const CD = /(?:^|[;&|(`\n]|\$\()\s*(?:(?:builtin|command)\s+)?(?:cd|pushd)\b(?:[ \t]+([^\s;&|)<>`]+))?|\benv\b[^;&|\n]*?(?:\s-C\s*|\s--chdir[=\s]+)([^\s;&|)<>`]+)/gi;
 const homeArg = (home) => new RegExp(`^(~|\\$HOME|\\$\\{HOME\\}|${esc(home)})(?=/|$)`, 'i');
+const homeWord = (w, home) => w.replace(/^~([\w.-]+)(?=\/|$)/, (_, u) => path.join(path.dirname(home), u)).replace(homeArg(home), home);
 function places(cmd, cwd, home) {
   let cur = path.resolve(cwd); const out = [cur];
   for (const m of String(cmd).matchAll(CD)) {
@@ -97,7 +99,7 @@ const globReason = (cur, g, home) => {
 // folders; a .. after it cancels the segment before it (/tmp/*/../../home/m*/.ssh).
 const wordReason = (w, dir, home) => {
   for (const x of braces(w)) {
-    const segs = x.replace(/^~([\w.-]+)(?=\/|$)/, (_, u) => path.join(path.dirname(home), u)).replace(homeArg(home), home).split('/'), g = [];
+    const segs = homeWord(x, home).split('/'), g = [];
     let cur = segs[0] === '' ? '/' : dir;
     for (const seg of segs) {
       if (!seg || seg === '.') continue;
@@ -483,4 +485,46 @@ export function savedRules(dir = dataDir()) {
 export function privateCheck(tool, input, cwd = process.cwd(), home = os.homedir(), dir = dataDir()) {
   const rules = savedRules(dir);
   return rules ? privateReason(tool, input, cwd, home, rules) : 'config.json in the data folder could not be read, so the private-data rules are unknown: fix it to go on';
+}
+
+// Peer-private logs. Every squiggle's private/ folder is closed to the others; a squiggle marked private closes its journal
+// and transcript too. The lead and the owner of the files pass, and so does a process that is no squiggle.
+const metaOf = (root, id) => { try { return JSON.parse(fs.readFileSync(path.join(root, 'squiggles', id, 'squiggle.json'), 'utf8')); } catch { return null; } };
+export function privatePaths(self, root = dataDir()) {
+  if (!self || metaOf(root, self)?.lead) return [];
+  let ids = []; try { ids = fs.readdirSync(path.join(root, 'squiggles')); } catch { return []; }
+  return ids.filter((id) => id !== self).flatMap((id) => {
+    const d = path.join(root, 'squiggles', id);
+    return [path.join(d, 'private'), ...(metaOf(root, id)?.private === true ? [path.join(d, 'journal.md'), path.join(root, 'runs', `${id}.jsonl`)] : [])];
+  });
+}
+// A glob reaches a closed path when its folders match all the way down; ** spans any number.
+const globReaches = (gs, cs, i = 0, j = 0) => {
+  if (j >= cs.length) return true;
+  if (i >= gs.length) return false;
+  if (gs[i] === '**') return globReaches(gs, cs, i + 1, j) || globReaches(gs, cs, i, j + 1);
+  let ok; try { ok = globRe(gs[i]).test(cs[j]); } catch { ok = true; }
+  return ok && globReaches(gs, cs, i + 1, j + 1);
+};
+// Every provider, Claude too, so it reads paths only. A folder above a closed file passes: grep -r from the repo has to keep
+// working, so a walk isn't refused. This keeps honest squiggles out; it isn't a sandbox.
+export function peerReason(tool, input = {}, o = {}) {
+  const closed = o.closed || privatePaths(o.self ?? process.env.AGENTS_ID, o.root);
+  if (!closed.length) return '';
+  const home = o.home || os.homedir(), cwd = o.cwd || process.cwd(), low = closed.map((c) => c.toLowerCase()), segs = closed.map((c) => c.split('/').filter(Boolean)), seen = new Map();
+  const within = (a) => low.some((c) => a === c || a.startsWith(c + '/'));
+  const hit = (p, from) => {
+    const abs = path.resolve(from, homeWord(p, home));
+    if (!seen.has(abs)) seen.set(abs, within(abs.toLowerCase()) || within(real(abs).toLowerCase()) || (/[*?[{]/.test(p) && segs.some((c) => globReaches(abs.split('/').filter(Boolean), c))));
+    return seen.get(abs);
+  };
+  const found = [], walk = (v, k) => { if (typeof v === 'string') found[found.length] = [k, v]; else if (v && typeof v === 'object') Object.entries(v).forEach(([k2, v2]) => walk(v2, Array.isArray(v) ? k : k2)); };
+  walk(input, '');
+  for (const [k, s] of found) {
+    if (k === 'command' || k === 'cmd') {
+      const cmd = s.replace(/\\\n/g, '').replace(/["'\\]/g, ''), words = cmd.split(/[\s;|&()<>=`]+/).filter(Boolean).flatMap((w) => braces(w));
+      for (const dir of new Set(places(cmd, cwd, home))) if (words.some((w) => hit(w, dir))) return REASONS.peer;
+    } else if (!s.includes('\n') && s.length < 4096 && s.trim() && hit(s.trim(), cwd)) return REASONS.peer;
+  }
+  return '';
 }

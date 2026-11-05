@@ -62,8 +62,10 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Ask output masking also catches secrets split by colour codes or a tab, `mysql -pPASS`, and URL-encoded `token%3D` values.
 - An ask cut off by a server restart is marked interrupted at boot and its filer is told; its output is lost.
 - Private data fence (off until configured): config `privateDirs`, `privateTools` and `privateRemote` name folders, tools and remote reach that only Claude squiggles get. Codex, Cursor and Pi guards refuse them, including walks from a parent folder, symlinks and globs; config is read each call and an unreadable config refuses. `notes` leaves private folders out for those squiggles.
+- Every squiggle's `private/` folder is closed to the others on every provider, and `private <id> on` closes its transcript and journal too. The lead and you still read them, and `notes` and the screen follow the same rule. It keeps honest squiggles out; it isn't a sandbox.
 
 ### Added
+- Private column in Settings and `private <id> on|off` (you and the lead only).
 - Cuddly emoji in reactions: 320 from olivvybee's pack, with search in the picker and an `emojis [query]` command. The pack in `ui/emoji` is CC-BY-NC-SA (non-commercial, share-alike), not Apache-2.0; its licence and credits sit beside it.
 - Usage: `usage [days]` and a line on the Team tab show the weekly Claude limit, each squiggle's share of Claude use, what each limit week finished, and turns that produced nothing.
 - Emoji reactions in chats: tap + under a message (or the chip itself, to take it back) to react, and squiggles react with `react <chat> <emoji> [words]`. Reactions wake nobody. Settings turns them off for the whole room (`room reactions on|off`).

@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { sender, askerOf, askSeen, writesNote, noteRefusal, labelled, screenRefusal, humansRefusal, roomRefusal, peersRefusal, squiggleRefusal } from '../gates.mjs';
+import { sender, askerOf, askSeen, writesNote, noteRefusal, labelled, screenRefusal, humansRefusal, roomRefusal, peersRefusal, squiggleRefusal, peerRefusal } from '../gates.mjs';
 import { firstFile, isBrowserFile } from '../caller.mjs';
 import { makePasscode } from '../passcode.mjs';
 
@@ -156,11 +156,44 @@ test('page: forged headers need the socket to agree; a session does not', async 
   assert.equal(await pc.page(forged), true, 'local skip, a browser');
 });
 
+test('a marked squiggle closes its logs to peers; itself, the lead, pages and the terminal read', () => {
+  const ask = (o) => peerRefusal({ owner: 'sam', closed: true, ...o });
+  assert.equal(ask({ caller: 'ann' })?.status, 403);
+  assert.equal(ask({ caller: 'sam' }), null);
+  assert.equal(ask({ caller: 'boss', lead: true }), null);
+  assert.equal(ask({}), null);
+  assert.equal(peerRefusal({ owner: 'sam', closed: false, caller: 'ann' }), null);
+});
+
+test('screen: a peer cannot put a closed file on its screen; owner, lead, page and terminal can', () => {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'screen-peer-')));
+  try {
+    const put = (id, meta) => { fs.mkdirSync(path.join(root, 'squiggles', id, 'private'), { recursive: true }); fs.writeFileSync(path.join(root, 'squiggles', id, 'squiggle.json'), JSON.stringify(meta)); };
+    put('sam', { private: true }); put('open', {}); put('ann', {}); put('boss', { lead: true });
+    fs.mkdirSync(path.join(root, 'runs'));
+    const closed = [path.join(root, 'squiggles/sam/journal.md'), path.join(root, 'squiggles/sam/private/x.md'), path.join(root, 'squiggles/open/private/x.md'), path.join(root, 'runs/sam.jsonl')];
+    for (const f of closed) fs.writeFileSync(f, 'x');
+    const link = path.join(root, 'link.md'); fs.symlinkSync(closed[1], link);
+    const free = path.join(root, 'squiggles/open/journal.md'); fs.writeFileSync(free, 'x');
+    const ask = (file, who, id = who.caller || 'sam') => screenRefusal({ id, kind: 'file', file, claude: true, ...who }, { dir: root });
+    for (const file of [...closed, link]) {
+      assert.equal(ask(file, { caller: 'ann' })?.status, 403, file);
+      assert.equal(ask(file, { caller: 'ann', claude: false })?.status, 403, file);
+    }
+    assert.equal(ask(closed[0], { caller: 'sam' }), null);
+    assert.equal(ask(closed[0], { caller: 'boss', lead: true }, 'sam'), null);
+    assert.equal(ask(closed[0], {}), null);
+    assert.equal(ask(free, { caller: 'ann' }), null);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
 test('routes gate before acting, and the body cannot name a sender', () => {
   const s = src('server.mjs');
   assert.doesNotMatch(s, /b\.from \|\| 'owner'/);
   const screen = s.slice(s.indexOf("case 'screen': {"));
   assert.ok(screen.indexOf('screenRefusal(') < screen.indexOf('await screen('));
+  const reads = s.slice(s.indexOf("case 'events': case 'journal': {"));
+  assert.ok(reads.indexOf('peerRefusal(') > 0 && reads.indexOf('peerRefusal(') < reads.indexOf('tailEvents('), 'gate before the read');
   const humans = s.slice(s.indexOf("url.pathname === '/api/humans'"));
   assert.ok(humans.indexOf('humansRefusal(') < humans.indexOf('humans.op('));
   const room = s.slice(s.indexOf('roomRefusal({'));

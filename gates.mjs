@@ -2,7 +2,7 @@
 // caller: the squiggle whose process tree it came from, '' for none. page: a person's page (pass.page).
 // Neither: the owner's terminal or a detached process, which look alike, so neither may speak as the owner or the lead.
 import fs from 'node:fs';
-import { pathReason, privateCheck } from './fence.mjs';
+import { pathReason, peerReason, privateCheck } from './fence.mjs';
 
 const UNLOCK = { status: 403, error: 'Unlock with the room passcode first', unlock: true };
 // No code to type, so a terminal isn't asked for one.
@@ -64,8 +64,13 @@ export function screenRefusal({ id, kind, file, caller = '', lead = false, claud
   if (caller && !lead && caller !== id) return { status: 403, error: `${caller} can only use its own screen` };
   if (kind !== 'file') return null;
   if (config && real(file) === real(config)) return { status: 403, error: 'room.json stays off the screen' };
-  const why = pathReason(file, cwd, home) || (caller && claude ? '' : privateCheck('read', { file_path: file }, cwd, home, dir));
+  const why = pathReason(file, cwd, home) || (caller && !lead ? peerReason('read', { path: file }, { self: caller, cwd, home, root: dir }) : '') || (caller && claude ? '' : privateCheck('read', { file_path: file }, cwd, home, dir));
   return why ? { status: 403, error: why } : null;
+}
+
+// A squiggle marked private: its transcript and journal are closed to its peers. Itself, the lead, pages and the terminal read them.
+export function peerRefusal({ owner, closed = false, caller = '', lead = false }) {
+  return closed && caller && caller !== owner && !lead ? { status: 403, error: `${owner}'s transcript and journal are closed to other squiggles: ask the lead` } : null;
 }
 
 export function humansRefusal({ id, caller = '', lead = false, page = false, passcode = true }) {
