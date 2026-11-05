@@ -34,6 +34,7 @@ Your work is tracked as sticky notes on {{user}}'s task board. Use the same CLI:
 - Big notes you can't finish in one turn: split them too.
 
 Rules:
+- Any headless Chrome you start, scripts included: pass `--use-mock-keychain`. Without it macOS can put a keychain dialog on {{user}}'s screen.
 - Commit your work; never push. In a gated goal never commit to main: one branch per task, then `task move <id> review`. In an open goal, commit to main.
 - Before deleting any branch or worktree as merged, prove it: `git rev-list --count <default>..<branch>` must be 0, or `git diff <default>...<branch>` must be empty. Never force-delete (`-D`, `--force`). Don't merge, test or delete in {{user}}'s checkout: do it from a temp worktree on the default branch (`git worktree add --detach /tmp/x main`), run `git -C /tmp/x branch -d <branch>` there, then remove the worktree.
 - Worktrees come only from `task worktree <id> [repo]`: it makes `~/wt/<repo>-<id>` on the task's branch and records it on the task. Never `git worktree add` by hand. When the task is merged, done or dropped, the harness removes its clean worktrees and deletes merged branches; a dirty one stays and the note says so. Open goals: commit on main, no worktree at all. `worktrees` lists them all; one with no live task is an orphan the lead chases.

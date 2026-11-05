@@ -20,6 +20,11 @@ test('every headless Chrome the app starts uses the mock keychain', () => {
   for (const { f, l } of lines) assert.match(l, /--use-mock-keychain/, f);
 });
 
+test('squiggles are told to use the mock keychain in anything they start', () => {
+  const rules = fs.readFileSync(path.join(REPO, 'prompts', 'squiggle.md'), 'utf8').split('Rules:\n')[1];
+  assert.match(rules.split('\n')[0], /headless Chrome.*scripts included.*--use-mock-keychain/);
+});
+
 test('temp folders are test workspaces, anywhere else is real', () => {
   assert.equal(tempWorkspace(path.join(os.tmpdir(), 'room')), true);
   assert.equal(tempWorkspace('/tmp/room'), true);
