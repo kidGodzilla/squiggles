@@ -332,8 +332,10 @@ export function privateReason(tool, input = {}, cwd = process.cwd(), home = os.h
   if (tools.some((x) => t.includes(x))) return REASONS.private;
   const toHome = (p) => String(p).replace(homeArg(home), home);
   const dirs = names.map((d) => real(path.resolve(home, toHome(d))).toLowerCase());
-  const hit = (p, from) => { const abs = path.resolve(from, toHome(p));
-    return [abs, real(abs)].some((a) => { a = a.toLowerCase(); return dirs.some((d) => a === d || a.startsWith(d + '/')); }); };
+  // Once per path for this one check: a repeated word mustn't cost a disk read each time.
+  const hits = new Map(), hit = (p, from) => { const abs = path.resolve(from, toHome(p));
+    if (!hits.has(abs)) hits.set(abs, [abs, real(abs)].some((a) => { a = a.toLowerCase(); return dirs.some((d) => a === d || a.startsWith(d + '/')); }));
+    return hits.get(abs); };
   // A path that can name something inside a private folder ('in': ~/cl*/a, ~/**) or a parent of one ('above': ~, ~/work),
   // which only matters to something that walks down (grep -r, find, a Glob tool).
   const reach = (p, from) => {
@@ -419,11 +421,21 @@ const SUBST = '\\$\\((?:[^()]|\\((?:[^()]|\\([^()]*\\))*\\))*\\)|`[^`]*`';
 const ASSIGNED = new RegExp(`(^|[\\s;&|(])(\\w+=)((?:"(?:[^"\\\\$\`]|\\\\[\\s\\S]|${SUBST}|\\$(?!\\())*"|'[^']*'|${SUBST}|[^\\s;&|()<>"'\`$]|\\$(?!\\())*)`, 'gm');
 const flat = (text) => (/\bcase\s+\S+\s+in\b/.test(text) ? text.replace(/\bcase\s+\S+\s+in\s+\(?[^;()\n]*\)|;;&?\s*\(?[^;()\n]*\)|;&\s*\(?[^;()\n]*\)/g, ';') : text)
   .replace(ASSIGNED, (m, at, key, value) => (/\$\(|`/.test(value) ? `${at}${key}S` : m));
+// `... | xargs sh`, `xargs -I{} sh -c '{} box'`: the script or part of it comes in on stdin, so it can't be read here.
+const XARGS_OPTS = '(?:^|[\\s;&|(/])xargs((?:\\s+-(?:[0oprtx]*[EIJLPRSadns]\\s*\\S+|[\\w-]+(?:=\\S*)?))*)\\s+';
+const XARGS = new RegExp(`${XARGS_OPTS}${LEAD}${SHELL}(?=\\s|$|[;&|)])(.*)`, 'm'), XARGS_RUNS = new RegExp(`${XARGS_OPTS}${LEAD}(\\S+)`, 'gm');
+// `-I %`, `-0J%`, `--replace=%`; `-i` and `--replace` alone mean {}.
+const xargsMark = (opts) => opts.match(/\s(?:-[0oprtx]*[IJ]\s*|-i|--replace=)(\S+)/)?.[1] ?? (/\s(?:-i|--replace)(?![\w-])/.test(opts) ? '{}' : '');
+function fedByXargs(text) {
+  const m = text.match(XARGS);
+  if (!m) return false;
+  const mark = xargsMark(m[1]) || '{}';
+  return m[2].includes(mark) || /^(?:\s+-\S+)*\s*(?:$|[;&|)])/.test(m[2]);
+}
 // `echo ssh | xargs -I{} {} box`: the program itself comes in on stdin.
-const XARGS_RUNS = new RegExp(`(?:^|[\\s;&|(/])xargs((?:\\s+-(?:[EIJLPRSadns]\\s*\\S+|[\\w-]+(?:=\\S*)?))*)\\s+${LEAD}(\\S+)`, 'gm');
 function xargsProgram(text) {
   for (const [, opts, prog] of text.matchAll(XARGS_RUNS)) {
-    const mark = opts.match(/\s(?:-[IJ]\s*|-i|--replace=)(\S+)/)?.[1] ?? (/\s(?:-i|--replace)(?![\w-])/.test(opts) ? '{}' : '');
+    const mark = xargsMark(opts);
     if (mark && prog.includes(mark)) return true;
   }
   return false;
@@ -431,7 +443,7 @@ function xargsProgram(text) {
 // The same command in the spelling the checks read: `function f {` as `() {`, `x+=1` and `x[0]=1` as `x=1`, `${p:-~/a}` as its default.
 // Read as well as the original, not instead: `${p:-docs}` could still be anything else. Nesting too deep to unwrap comes back null.
 function respelled(text) {
-  let t = text.replace(/(^|[\s;&|({])function\s+(?:[^\s(){};&|]+\s+)*\{/g, '$1() {')
+  let t = text.replace(/(^|[\s;&|({])function((?:\s+[^\s(){};&|]+)*)(\s+\{)?/g, (m, at, names, brace) => (brace ? `${at}() {` : m)) // takes the whole run of names in one match: retrying from each word is quadratic
     .replace(/(^|[\s;&|(])(\w+)(?:\[[^\]\n]{0,200}\]\+?|\+)=/g, '$1$2=');
   for (let i = 0; i < 8; i++) {
     const next = t.replace(/\$\{\w+:?[-=+]([^{}]*)\}/g, '$1');
@@ -447,7 +459,7 @@ function privateCommand(cmd, cwd, home, o, depth) {
   const again = strict ? respelled(raw) : raw;
   if (again === null || again !== raw && privateCommand(again, cwd, home, o, depth)) return true;
   const bare = strict ? plain(raw) : raw, code = masked(bare);
-  if (strict && (PIPED.test(bare) || PIPED.test(code) || BUILT.test(code) || xargsProgram(code))) return true;
+  if (strict && (PIPED.test(bare) || PIPED.test(code) || BUILT.test(code) || fedByXargs(bare) || xargsProgram(code))) return true;
   const level = strict ? flat(bare) : bare;
   if (level !== bare && privateCommand(level, cwd, home, o, depth)) return true;
   const values = strict ? expanded(text) : [];

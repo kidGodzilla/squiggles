@@ -237,6 +237,20 @@ test('remote: a bare ssh alias host and ssh:// URLs', () => {
   assert.equal(bash('rsync -av ./site/ prod:/var/www/', cwd, privateRules({})), '', 'off without privateRemote');
 });
 
+test('xargs flags clustered ahead of the mark; a script fed in by xargs', () => {
+  for (const c of ['echo x | xargs -0I {} sh -c {}', 'echo x | xargs -0J% sh -c %', 'echo ssh | xargs -0I{} {} box', 'echo ssh | xargs -0I {} {} box', 'echo ssh | xargs -0tI% % box', 'echo ssh | xargs -0 -I% % box', 'echo x | xargs sh', "echo x | xargs -I{} sh -c '{} box'"])
+    assert.equal(bash(c), P, c);
+  for (const c of ['ls | xargs -I{} cat {}', 'ls | xargs -0I{} cat {}', 'ls | xargs -0n1 echo', 'ls | xargs -0r echo', 'ls | xargs -0I % cp % /tmp'])
+    assert.equal(bash(c), '', c);
+});
+
+test('a long run of function words takes under 1 s', () => {
+  for (const c of ['function '.repeat(30000), 'function a '.repeat(24000)]) {
+    const t = performance.now(); bash(c); const ms = performance.now() - t;
+    assert.ok(ms < 1000, `${c.slice(0, 11)}: ${Math.round(ms)} ms`);
+  }
+});
+
 test('other spellings of hidden shell forms are refused; everyday ones pass', () => {
   for (const c of ['cat ${p:-~/team/alpha}/a.txt', 'function f { ssh box; }; f', 'x+=1 ssh box', 'x[0]=1 ssh box', 'echo ssh | xargs -I{} {} box', 'echo x | sh >| o',
     'cat ${p:=~/team/alpha}/a.txt', 'cat ${p-~/team/alpha}/a.txt', 'cat ${a:-${b:-~/team/alpha}}/a.txt', "bash -c 'cat ${p:-~/team/alpha}/a.txt'",
