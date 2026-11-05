@@ -18,6 +18,7 @@ test('the 40,000-character word takes each fence check under 1 s', () => {
   fast('privateReason', () => strict(`cat ${word}`));
   fast('pi guard', () => pi({ toolName: 'bash', input: { command: `cat ${word}` } }));
   fast('pathReason', () => pathReason(word, cwd));
+  fast('64KB path', () => pathReason('a/'.repeat(32000), cwd));
 });
 test('six brace groups before the long word take each fence check under 1 s, and a read after them still refuses', () => {
   const c = `cat ${'{a,b}/'.repeat(6)}${word}`;
