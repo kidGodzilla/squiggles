@@ -19,6 +19,12 @@ export function sender({ caller = '', page = false, human, people = [] } = {}) {
 // refusal and allow charter edits.
 export const askerOf = (from, human, id) => (['harness', 'terminal', id].includes(from) ? '' : from === 'owner' ? human || 'owner' : from);
 
+// Peering opens a line to another room, so it's the owner's or the lead's to change.
+export function peersRefusal({ caller = '', lead = false, page = false, passcode = true }) {
+  if (caller && !lead) return { status: 403, error: 'Only the owner and the lead change peers' };
+  return caller || page ? null : passcode ? UNLOCK : NOCODE;
+}
+
 // The label a squiggle reads. People and the lead keep theirs; anyone else is named first, so a message can't open "From <a person>:".
 export function labelled(text, { from, who, leadId, name }) {
   if (who) return `From ${who}: ${text}`;

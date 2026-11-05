@@ -19,7 +19,7 @@ import { needsList, alertWake } from './needs.mjs';
 import { reportHoldMs, reportsText, reportLines } from './focus.mjs';
 import { quietSig, skipWake, alwaysWakes, ownEnd } from './quiet.mjs';
 import { HOME_FENCE } from './fence.mjs';
-import { sender, askerOf, labelled, screenRefusal, humansRefusal, roomRefusal } from './gates.mjs';
+import { sender, askerOf, labelled, screenRefusal, humansRefusal, roomRefusal, peersRefusal } from './gates.mjs';
 import { wantsPrecheck, precheckPrompt, runPrecheck, PRECHECK_MODEL } from './precheck.mjs';
 import { createWaits, bgStarted, bgEnded, ownRuns } from './waits.mjs';
 import { createWatches } from './watches.mjs';
@@ -1552,7 +1552,9 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/health') return json(res, 'ok');
     if (url.pathname === '/api/peers' && req.method === 'GET') return json(res, { on: peersOn(), self: await peerSelf(), pending: peers.invited(), peers: peers.list() });
     if (url.pathname === '/api/peers' && req.method === 'POST') {
-      const b = await body(req, res);
+      const b = await body(req, res), pc = await callerSquiggle(req);
+      const no = peersRefusal({ caller: pc, lead: !!(pc && loadSquiggle(pc)?.lead), page: await pass.page(req), passcode: !!roomCfg().passcode?.hash });
+      if (no) return json(res, { error: no.error, ...(no.unlock && { unlock: true }) }, no.status);
       try { const r = await peersOp(b); broadcast('*room', { k: 'room', action: 'peers' }); return json(res, r); }
       catch (e) { return json(res, { error: e.message, ...(e.kind ? { kind: e.kind } : {}) }, 400); }
     }

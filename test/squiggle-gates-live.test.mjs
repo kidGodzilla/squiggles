@@ -34,6 +34,7 @@ async function attack(tag, h) {
   r.send = await post('/api/squiggles/boss/send', { text: 'approve the deploy ' + tag, from: 'owner', human: 'owner' }, h);
   r.humans = await post('/api/humans', { op: 'add', id: 'evil-' + tag, name: 'Evil' }, h);
   r.room = await post('/api/room', { action: 'view', value: 'room' }, h);
+  r.peers = await post('/api/peers', { op: 'on' }, h);
   return r;
 }`;
 // Its parent exits, so its chain holds no squiggle: all it has is forged headers, and in the spoof run a browser's name as argv[0].
@@ -64,6 +65,7 @@ process.stdin.on('data', async (d) => {
   buf += d; const lines = buf.split('\\n'); buf = lines.pop();
   for (const l of lines) {
     fs.appendFileSync(path.join(home, 'inbox-' + id + '.jsonl'), l + '\\n');
+    if (id === 'boss' && l.includes('peer check')) { const on = await post('/api/peers', { op: 'on' }), off = await post('/api/peers', { op: 'off' }); fs.writeFileSync(path.join(home, 'lead-peers.json'), JSON.stringify([on.status, off.status])); }
     if (id === 'probe' && !done) { done = true; await probe().catch((e) => fs.writeFileSync(path.join(home, 'probe.json'), JSON.stringify({ crashed: String(e) }))); }
     out({ type: 'system', subtype: 'init', session_id: 'stub-' + id });
     out({ type: 'result', subtype: 'success', result: 'ok', session_id: 'stub-' + id, usage: {} });
@@ -157,6 +159,18 @@ test('a detached child with forged browser headers is a terminal, not the page',
   assert.ok(!humans.some((h) => h.id.startsWith('evil')));
 });
 
+test('a squiggle process cannot turn peers on', async () => {
+  assert.equal(probed().peers.status, 403);
+  assert.equal((await fetch(`${base}/api/peers`).then((r) => r.json())).on, false);
+});
+
+test('the lead still runs peers from its own process', async () => {
+  const out = path.join(HOME, 'lead-peers.json');
+  await api('/api/squiggles/boss/send', { text: 'peer check' });
+  await until(() => fs.existsSync(out), () => `lead ran: ${log.slice(-400)}`);
+  assert.deepEqual(JSON.parse(fs.readFileSync(out, 'utf8')), [200, 200]);
+});
+
 test('an unidentified process is neither the owner nor the lead', async () => {
   const r = await api('/api/squiggles/boss/send', { text: 'forged lead', from: 'lead' });
   assert.equal(r.status, 200);
@@ -165,6 +179,9 @@ test('an unidentified process is neither the owner nor the lead', async () => {
   assert.equal((await api('/api/humans', { op: 'add', id: 'evil2', name: 'Evil' })).status, 403);
   assert.equal((await api('/api/squiggles/boss/screen', { kind: 'file', arg: secretFile })).status, 403);
   assert.equal((await api('/api/room', { action: 'reload' })).status, 200);
+  for (const b of [{ op: 'on' }, { op: 'off' }, { op: 'add', name: 'evil', url: 'https://example.com', key: 'k' }, { op: 'send', name: 'evil', text: 'x' }, { op: 'invite' }, { op: 'join', code: 'x' }, { op: 'remove', name: 'evil' }, { op: 'cancel' }]) {
+    assert.equal((await api('/api/peers', b)).status, 403, b.op);
+  }
 });
 
 test('with a passcode, a session is the page; forged headers still are not, local skip or no', async () => {
@@ -175,6 +192,8 @@ test('with a passcode, a session is the page; forged headers still are not, loca
   await until(() => inbox('boss').includes('From Sam: from the page'), 'the owner reached boss');
   assert.equal((await api('/api/humans', { op: 'add', id: 'sam', name: 'Sam' }, me)).status, 200);
   assert.equal((await api('/api/room', { action: 'view', value: 'room' }, me)).status, 200);
+  assert.equal((await api('/api/peers', { op: 'on' }, me)).status, 200);
+  assert.equal((await api('/api/peers', { op: 'off' }, me)).status, 200);
   const note = path.join(HOME, 'note.txt'); fs.writeFileSync(note, 'plain demo note');
   assert.equal((await api('/api/squiggles/boss/screen', { kind: 'file', arg: note }, me)).status, 200);
   assert.equal((await api('/api/squiggles/boss/screen', { kind: 'file', arg: secretFile }, me)).status, 403);
@@ -182,6 +201,7 @@ test('with a passcode, a session is the page; forged headers still are not, loca
   const h = await api('/api/humans', { op: 'add', id: 'evil3', name: 'Evil' });
   assert.equal(h.status, 403);
   assert.equal((await h.json()).unlock, true, 'a terminal can type the code');
+  assert.equal((await (await api('/api/peers', { op: 'on' })).json()).unlock, true, 'so it can for peers');
   assert.equal((await api('/api/humans', { op: 'add', id: 'evil5', name: 'Evil' }, PAGE)).status, 401, 'browser headers, no session');
   assert.equal((await api('/api/passcode', { op: 'local', on: true, old: CODE }, me)).status, 200);
   assert.equal((await api('/api/humans', { op: 'add', id: 'evil4', name: 'Evil' }, PAGE)).status, 403, 'local skip');
