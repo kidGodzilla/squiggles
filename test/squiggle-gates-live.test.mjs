@@ -50,6 +50,15 @@ const page = { 'user-agent': 'Mozilla/5.0', 'sec-fetch-site': 'same-origin', ori
   fs.writeFileSync(file, JSON.stringify(out));
 })().catch((e) => fs.writeFileSync(file, JSON.stringify({ crashed: String(e) })));
 `;
+// A Low trust squiggle's nohup child, once with no headers and once dressed as a page. Same shape as the owner's terminal.
+const lowChild = `const fs = require('fs'), path = require('path'), base = process.env.PROBE_BASE, id = process.env.NOTE;
+const post = async (b, headers = {}) => { const r = await fetch(base + '/api/tasks', { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(b) }); return { status: r.status, body: await r.json().catch(() => null) }; };
+const dressed = { 'user-agent': 'Mozilla/5.0', 'sec-fetch-site': 'same-origin', origin: base };
+(async () => {
+  for (let i = 0; i < 100 && process.ppid !== 1; i++) await new Promise((r) => setTimeout(r, 50));
+  const r = { ppid: process.ppid, add: await post({ op: 'add', title: 'child idea' }), asked: await post({ op: 'add', title: 'child claim', asked: 'owner' }), dressed: await post({ op: 'add', title: 'dressed', asked: 'owner' }, dressed), split: await post({ op: 'split', id, titles: ['child part'] }), edit: await post({ op: 'edit', id, title: 'relabelled', asked: 'owner' }) };
+  fs.writeFileSync(path.join(process.env.HOME, 'low-child.json'), JSON.stringify(r));
+})();`;
 const stub = `#!${process.execPath}
 const fs = require('fs'), path = require('path'), { spawn } = require('child_process'), id = process.env.AGENTS_ID, home = process.env.HOME, base = process.env.PROBE_BASE;
 const out = (o) => process.stdout.write(JSON.stringify(o) + '\\n');
@@ -69,7 +78,10 @@ process.stdin.on('data', async (d) => {
   buf += d; const lines = buf.split('\\n'); buf = lines.pop();
   for (const l of lines) {
     fs.appendFileSync(path.join(home, 'inbox-' + id + '.jsonl'), l + '\\n');
-    if (l.includes('claim now')) { const add = (asked) => post('/api/tasks', { op: 'add', title: 'claim', ...(asked && { asked }) }), n = l.match(/claim now (\\w+)/)[1]; fs.writeFileSync(path.join(home, 'claim-' + n + '.json'), JSON.stringify({ owner: await add('owner'), lead: await add('lead'), none: await add() })); }
+    if (l.includes('claim now')) { const add = (asked) => post('/api/tasks', { op: 'add', title: 'claim', ...(asked && { asked }) }), n = l.match(/claim now (\\w+)/)[1]; fs.writeFileSync(path.join(home, 'claim-' + n + '.json'), JSON.stringify({ owner: await add('owner'), lead: await add('lead'), none: await add(), peer: await add('pal') })); }
+    if (l.includes('peer tell')) await post('/api/squiggles/meek/send', { text: 'peer hello' });
+    if (l.includes('child now')) spawn('/bin/sh', ['-c', 'NOTE=' + l.match(/child now (t\\d+)/)[1] + ' nohup "' + process.execPath + '" "' + path.join(home, 'low-child.js') + '" >/dev/null 2>&1 &'], { stdio: 'ignore' });
+    if (l.includes('ops now')) { const [, plain, marked] = l.match(/ops now (t\\d+) (t\\d+)/), op = (b) => post('/api/tasks', b), idea = await op({ op: 'suggest', title: 'an idea' }); fs.writeFileSync(path.join(home, 'low-ops.json'), JSON.stringify({ split: await op({ op: 'split', id: plain, titles: ['mine'] }), asked: await op({ op: 'edit', id: plain, asked: 'owner' }), title: await op({ op: 'edit', id: plain, title: 'my idea' }), mark: await op({ op: 'edit', id: plain, split: true }), accept: await op({ op: 'accept', id: idea.body.id, goal: 'g', owner: 'meek' }), marked: await op({ op: 'split', id: marked, titles: ['part'] }), note: await op({ op: 'edit', id: plain, note: 'progress' }), suggest: idea })); }
     if (id === 'boss' && l.includes('ask meek')) await post('/api/squiggles/meek/send', { text: 'the lead asks' });
     if (id === 'boss' && l.includes('peer check')) { const on = await post('/api/peers', { op: 'on' }), off = await post('/api/peers', { op: 'off' }); fs.writeFileSync(path.join(home, 'lead-peers.json'), JSON.stringify([on.status, off.status])); }
     if (id === 'boss' && l.includes('control check')) { const r = []; for (const a of ['stop', 'clear', 'remove']) r[r.length] = (await post('/api/squiggles/shut/' + a, {})).status; fs.writeFileSync(path.join(home, 'lead-control.json'), JSON.stringify(r)); }
@@ -88,9 +100,9 @@ const PAGE = { 'user-agent': 'Mozilla/5.0', 'sec-fetch-site': 'same-origin' };
 before(async () => {
   fs.mkdirSync(path.dirname(secretFile), { recursive: true });
   fs.writeFileSync(secretFile, SECRET);
-  fs.writeFileSync(path.join(HOME, 'lone.js'), lone);
+  fs.writeFileSync(path.join(HOME, 'lone.js'), lone); fs.writeFileSync(path.join(HOME, 'low-child.js'), lowChild);
   fs.mkdirSync(BIN); fs.mkdirSync(path.join(DATA, 'runs'), { recursive: true });
-  for (const [id, extra] of [['boss', { lead: true }], ['probe', {}], ['shut', {}], ['spare', {}], ['meek', { trust: 'low', paused: false }]]) {
+  for (const [id, extra] of [['boss', { lead: true }], ['probe', {}], ['shut', {}], ['spare', {}], ['meek', { trust: 'low', paused: false }], ['pal', { paused: false }]]) {
     const d = path.join(DATA, 'squiggles', id); fs.mkdirSync(d, { recursive: true });
     fs.writeFileSync(path.join(d, 'squiggle.json'), JSON.stringify({ name: id[0].toUpperCase() + id.slice(1), role: 'Test', cwd: '~', every: 0, paused: true, permissionMode: 'auto', ...extra }));
     fs.writeFileSync(path.join(d, 'charter.md'), 'Test fixture.\n'); fs.writeFileSync(path.join(d, 'journal.md'), '');
@@ -242,8 +254,10 @@ test('with a passcode, a session is the page; forged headers still are not, loca
   assert.equal((await api('/api/humans', { op: 'add', id: 'evil4', name: 'Evil' }, PAGE)).status, 403, 'local skip');
 });
 
+let me;
 test('Low trust can file for an ask the server saw, never for one it did not', async () => {
   const cookie = (await api('/api/passcode', { op: 'unlock', code: CODE })).headers.get('set-cookie').split(';')[0];
+  me = { ...PAGE, cookie };
   const claims = async (n) => {
     const f = path.join(HOME, `claim-${n}.json`);
     assert.equal((await api('/api/squiggles/meek/send', { text: `claim now ${n}` })).status, 200);
@@ -260,4 +274,48 @@ test('Low trust can file for an ask the server saw, never for one it did not', a
   await until(() => inbox('meek').includes('the lead asks'), 'the lead asked');
   await sleep(300);
   assert.deepEqual(await claims('lead'), [200, 200, 403], 'and now for the lead');
+});
+
+// The routes around --asked.
+const note = async (title, extra = {}) => (await (await api('/api/tasks', { op: 'add', title, ...extra }, me)).json()).id;
+const listOf = async () => { const b = await fetch(`${base}/api/board`, { headers: me }).then((r) => r.json()); return b.tasks || b; };
+const fileOf = async (name, what) => { const f = path.join(HOME, name); await until(() => fs.existsSync(f) && fs.statSync(f).size, () => `${what}: ${log.slice(-400)}`); return JSON.parse(fs.readFileSync(f, 'utf8')); };
+
+test("a Low trust squiggle's detached child files and relabels nothing", async () => {
+  const id = await note('a real note');
+  await api('/api/squiggles/meek/send', { text: `child now ${id}` });
+  const r = await fileOf('low-child.json', 'child ran');
+  assert.equal(r.ppid, 1, 'really detached');
+  for (const k of ['add', 'asked', 'dressed', 'split', 'edit']) { assert.equal(r[k].status, 403, k); assert.equal(r[k].body.unlock, true, k); }
+  const t = await listOf();
+  assert.equal(t.find((x) => x.id === id).title, 'a real note');
+  assert.equal(t.some((x) => /^child |^dressed$/.test(x.title)), false);
+});
+
+test('in a Low turn, split and edit neither create nor relabel; its own work still goes through', async () => {
+  const plain = await note('plain'), marked = await note('marked');
+  assert.equal((await api('/api/tasks', { op: 'edit', id: marked, split: true }, me)).status, 200);
+  await api('/api/squiggles/meek/send', { text: `ops now ${plain} ${marked}` });
+  const r = await fileOf('low-ops.json', 'meek ran');
+  for (const k of ['split', 'asked', 'title', 'mark', 'accept']) assert.equal(r[k].status, 403, k);
+  for (const k of ['marked', 'note', 'suggest']) assert.equal(r[k].status, 200, k);
+  const t = (await listOf()).find((x) => x.id === plain);
+  assert.equal(t.title, 'plain'); assert.equal(t.asked, undefined);
+});
+
+test("a peer's ask is not the owner's or the lead's", async () => {
+  await api('/api/squiggles/pal/send', { text: 'peer tell' });
+  await until(() => inbox('meek').includes('peer hello'), 'peer asked');
+  await sleep(300);
+  await api('/api/squiggles/meek/send', { text: 'claim now peer' });
+  assert.equal((await fileOf('claim-peer.json', 'meek filed')).peer.status, 403);
+});
+
+test("the owner's page still can; a plain terminal gets the code prompt", async () => {
+  const id = await note('page note', { asked: 'owner' });
+  assert.ok(id);
+  assert.equal((await api('/api/tasks', { op: 'edit', id, title: 'page title', asked: 'lead' }, me)).status, 200);
+  assert.equal((await api('/api/tasks', { op: 'split', id, titles: ['page part'] }, me)).status, 200);
+  const r = await api('/api/tasks', { op: 'add', title: 'terminal' });
+  assert.equal(r.status, 403); assert.equal((await r.json()).unlock, true);
 });

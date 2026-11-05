@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { sender, askerOf, askSeen, labelled, screenRefusal, humansRefusal, roomRefusal, peersRefusal, squiggleRefusal } from '../gates.mjs';
+import { sender, askerOf, askSeen, writesNote, noteRefusal, labelled, screenRefusal, humansRefusal, roomRefusal, peersRefusal, squiggleRefusal } from '../gates.mjs';
 import { firstFile, isBrowserFile } from '../caller.mjs';
 import { makePasscode } from '../passcode.mjs';
 
@@ -188,3 +188,24 @@ test('an --asked claim holds only for an ask the server saw', () => {
   for (const c of ['nobody', '__proto__', 'constructor', '', true]) assert.equal(ok(c), false, String(c));
   assert.equal(askSeen({ claim: 'owner' }), false, 'no record at all');
 });
+
+test("a peer's ask counts for nobody; the lead's and a person's do", () => {
+  const now = 1e12, seen = { boss: now, ann: now, sam: now }, ok = (claim) => askSeen({ claim, seen, leadId: 'boss', peers: ['boss', 'ann'], now });
+  assert.equal(ok('ann'), false); assert.equal(ok('lead'), true); assert.equal(ok('boss'), true); assert.equal(ok('sam'), true);
+});
+
+test('note writes while a squiggle is Low', () => {
+  const add = { op: 'add' }, no = (o) => noteRefusal({ b: add, ...o });
+  assert.equal(no({}), null, 'no Low squiggle: a terminal stays free');
+  assert.equal(no({ lowInRoom: true }).unlock, true, 'terminal or detached child: the code');
+  const none = no({ lowInRoom: true, passcode: false });
+  assert.equal(none.status, 403); assert.equal(none.unlock, undefined, 'no code to ask for');
+  assert.equal(no({ lowInRoom: true, page: true }), null, 'a page');
+  assert.equal(no({ caller: 'ann', lowInRoom: true }), null, 'a Medium turn is known by its process');
+  for (const b of [{ op: 'split' }, { op: 'accept' }, { op: 'edit', title: 'x' }, { op: 'edit', asked: 'owner' }, { op: 'edit', asked: '' }, { op: 'edit', split: true }]) assert.equal(noteRefusal({ b, caller: 'meek', low: true }).status, 403, JSON.stringify(b));
+  assert.equal(noteRefusal({ b: { op: 'split' }, caller: 'meek', low: true, marked: true }), null, 'marked for splitting');
+  for (const b of [{ op: 'edit', note: 'x' }, { op: 'move' }, { op: 'suggest' }, { op: 'drop' }]) assert.equal(noteRefusal({ b, caller: 'meek', low: true, lowInRoom: true }), null, b.op);
+  assert.equal(writesNote({ op: 'edit', note: 'x' }), false);
+});
+
+test('the CLI offers the code for note writes', () => assert.match(src('bin/agents.mjs'), /const UNLOCKS = .*\|tasks\)/));
