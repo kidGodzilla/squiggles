@@ -16,7 +16,7 @@ let s = {}; try { for (const f of fs.readdirSync(d)) { try { const j = JSON.pars
 const q = new URLSearchParams({ gen, id: s.id || "lead", look: s.look || "" }); if (s.lookSeed != null && s.lookSeed !== "") q.set("seed", s.lookSeed);
 console.log(q.toString());' "$DATA")"
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
-shot() { "$CHROME" --headless=new --disable-gpu --hide-scrollbars --user-data-dir="$TMP/p" --default-background-color=00000000 --window-size=1024,1024 \
+shot() { "$CHROME" --headless=new --use-mock-keychain --disable-gpu --hide-scrollbars --user-data-dir="$TMP/p" --default-background-color=00000000 --window-size=1024,1024 \
   --screenshot="$TMP/$1.png" "file://$ROOT/assets/icon.html#$HASH$2" >/dev/null 2>&1 || true; }
 shot mac ""; shot full "&full"; shot face "&face"; shot facefull "&face&full"
 [ -f "$TMP/mac.png" ] && [ -f "$TMP/full.png" ] && [ -f "$TMP/face.png" ] && [ -f "$TMP/facefull.png" ] || { echo "render failed, icons unchanged"; exit 1; }

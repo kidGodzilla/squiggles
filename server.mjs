@@ -35,7 +35,7 @@ import { fenced as cursorFenced, HOOKS as CURSOR_HOOKS } from './cursor/install.
 import { createMeetings, local, markPast, meetingNotes, parseWhen } from './meetings.mjs';
 import { createInbox } from './inbox.mjs';
 import { createHumans } from './humans.mjs';
-import { dataDir, loadConfig, providerFor, CODEX_MODELS } from './config.mjs';
+import { dataDir, loadConfig, providerFor, tempWorkspace, CODEX_MODELS } from './config.mjs';
 import { migrate } from './migrate.mjs';
 import { createSchedule, wakeToken, stampWake } from './schedule.mjs';
 import { makeGuard, tailnetName } from './guard.mjs';
@@ -107,9 +107,9 @@ function saveSquiggle(s) {
 }
 const ROOMCFG = path.join(DATA, 'room.json');
 const reactions = createReactions(path.join(RUNS, 'reactions.json'));
-// App icons follow the lead's look: redraw them into <data>/icons a moment after its look or the room's characters change.
+// App icons follow the lead's look: redraw them into <data>/icons a moment after its look or the room's characters change. Test workspaces keep the shipped icons: drawing starts Chrome.
 const ICONS = path.join(DATA, 'icons'), ICON_FILES = ['icon-180.png', 'icon-192.png', 'icon-512.png', 'favicon-64.png', 'logo-64.png'];
-let iconTimer; const drawIcons = () => { clearTimeout(iconTimer); iconTimer = setTimeout(() => { const c = spawn(path.join(ROOT, 'bin', 'render-icons.sh'), [], { stdio: 'ignore', detached: true, env: { ...process.env, SQUIGGLES_HOME: DATA } }); c.on('error', () => {}); c.unref(); }, 3000); };
+let iconTimer; const drawIcons = () => { if (tempWorkspace(DATA)) return; clearTimeout(iconTimer); iconTimer = setTimeout(() => { const c = spawn(path.join(ROOT, 'bin', 'render-icons.sh'), [], { stdio: 'ignore', detached: true, env: { ...process.env, SQUIGGLES_HOME: DATA } }); c.on('error', () => {}); c.unref(); }, 3000); };
 if (!fs.existsSync(ICONS)) drawIcons(); // a workspace older than these icons draws its own lead once
 const roomCfg = () => { try { return JSON.parse(fs.readFileSync(ROOMCFG, 'utf8')); } catch { return {}; } };
 // Team defaults: model, effort and cadence a new squiggle starts with; room.json `defaults`, set from Settings or `defaults`.

@@ -191,6 +191,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Settings number inputs show an accent border on focus and are 44px tall on touch screens.
 
 ### Fixed
+- Drawing icons no longer makes macOS ask for a keychain for Chrome, and a workspace under the temp folder no longer draws them at all.
 - The Team tab's cards no longer overflow sideways on a phone.
 - With "This Mac's browser skips the passcode" on, a step that needs an unlocked page (Run on an ask, answering a pick) prompts for the passcode instead of reloading the page.
 - The squiggle sheet saves in a room with no passcode again: it sends permissions, model, start folder and context cap only when they changed.

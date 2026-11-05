@@ -28,6 +28,12 @@ export const providerFor = (s, cfg) => (cfg.codex && CODEX_MODELS.includes(s.mod
 
 export const dataDir = () => path.resolve(String(process.env.SQUIGGLES_HOME || '~/.squiggles').replace(/^~(?=\/|$)/, os.homedir()));
 
+// A workspace under the OS temp folder is a test one. Paths compare as given and resolved: macOS links /tmp and /var into /private.
+export const tempWorkspace = (dir = dataDir()) => {
+  const both = (p) => { try { return [p, fs.realpathSync(p)]; } catch { return [p]; } };
+  return both(path.resolve(dir)).some((d) => ['/tmp', os.tmpdir()].flatMap(both).some((t) => (d + path.sep).startsWith(t + path.sep)));
+};
+
 export function loadConfig(dir = dataDir()) {
   const file = path.join(dir, 'config.json');
   let saved = null;
