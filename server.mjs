@@ -23,7 +23,7 @@ import { wantsPrecheck, precheckPrompt, runPrecheck, PRECHECK_MODEL } from './pr
 import { createWaits, bgStarted, bgEnded, ownRuns } from './waits.mjs';
 import { createWatches } from './watches.mjs';
 import { mimeFor } from './mime.mjs';
-import { trustLevel, trustOf, trustRules, updateRefusal, createRefusal, quitRefusal, slotsRefusal, shareRefusal, fileRmRefusal, fileBy, charterDiff, charterEdit, charterStart } from './trust.mjs';
+import { trustLevel, trustOf, trustRules, updateRefusal, createRefusal, quitRefusal, slotsRefusal, shareRefusal, fileRmRefusal, fileBy, sendFrom, charterDiff, charterEdit, charterStart } from './trust.mjs';
 import { KEYS, DEFAULT_SLOTS, slotKey, rankOf, limitOf, enqueue, drain, leave, checkSlots } from './slots.mjs';
 import { dropStale } from './stale.mjs';
 import { createLedger } from './cost.mjs';
@@ -1792,7 +1792,8 @@ const server = http.createServer(async (req, res) => {
       switch (p[3]) {
         case 'events': return json(res, tailEvents(id, Number(url.searchParams.get('n') || 400)));
         case 'journal': return json(res, readText(path.join(sqDir(id), 'journal.md')));
-        case 'send': send(id, b.text || '', b.from || 'owner', { human: b.human, images: (b.images || []).slice(0, 8).map(saveImage) }); relayMentions(id, b.text || '', b.from || 'owner', b.human); return json(res, 'ok');
+        case 'send': { const c = await callerSquiggle(req), { from, human } = sendFrom(b, { caller: c, callerLead: !!(c && loadSquiggle(c)?.lead) }); // `from` from the process tree, not the body
+          send(id, b.text || '', from, { human, images: (b.images || []).slice(0, 8).map(saveImage) }); relayMentions(id, b.text || '', from, human); return json(res, 'ok'); }
         case 'wake': return json(res, wake(id, b.why || 'asked', b.why && b.why !== 'asked' ? 'lead' : 'owner'));
         case 'stop': stop(id); return json(res, 'ok');
         case 'clear': return json(res, clearChat(id));

@@ -100,5 +100,10 @@ export function fileRmRefusal({ caller, uploader, owner, passcode, user }) {
   if (caller) return uploader === caller ? null : { status: 403, error: `${caller} can delete only files it added: ${user} deletes the rest` };
   return !passcode || owner() ? null : { status: 403, error: `Unlock with the room passcode first: deleting files is ${user}'s`, unlock: true };
 }
+// Who a chat message is from: the calling squiggle, never a name it claims. A squiggle claiming 'owner' would speak as the
+// user (From <name>: ...) and 'lead' as the lead; either asker lets the target rewrite its charter or file the user's work.
+// The lead speaks as 'lead'. No caller (the user's page or terminal) keeps the body's word.
+export const sendFrom = (b, { caller = '', callerLead = false } = {}) =>
+  caller ? { from: callerLead ? 'lead' : caller } : { from: b.from || 'owner', human: b.human };
 // Who added a file: the calling squiggle, never a name it claims; from the page, a person in the room or the owner.
 export const fileBy = (caller, by, people) => caller || (people.includes(by) ? by : 'owner');
