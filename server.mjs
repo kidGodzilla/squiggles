@@ -19,7 +19,7 @@ import { needsList, alertWake } from './needs.mjs';
 import { reportHoldMs, reportsText, reportLines } from './focus.mjs';
 import { quietSig, skipWake, alwaysWakes, ownEnd } from './quiet.mjs';
 import { HOME_FENCE } from './fence.mjs';
-import { sender, askerOf, labelled, screenRefusal, humansRefusal, roomRefusal, peersRefusal } from './gates.mjs';
+import { sender, askerOf, labelled, screenRefusal, humansRefusal, roomRefusal, peersRefusal, squiggleRefusal } from './gates.mjs';
 import { wantsPrecheck, precheckPrompt, runPrecheck, PRECHECK_MODEL } from './precheck.mjs';
 import { createWaits, bgStarted, bgEnded, ownRuns } from './waits.mjs';
 import { createWatches } from './watches.mjs';
@@ -1810,6 +1810,11 @@ const server = http.createServer(async (req, res) => {
       if (p[3] === 'media' && req.method === 'GET') return serveMedia(req, res, liveScreen.get(id)?.kind === 'video' ? mediaFile.get(id) : null);
       if (!['events', 'journal'].includes(p[3]) && req.method !== 'POST') return json(res, { error: 'POST only' }, 405);
       const b = req.method === 'POST' ? await body(req, res) : {};
+      if (['stop', 'clear', 'remove'].includes(p[3])) {
+        const c = await callerSquiggle(req);
+        const no = squiggleRefusal({ id, action: p[3], caller: c, lead: !!(c && loadSquiggle(c)?.lead), page: await pass.page(req), passcode: !!roomCfg().passcode?.hash });
+        if (no) return json(res, { error: no.error, ...(no.unlock && { unlock: true }) }, no.status);
+      }
       switch (p[3]) {
         case 'events': return json(res, tailEvents(id, Number(url.searchParams.get('n') || 400)));
         case 'journal': return json(res, readText(path.join(sqDir(id), 'journal.md')));

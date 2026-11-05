@@ -720,7 +720,7 @@ function wireChat(cw, id) {
       const b = e.target;
       if (!b.classList.contains('arm')) { b.classList.add('arm'); b.dataset.label = b.innerHTML; b.textContent = 'Clear?'; b.title = 'Click again to clear this chat'; clearTimeout(b._t); b._t = setTimeout(() => { b.classList.remove('arm'); b.innerHTML = b.dataset.label; b.title = 'Clear chat'; }, 3000); return; }
       clearTimeout(b._t); b.classList.remove('arm'); b.innerHTML = b.dataset.label; b.title = 'Clear chat';
-      api(`/squiggles/${id}/clear`, {}); return;
+      unlocked(() => api(`/squiggles/${id}/clear`, {}), 'Unlock this browser').then((x) => x?.error && toast(x.error)); return;
     }
     if (a === 'back') return setView('room');
     if (a === 'close') { saveWin(cw); cw.remove(); syncUrl(); }
@@ -981,11 +981,11 @@ async function openSheet(id) {
     const a = e.target.dataset.a; if (!a) return;
     if (a === 'meet') return meetNowPop(e.target, id);
     if (a === 'wake') await api(`/squiggles/${id}/wake`, { why: 'Asked from the room' });
-    if (a === 'stop') await api(`/squiggles/${id}/stop`, {});
+    if (a === 'stop') { const r = await unlocked(() => api(`/squiggles/${id}/stop`, {}), 'Unlock this browser'); if (r?.error) toast(r.error); }
     if (a === 'pause') Object.assign(S.sq[id], await api(`/squiggles/${id}/update`, { paused: !s.paused }));
     if (a === 'remove') {
       const b = e.target; if (!b.classList.contains('arm')) { b.classList.add('arm'); b.textContent = `Remove ${s.name}? Click again`; setTimeout(() => { b.classList.remove('arm'); b.textContent = 'Remove from the room'; }, 3000); return; }
-      const res = await api(`/squiggles/${id}/remove`, {}); toast(typeof res === 'string' ? res : res.error); $('#sheet').classList.remove('on'); return;
+      const res = await unlocked(() => api(`/squiggles/${id}/remove`, {}), 'Unlock this browser'); if (res == null) return; toast(typeof res === 'string' ? res : res.error); $('#sheet').classList.remove('on'); return;
     }
     if (a === 'shuffle') { await restyle(id, { lookSeed: Math.floor(Math.random() * 1e9) }); return openSheet(id); }
     if (a === 'dropwait') { const r = await api('/waits', { op: 'drop', id: e.target.dataset.w }); if (r?.error) toast(r.error); return openSheet(id); }

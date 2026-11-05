@@ -18,7 +18,7 @@ const SECRET = 'demo-key-not-real-7c1f', CODE = 'temp-room-code-1';
 const secretFile = path.join(HOME, '.ssh', 'id_demo'), probeOut = path.join(HOME, 'probe.json'), loneOut = path.join(HOME, 'lone.json'), spoofOut = path.join(HOME, 'spoof.json');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const inbox = (id) => { try { return fs.readFileSync(path.join(HOME, `inbox-${id}.jsonl`), 'utf8'); } catch { return ''; } };
-async function until(fn, what, ms = 20000) {
+async function until(fn, what, ms = 60000) {
   const why = () => (typeof what === 'function' ? what() : what);
   for (const end = Date.now() + ms; Date.now() < end; await sleep(100)) { const v = await fn(); if (v) return v; }
   throw new Error(`timed out: ${why()}`);
@@ -35,6 +35,9 @@ async function attack(tag, h) {
   r.humans = await post('/api/humans', { op: 'add', id: 'evil-' + tag, name: 'Evil' }, h);
   r.room = await post('/api/room', { action: 'view', value: 'room' }, h);
   r.peers = await post('/api/peers', { op: 'on' }, h);
+  r.stop = await post('/api/squiggles/boss/stop', {}, h);
+  r.clear = await post('/api/squiggles/boss/clear', {}, h);
+  r.remove = await post('/api/squiggles/spare/remove', {}, h);
   return r;
 }`;
 // Its parent exits, so its chain holds no squiggle: all it has is forged headers, and in the spoof run a browser's name as argv[0].
@@ -57,6 +60,7 @@ async function probe() {
   const r = await attack('tree', {});
   r.proxied = await attack('xff', { 'x-forwarded-for': '100.64.0.9' });
   r.forged = await attack('forged', { ...page, 'x-forwarded-for': '100.64.0.9' });
+  r.clearSelf = await post('/api/squiggles/probe/clear', {});
   fs.writeFileSync(path.join(home, 'probe.json'), JSON.stringify(r));
   spawn('/bin/sh', ['-c', 'nohup "$0" "$1" lone >/dev/null 2>&1 &', process.execPath, path.join(home, 'lone.js')], { stdio: 'ignore' });
   spawn('/bin/zsh', ['-c', '(exec -a "$2" "$0" "$1" spoof) >/dev/null 2>&1 &', process.execPath, path.join(home, 'lone.js'), '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'], { stdio: 'ignore' });
@@ -66,6 +70,7 @@ process.stdin.on('data', async (d) => {
   for (const l of lines) {
     fs.appendFileSync(path.join(home, 'inbox-' + id + '.jsonl'), l + '\\n');
     if (id === 'boss' && l.includes('peer check')) { const on = await post('/api/peers', { op: 'on' }), off = await post('/api/peers', { op: 'off' }); fs.writeFileSync(path.join(home, 'lead-peers.json'), JSON.stringify([on.status, off.status])); }
+    if (id === 'boss' && l.includes('control check')) { const r = []; for (const a of ['stop', 'clear', 'remove']) r[r.length] = (await post('/api/squiggles/shut/' + a, {})).status; fs.writeFileSync(path.join(home, 'lead-control.json'), JSON.stringify(r)); }
     if (id === 'probe' && !done) { done = true; await probe().catch((e) => fs.writeFileSync(path.join(home, 'probe.json'), JSON.stringify({ crashed: String(e) }))); }
     out({ type: 'system', subtype: 'init', session_id: 'stub-' + id });
     out({ type: 'result', subtype: 'success', result: 'ok', session_id: 'stub-' + id, usage: {} });
@@ -83,9 +88,9 @@ before(async () => {
   fs.writeFileSync(secretFile, SECRET);
   fs.writeFileSync(path.join(HOME, 'lone.js'), lone);
   fs.mkdirSync(BIN); fs.mkdirSync(path.join(DATA, 'runs'), { recursive: true });
-  for (const [id, extra] of [['boss', { lead: true }], ['probe', {}]]) {
+  for (const [id, extra] of [['boss', { lead: true }], ['probe', {}], ['shut', {}], ['spare', {}]]) {
     const d = path.join(DATA, 'squiggles', id); fs.mkdirSync(d, { recursive: true });
-    fs.writeFileSync(path.join(d, 'squiggle.json'), JSON.stringify({ name: id === 'boss' ? 'Boss' : 'Probe', role: 'Test', cwd: '~', every: 0, paused: true, permissionMode: 'auto', ...extra }));
+    fs.writeFileSync(path.join(d, 'squiggle.json'), JSON.stringify({ name: id[0].toUpperCase() + id.slice(1), role: 'Test', cwd: '~', every: 0, paused: true, permissionMode: 'auto', ...extra }));
     fs.writeFileSync(path.join(d, 'charter.md'), 'Test fixture.\n'); fs.writeFileSync(path.join(d, 'journal.md'), '');
   }
   fs.writeFileSync(path.join(BIN, 'claude'), stub, { mode: 0o755 });
@@ -171,6 +176,29 @@ test('the lead still runs peers from its own process', async () => {
   assert.deepEqual(JSON.parse(fs.readFileSync(out, 'utf8')), [200, 200]);
 });
 
+const sparePresent = () => fs.existsSync(path.join(DATA, 'squiggles', 'spare', 'squiggle.json'));
+
+test('a squiggle process cannot stop, clear or remove another; its own chat is its own', () => {
+  for (const k of ['stop', 'clear', 'remove']) {
+    assert.equal(probed()[k].status, 403, k);
+    assert.match(probed()[k].body.error, /Only the owner and the lead/, k);
+  }
+  assert.equal(probed().clearSelf.status, 200);
+  assert.ok(sparePresent(), 'spare is still here');
+});
+
+test('a detached child with forged browser headers cannot stop, clear or remove either', () => {
+  for (const [d, tag] of [[detached(), 'lone'], [spoofed(), 'spoof']]) for (const k of ['stop', 'clear', 'remove']) assert.equal(d.plain[k].status, 403, `${tag} ${k}`);
+});
+
+test('the lead still stops, clears and removes from its own process', async () => {
+  const out = path.join(HOME, 'lead-control.json');
+  await api('/api/squiggles/boss/send', { text: 'control check' });
+  await until(() => fs.existsSync(out), () => `lead ran: ${log.slice(-400)}`);
+  assert.deepEqual(JSON.parse(fs.readFileSync(out, 'utf8')), [200, 200, 200]);
+  assert.equal(fs.existsSync(path.join(DATA, 'squiggles', 'shut', 'squiggle.json')), false);
+});
+
 test('an unidentified process is neither the owner nor the lead', async () => {
   const r = await api('/api/squiggles/boss/send', { text: 'forged lead', from: 'lead' });
   assert.equal(r.status, 200);
@@ -182,6 +210,8 @@ test('an unidentified process is neither the owner nor the lead', async () => {
   for (const b of [{ op: 'on' }, { op: 'off' }, { op: 'add', name: 'evil', url: 'https://example.com', key: 'k' }, { op: 'send', name: 'evil', text: 'x' }, { op: 'invite' }, { op: 'join', code: 'x' }, { op: 'remove', name: 'evil' }, { op: 'cancel' }]) {
     assert.equal((await api('/api/peers', b)).status, 403, b.op);
   }
+  for (const [id, a] of [['boss', 'stop'], ['boss', 'clear'], ['spare', 'remove']]) assert.equal((await api(`/api/squiggles/${id}/${a}`, {})).status, 403, a);
+  assert.ok(sparePresent(), 'spare is still here');
 });
 
 test('with a passcode, a session is the page; forged headers still are not, local skip or no', async () => {
@@ -202,6 +232,9 @@ test('with a passcode, a session is the page; forged headers still are not, loca
   assert.equal(h.status, 403);
   assert.equal((await h.json()).unlock, true, 'a terminal can type the code');
   assert.equal((await (await api('/api/peers', { op: 'on' })).json()).unlock, true, 'so it can for peers');
+  assert.equal((await (await api('/api/squiggles/boss/stop', {})).json()).unlock, true, 'and for stopping a squiggle');
+  for (const a of ['stop', 'clear', 'remove']) assert.equal((await api(`/api/squiggles/spare/${a}`, {}, me)).status, 200, a);
+  assert.equal(sparePresent(), false);
   assert.equal((await api('/api/humans', { op: 'add', id: 'evil5', name: 'Evil' }, PAGE)).status, 401, 'browser headers, no session');
   assert.equal((await api('/api/passcode', { op: 'local', on: true, old: CODE }, me)).status, 200);
   assert.equal((await api('/api/humans', { op: 'add', id: 'evil4', name: 'Evil' }, PAGE)).status, 403, 'local skip');

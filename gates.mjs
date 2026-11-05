@@ -19,10 +19,19 @@ export function sender({ caller = '', page = false, human, people = [] } = {}) {
 // refusal and allow charter edits.
 export const askerOf = (from, human, id) => (['harness', 'terminal', id].includes(from) ? '' : from === 'owner' ? human || 'owner' : from);
 
-// Peering opens a line to another room, so it's the owner's or the lead's to change.
-export function peersRefusal({ caller = '', lead = false, page = false, passcode = true }) {
-  if (caller && !lead) return { status: 403, error: 'Only the owner and the lead change peers' };
+// The owner's or the lead's to do: not a plain squiggle, a terminal or a detached process.
+function controlRefusal({ what, caller = '', lead = false, page = false, passcode = true }) {
+  if (caller && !lead) return { status: 403, error: `Only the owner and the lead ${what}` };
   return caller || page ? null : passcode ? UNLOCK : NOCODE;
+}
+
+// Peering opens a line to another room.
+export const peersRefusal = (who) => controlRefusal({ ...who, what: 'change peers' });
+
+// A squiggle may stop or clear itself. Stopping, clearing or removing another, or removing itself, is the owner's or the lead's.
+export function squiggleRefusal({ id, action, ...who }) {
+  if (who.caller === id && action !== 'remove') return null;
+  return controlRefusal({ ...who, what: `${action} another squiggle` });
 }
 
 // The label a squiggle reads. People and the lead keep theirs; anyone else is named first, so a message can't open "From <a person>:".

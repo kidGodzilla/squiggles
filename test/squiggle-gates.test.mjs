@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { sender, askerOf, labelled, screenRefusal, humansRefusal, roomRefusal, peersRefusal } from '../gates.mjs';
+import { sender, askerOf, labelled, screenRefusal, humansRefusal, roomRefusal, peersRefusal, squiggleRefusal } from '../gates.mjs';
 import { firstFile, isBrowserFile } from '../caller.mjs';
 import { makePasscode } from '../passcode.mjs';
 
@@ -89,6 +89,19 @@ test('room: reload is open; everything else needs a page or the lead', () => {
   assert.equal(roomRefusal({ action: 'characters' })?.unlock, true);
 });
 
+test('a squiggle stops or clears itself, never another, and never removes itself', () => {
+  for (const action of ['stop', 'clear']) {
+    assert.equal(squiggleRefusal({ id: 'ann', action, caller: 'ann' }), null);
+    assert.equal(squiggleRefusal({ id: 'bob', action, caller: 'ann' })?.status, 403);
+    assert.equal(squiggleRefusal({ id: 'bob', action, caller: 'ann', page: true })?.status, 403, 'the process tree before the page');
+  }
+  assert.equal(squiggleRefusal({ id: 'ann', action: 'remove', caller: 'ann' })?.status, 403);
+  assert.equal(squiggleRefusal({ id: 'bob', action: 'remove', caller: 'lead', lead: true }), null);
+  assert.equal(squiggleRefusal({ id: 'bob', action: 'stop', page: true }), null);
+  assert.equal(squiggleRefusal({ id: 'bob', action: 'stop' })?.unlock, true);
+  assert.equal(squiggleRefusal({ id: 'bob', action: 'stop', passcode: false })?.unlock, undefined);
+});
+
 test('peers: a page or the lead, never a plain squiggle or terminal', () => {
   assert.equal(peersRefusal({ caller: 'lead', lead: true }), null);
   assert.equal(peersRefusal({ page: true }), null);
@@ -157,4 +170,9 @@ test('routes gate before acting, and the body cannot name a sender', () => {
 test('the owner keeps a way in from the terminal: the CLI asks for the code', () => {
   assert.match(src('bin/agents.mjs'), /const UNLOCKS = .*humans\|room\|peers/);
   assert.doesNotMatch(src('bin/agents.mjs'), /from: 'lead'/);
+  const unlocks = new RegExp(src('bin/agents.mjs').match(/const UNLOCKS = \/(.*)\/;/)[1]);
+  for (const a of ['stop', 'clear', 'remove']) {
+    assert.ok(unlocks.test(`/squiggles/ann/${a}`), a);
+    assert.match(src('ui/room.js'), new RegExp('unlocked\\(\\(\\) => api\\(`/squiggles/\\$\\{id\\}/' + a), a);
+  }
 });
