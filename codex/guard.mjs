@@ -1,11 +1,10 @@
 // Codex squiggles: the fence.mjs checks as a PreToolUse hook on codex app-server (its workspace-write sandbox reads
 // everywhere and has network). Codex sends {tool_name, tool_input, cwd}; exit 2 blocks and shows stderr to the model.
 // Fails closed on bad input. apply_patch carries its patch in tool_input.command: read as text, each file it touches checked.
-import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { check as cursorCheck } from '../cursor/guard.mjs';
-import { mentionReason, pathReason, peerReason, privateCheck, REASONS, watchesPath } from '../fence.mjs';
+import { hookMain, mentionReason, pathReason, peerReason, privateCheck, REASONS, watchesPath } from '../fence.mjs';
 
 const PATCH = /^(apply_patch|Edit|Write)$/;
 export function check(ev) {
@@ -23,6 +22,5 @@ export const hookConfig = () => `hooks.PreToolUse=[{matcher=".*",hooks=[{type="c
 // From app-server's hooks/list: is our hook there, enabled and trusted?
 export const hookTrusted = (list) => (list?.data || []).some((e) => (e.hooks || []).some((h) => h.key === HOOK_KEY && h.command === HOOK_CMD && h.enabled && h.trustStatus === 'trusted'));
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  let ev; try { ev = JSON.parse(fs.readFileSync(0, 'utf8')); } catch { process.stderr.write('guard could not read the tool call'); process.exit(2); }
-  const r = check(ev); if (r) { process.stderr.write(r); process.exit(2); }
+  hookMain(check);
 }

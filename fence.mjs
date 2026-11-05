@@ -12,8 +12,15 @@ export const HOME_FENCE = ['Downloads', 'Desktop', 'Documents', '.ssh'].flatMap(
 export const REASONS = { dirs: 'Downloads, Desktop and Documents are off limits', ssh: '~/.ssh is off limits', push: 'git push is off limits: squiggles commit, you push',
   watches: 'watches.json is written only by the watch commands: reading it is fine',
   peer: "that squiggle's transcript, journal and private notes are closed to other squiggles: ask the lead",
-  tree: 'a recursive read or copy from home or above reaches Downloads, Desktop, Documents and ~/.ssh: name a folder inside home' };
+  tree: 'a recursive read or copy from home or above reaches Downloads, Desktop, Documents and ~/.ssh: name a folder inside home',
+  crash: 'guard could not read the tool call, so it is refused' };
 export const REASON = REASONS.dirs;
+// The main of every hook guard: exit 2 with a reason refuses. Codex runs the tool on any other exit, and on exit 2 with empty stderr.
+export function hookMain(check, allow = '') {
+  let r; try { r = check(JSON.parse(fs.readFileSync(0, 'utf8'))); } catch { r = REASONS.crash; }
+  if (r) { process.stderr.write(r); process.exit(2); }
+  if (allow) process.stdout.write(allow);
+}
 const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 // Follows symlinks through the part of the path that exists, and compares without case (APFS ignores it by default).
 const real = (abs) => { let p = abs, rest = ''; while (true) { try { return path.join(fs.realpathSync(p), rest); } catch { const up = path.dirname(p); if (up === p) return abs; rest = path.join(path.basename(p), rest); p = up; } } };
@@ -67,12 +74,14 @@ function places(cmd, cwd, home) {
 const startsHome = (cmd, cwd, home) => places(cmd, cwd, home).some((d) => d.toLowerCase() === home.toLowerCase());
 // {a,b} spelled out, so a brace can hold the home path or a folder above it ({~,x}/.ssh, {/home/me,/x}/Downloads).
 // {} and {x} stay literal, as in the shell. Capped: past the cap a word keeps its braces and globSrc reads them.
-const braces = (w, n = 64) => {
+// Depth capped too: thousands of groups overflowed the stack.
+const braces = (w, n = 64, depth = 0) => {
+  if (depth >= n) return [w];
   for (let i = w.indexOf('{'); i >= 0; i = w.indexOf('{', i + 1)) {
     const j = braceEnd(w, i), alts = j > 0 ? topSplit(w.slice(i + 1, j)) : [];
     if (alts.length < 2) continue;
     const out = [];
-    for (const a of alts) for (const x of braces(w.slice(0, i) + a + w.slice(j + 1), n)) { out.push(x); if (out.length >= n) return out; }
+    for (const a of alts) for (const x of braces(w.slice(0, i) + a + w.slice(j + 1), n, depth + 1)) { out.push(x); if (out.length >= n) return out; }
     return out;
   }
   return [w];

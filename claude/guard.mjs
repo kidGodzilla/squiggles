@@ -1,10 +1,9 @@
 // Claude squiggles: the shared fence as a PreToolUse hook for Bash, Grep and Glob; --disallowedTools covers
 // Read, Edit and Write. The hook also sees Read, for logs closed to peers. Claude sends {tool_name, tool_input, cwd}; exit 2 blocks and shows stderr to the model. Fails closed.
 // Grep and Glob are read as the shell commands they are (grep -r, ls of the pattern), so a search rooted at home is refused too.
-import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { commandReason, editReason, peerReason } from '../fence.mjs';
+import { commandReason, editReason, hookMain, peerReason } from '../fence.mjs';
 
 const q = (s) => String(s).replace(/\s/g, '?');
 // A pattern that is absolute or starts at ~ stands alone; path.join would drop its root.
@@ -28,6 +27,5 @@ export const withHook = (settings = {}) => ({ ...settings, crossSessionInbound: 
   hooks: { ...settings.hooks,
   PreToolUse: [...(settings.hooks?.PreToolUse || []), { matcher: MATCHER, hooks: [{ type: 'command', command: JSON.stringify(HOOK_CMD) }] }] } });
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  let ev; try { ev = JSON.parse(fs.readFileSync(0, 'utf8')); } catch { process.stderr.write('guard could not read the tool call'); process.exit(2); }
-  const r = check(ev); if (r) { process.stderr.write(r); process.exit(2); }
+  hookMain(check);
 }
