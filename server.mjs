@@ -1240,7 +1240,8 @@ setInterval(() => {
 }, 5000);
 
 // ---------- share on the tailnet: `tailscale serve` proxies https://<this mac>.<tailnet>.ts.net/ to this server. No ACL: the tailnet is trusted. ----------
-const TS = fs.existsSync('/Applications/Tailscale.app/Contents/MacOS/Tailscale') ? '/Applications/Tailscale.app/Contents/MacOS/Tailscale' : 'tailscale';
+// SQUIGGLES_TAILSCALE: another binary, so a test's stub stands in for the real tailnet.
+const TS = process.env.SQUIGGLES_TAILSCALE || (fs.existsSync('/Applications/Tailscale.app/Contents/MacOS/Tailscale') ? '/Applications/Tailscale.app/Contents/MacOS/Tailscale' : 'tailscale');
 // Without a terminal the app binary tries to start its GUI ('The Tailscale GUI failed to start'); TAILSCALE_BE_CLI keeps it a CLI.
 const tsRun = (args) => new Promise((ok, no) => execFile(TS, args, { timeout: 15000, env: { ...process.env, TAILSCALE_BE_CLI: '1' } }, (e, out, err) => e ? no(new Error(String(err || e.message).trim().split('\n').pop())) : ok(out)));
 // The serve entry pointing at this port, if any: {on, url}.
@@ -1568,10 +1569,9 @@ const server = http.createServer(async (req, res) => {
     }
     if (url.pathname === '/api/config') { const { userName, model, codex, tailnet } = CONFIG; return json(res, { userName, model, codex, tailnet, call: fs.existsSync(CALL_DIR), version: VERSION, schema: CONFIG.schema }); }
     if (url.pathname === '/api/share' && req.method === 'POST') {
-      const b = await body(req, res);
-      if (b.via !== 'cloudflare') return json(res, await share(!!b.on));
-      if (b.on && tunnel && shareReady()) { const no = shareRefusal({ caller: await callerSquiggle(req), owner: () => { try { return pass.session(req); } catch { return false; } }, user: USER }); if (no) return json(res, { error: no.error, ...(no.unlock && { unlock: true }) }, no.status); }
-      return json(res, await shareCloudflare(!!b.on));
+      const b = await body(req, res), cf = b.via === 'cloudflare';
+      if (b.on && (cf ? tunnel : CONFIG.tailnet) && shareReady()) { const no = shareRefusal({ caller: await callerSquiggle(req), owner: () => { try { return pass.session(req); } catch { return false; } }, user: USER, where: cf ? 'on the internet' : 'on the tailnet' }); if (no) return json(res, { error: no.error, ...(no.unlock && { unlock: true }) }, no.status); }
+      return json(res, await (cf ? shareCloudflare : share)(!!b.on));
     }
     if (url.pathname === '/api/share') return json(res, await shareStatus());
     if (url.pathname === '/api/inbox') return json(res, { ...drop.list(), dir: path.join(DATA, 'inbox').replace(os.homedir(), '~') });

@@ -16,6 +16,7 @@ const room = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'gates-')));
 const HOME = path.join(room, 'home'), DATA = path.join(room, 'data'), BIN = path.join(room, 'stub');
 const SECRET = 'demo-key-not-real-7c1f', CODE = 'temp-room-code-1', SHUT = 'demo-closed-journal-line';
 const secretFile = path.join(HOME, '.ssh', 'id_demo'), probeOut = path.join(HOME, 'probe.json'), loneOut = path.join(HOME, 'lone.json'), spoofOut = path.join(HOME, 'spoof.json');
+const TS = path.join(BIN, 'tailscale'), tsLog = path.join(HOME, 'tailscale.log'), served = () => { try { return fs.readFileSync(tsLog, 'utf8').includes('serve --bg'); } catch { return false; } };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const inbox = (id) => { try { return fs.readFileSync(path.join(HOME, `inbox-${id}.jsonl`), 'utf8'); } catch { return ''; } };
 async function until(fn, what, ms = 60000) {
@@ -86,6 +87,7 @@ process.stdin.on('data', async (d) => {
     if (l.includes('claim now') && ['meek', 'shy'].includes(id)) { const add = (asked) => post('/api/tasks', { op: 'add', title: 'claim', ...(asked && { asked }) }), n = l.match(/claim now (\\w+)/)[1]; fs.writeFileSync(path.join(home, 'claim-' + n + '.json'), JSON.stringify({ owner: await add('owner'), lead: await add('lead'), none: await add(), peer: await add('pal'), mention: await add('mention') })); }
     if (l.includes('mention peer') && id === 'pal') await post('/api/squiggles/boss/send', { text: 'claim now peermention @shy' });
     if (l.includes('mark now')) fs.writeFileSync(path.join(home, 'mark-' + id + '.txt'), require('child_process').spawnSync(process.execPath, [process.env.PROBE_CLI, 'private', 'probe', 'on'], { encoding: 'utf8' }).stdout);
+    if (l.includes('share check')) fs.writeFileSync(path.join(home, 'share-' + id + '.json'), JSON.stringify(await post('/api/share', { on: true })));
     if (l.includes('peek now')) fs.writeFileSync(path.join(home, 'peek-' + id + '.json'), JSON.stringify(await peek()));
     if (l.includes('peer tell')) await post('/api/squiggles/meek/send', { text: 'peer hello' });
     if (l.includes('child now')) spawn('/bin/sh', ['-c', 'NOTE=' + l.match(/child now (t\\d+)/)[1] + ' nohup "' + process.execPath + '" "' + path.join(home, 'low-child.js') + '" >/dev/null 2>&1 &'], { stdio: 'ignore' });
@@ -116,9 +118,10 @@ before(async () => {
     fs.writeFileSync(path.join(d, 'charter.md'), 'Test fixture.\n'); fs.writeFileSync(path.join(d, 'journal.md'), id === 'closed' ? SHUT : '');
   }
   fs.writeFileSync(path.join(BIN, 'claude'), stub, { mode: 0o755 });
+  fs.writeFileSync(TS, `#!/bin/sh\necho "$*" >> "${tsLog}"\necho '{}'\n`, { mode: 0o755 });
   const p = await port(); base = `http://127.0.0.1:${p}`; PAGE.origin = base;
-  fs.writeFileSync(path.join(DATA, 'config.json'), JSON.stringify({ schema: 1, port: p, userName: 'Sam' }));
-  server = spawn(process.execPath, ['server.mjs'], { cwd: SRC, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, HOME, SQUIGGLES_HOME: DATA, PATH: `${BIN}:${process.env.PATH}`, PROBE_BASE: base, PROBE_SECRET: secretFile, PROBE_CLOSED: path.join(DATA, 'squiggles', 'closed', 'journal.md'), PROBE_CLI: path.join(SRC, 'bin', 'agents.mjs') } });
+  fs.writeFileSync(path.join(DATA, 'config.json'), JSON.stringify({ schema: 1, port: p, userName: 'Sam', tailnet: true }));
+  server = spawn(process.execPath, ['server.mjs'], { cwd: SRC, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, HOME, SQUIGGLES_HOME: DATA, SQUIGGLES_TAILSCALE: TS, PATH: `${BIN}:${process.env.PATH}`, PROBE_BASE: base, PROBE_SECRET: secretFile, PROBE_CLOSED: path.join(DATA, 'squiggles', 'closed', 'journal.md'), PROBE_CLI: path.join(SRC, 'bin', 'agents.mjs') } });
   server.stdout.on('data', (d) => { log += d; }); server.stderr.on('data', (d) => { log += d; });
   await until(() => fetch(`${base}/api/humans`).then((r) => r.ok).catch(() => false), () => `server up: ${log.slice(-400)}`);
   // Any message wakes the probe; its stub then attacks from inside a real squiggle process tree.
@@ -383,4 +386,25 @@ test('the page and the lead set the mark; it is true or false', async () => {
   }
   assert.equal((await api('/api/squiggles/boss/send', { text: 'mark now', human: 'owner' }, me)).status, 200);
   await until(() => closedMeta('probe').private === true, () => `lead marked probe: ${log.slice(-400)}`);
+});
+
+// Not under SRC: an older checkout ignores SQUIGGLES_TAILSCALE, and these requests would reach the real tailscale.
+test('only the owner turns tailnet sharing on, never a terminal or a squiggle', { skip: !!process.env.SRC }, async () => {
+  const terminal = await api('/api/share', { on: true });
+  assert.equal(terminal.status, 403);
+  const t = await terminal.json();
+  assert.equal(t.unlock, true, 'a terminal can type the code');
+  assert.match(t.error, /sharing on the tailnet/);
+  for (const id of ['pal', 'boss']) {
+    assert.equal((await api(`/api/squiggles/${id}/send`, { text: 'share check', human: 'owner' }, me)).status, 200);
+    const f = path.join(HOME, `share-${id}.json`);
+    await until(() => fs.existsSync(f), () => `${id} tried: ${log.slice(-400)}`);
+    const r = JSON.parse(fs.readFileSync(f, 'utf8'));
+    assert.equal(r.status, 403, id); assert.equal(r.body.unlock, undefined, id);
+    assert.match(r.body.error, /can't share the room on the tailnet/, id);
+  }
+  assert.equal(served(), false, 'nothing reached tailscale');
+  assert.equal((await api('/api/share', { on: true }, me)).status, 200);
+  assert.equal(served(), true, 'the owner did');
+  assert.equal((await api('/api/share', { on: false })).status, 200, 'anyone can turn it off');
 });

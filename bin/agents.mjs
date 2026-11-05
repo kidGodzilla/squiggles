@@ -12,7 +12,7 @@ const afterMerge = async () => {
 };
 const [cmd, ...a] = process.argv.slice(2);
 
-// Your terminal unlocks squiggle settings, charters, hiring, stopping, clearing and removing, quitting, deleting shared files and sharing on the internet; merges stay browser-only.
+// Your terminal unlocks squiggle settings, charters, hiring, stopping, clearing and removing, quitting, deleting shared files and sharing; merges stay browser-only.
 const UNLOCKS = /^\/(squiggles(\/[^/]+\/(update|stop|clear|remove))?|files|quit|slots|share|watches|humans|room|peers|tasks)$/;
 const call = (path, body) => callWithUnlock(base, path, body, process.stdin.isTTY && UNLOCKS.test(path) && (() => askCode('this change')));
 

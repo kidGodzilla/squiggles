@@ -62,6 +62,7 @@ test('only the user turns public sharing on', () => {
   assert.match(shareRefusal({ caller: 'bo', owner: () => true }).error, /bo can't share/);
   assert.equal(shareRefusal({ owner: () => false }).unlock, true);
   assert.equal(shareRefusal({ owner: () => true }), null);
+  assert.match(shareRefusal({ caller: 'bo', where: 'on the tailnet' }).error, /bo can't share the room on the tailnet/);
 });
 
 test('a spoofed X-Forwarded-For gets no fresh bucket, and remote guessing never locks out this Mac', () => {

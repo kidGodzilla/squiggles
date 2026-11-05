@@ -48,10 +48,10 @@ export function slotsRefusal({ caller = '', callerLead = false, owner = () => fa
   if (caller) return callerLead ? null : { status: 403, error: `${caller} can't change provider slots: ${user} or the lead does` };
   return !passcode || owner() ? null : { status: 403, error: `Unlock with the room passcode first: changing slots is ${user} or the lead`, unlock: true };
 }
-// Public share (Cloudflare tunnel): the user only, from an unlocked page or their terminal. No squiggle, the lead included.
-export function shareRefusal({ caller = '', owner = () => false, user = 'the user' } = {}) {
-  if (caller) return { status: 403, error: `${caller} can't share the room on the internet: ${user} does, in Settings > Sharing` };
-  return owner() ? null : { status: 403, error: `Unlock with the room passcode first: sharing on the internet is ${user}'s`, unlock: true };
+// Turning a share on (tailnet or Cloudflare tunnel): the user only, from an unlocked page or their terminal. No squiggle, the lead included.
+export function shareRefusal({ caller = '', owner = () => false, user = 'the user', where = 'on the internet' } = {}) {
+  if (caller) return { status: 403, error: `${caller} can't share the room ${where}: ${user} does, in Settings > Sharing` };
+  return owner() ? null : { status: 403, error: `Unlock with the room passcode first: sharing ${where} is ${user}'s`, unlock: true };
 }
 // Own charter (a guard against instructions planted in mail, web pages or files): a non-lead squiggle rewrites it only in
 // a turn the user or the lead asked for. `askers` is who asked this turn (R(caller).asked): 'owner', 'lead' or the lead's id.

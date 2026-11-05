@@ -1071,11 +1071,11 @@ $('#shareCopy').onclick = $('#shareCfCopy').onclick = async (e) => {
 };
 $('#shareOn').onchange = async (e) => {
   const on = e.target.checked; e.target.disabled = true;
-  const r = await fetch('/api/share', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ on }) }).then((x) => x.json()).catch((er) => ({ error: er.message }));
+  const r = await unlocked(() => api('/share', { on }), 'Unlock to share').catch((er) => ({ error: er.message }));
   e.target.disabled = false;
-  if (r.error) { toast(r.error); loadShare(); } else { paintShare(r); toast(r.on ? 'Shared on the tailnet' : 'No longer shared'); }
+  if (!r || r.error) { if (r?.error) toast(r.error); loadShare(); } else { paintShare(r); toast(r.on ? 'Shared on the tailnet' : 'No longer shared'); }
 };
-// Public: the server wants this device unlocked (never a squiggle), so turning it on may ask for the passcode.
+// Either share: the server wants this device unlocked (never a squiggle), so turning it on may ask for the passcode.
 $('#shareCfOn').onchange = async (e) => {
   const on = e.target.checked; e.target.disabled = true; $('#shareCfSt').textContent = on ? 'Starting…' : '';
   const r = await unlocked(() => api('/share', { via: 'cloudflare', on }), 'Unlock to share');
