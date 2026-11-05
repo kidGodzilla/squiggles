@@ -10,7 +10,7 @@ import path from 'node:path';
 import os from 'node:os';
 import vm from 'node:vm';
 import { createBoard, ownIdeas, plainAsk, ASK_WORDS } from './board.mjs';
-import { createReactions, findMessage } from './reactions.mjs';
+import { createReactions, findMessage, packNames } from './reactions.mjs';
 import { createFiles } from './files.mjs';
 import { holdGate } from './hold.mjs';
 import { createAsks, runAsk } from './asks.mjs';
@@ -1521,6 +1521,7 @@ const server = http.createServer(async (req, res) => {
     // UI seam: <data>/local.css loads after room.css; empty when absent.
     if (url.pathname === '/local.css') { res.writeHead(200, { 'content-type': 'text/css' }); return res.end(readText(path.join(DATA, 'local.css'))); }
     if (p[0] === 'ui' && p[1] === 'gen') return serveFile(res, path.join(ROOT, 'ui', 'gen', path.basename(p[2] || '')), UI_CSP);
+    if (p[0] === 'ui' && p[1] === 'emoji') return serveFile(res, path.join(ROOT, 'ui', 'emoji', path.basename(p[2] || '')), UI_CSP);
     if (p[0] === 'ui' && ICON_FILES.includes(p[1]) && fs.existsSync(path.join(ICONS, p[1]))) return serveFile(res, path.join(ICONS, p[1]), UI_CSP); // drawn from the lead's look
     if (p[0] === 'ui') return serveFile(res, path.join(ROOT, 'ui', path.basename(p[1] || '')), UI_CSP);
     if (p[0] === 'media') return serveFile(res, path.join(MEDIA, path.basename(p[1] || '')));
@@ -1630,7 +1631,7 @@ const server = http.createServer(async (req, res) => {
       broadcast('*room', { k: 'room', action: 'react', chat, ts, list: r.list });
       return json(res, { chat, ts, list: r.list });
     }
-    if (url.pathname === '/api/react') return json(res, { on: roomCfg().reactions !== 'off', items: reactions.all() });
+    if (url.pathname === '/api/react') return json(res, { on: roomCfg().reactions !== 'off', items: reactions.all(), pack: packNames() });
     if (url.pathname === '/api/defaults' && req.method === 'POST') {
       const d = setDefaults(await body(req, res)); broadcast('*room', { k: 'room', action: 'defaults' }); return json(res, d);
     }

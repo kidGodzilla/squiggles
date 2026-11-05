@@ -491,6 +491,11 @@ function appendLine(cw, line, keepPlace) {
 }
 // Emoji reactions: a row under each message, one chip per emoji; your own click takes yours back.
 const RX_PALETTE = ['👍', '❤️', '😂', '🎉', '🔥', '👀', '🙌', '🤔', '😮', '😢', '🚀', '✅'];
+// The cuddly pack: a :name: draws ui/emoji/<name>.svg. S.rxPack is empty until the server has the pack.
+const RX_CUDDLY = 'blobbee_hug_heart blobbee_snuggle blobbee_uwu blobbee_heart_eyes blobbee_pleading blobbee_happy_hearts blobbee_party blobbee_pat blobbee_boop blobbee_wave blobbee_peek blobbee_sip_boba blobbee_think blobbee_sob blobbee_checkmark neobread_hug_heart neobread_snuggle neobread_uwu neobread_party neocat_hug_bee_heart neofox_hug_bread_heart';
+const rxFace = (e) => { const m = /^:([a-z0-9_]+):$/.exec(e); return m ? `<img class="rxface" src="/ui/emoji/${m[1]}.svg" alt="${e}" loading="lazy">` : esc(e); };
+const rxWords = (e) => e.replace(/^:|:$/g, '').replace(/_/g, ' ');
+const rxBtn = (e) => `<button type="button" data-e="${esc(e)}" title="${esc(rxWords(e))}" aria-label="${esc(rxWords(e))}">${rxFace(e)}</button>`;
 const rxName = (by) => S.sq[by]?.name || B.humans.find((h) => h.id === by)?.name || (by === 'owner' ? 'You' : by);
 function paintRx(d, id) {
   if (!d.dataset.ts) return;
@@ -498,7 +503,7 @@ function paintRx(d, id) {
   for (const r of list) groups.set(r.emoji, [...(groups.get(r.emoji) || []), r.by]);
   let row = d.querySelector(':scope > .rxrow');
   if (!row) { row = document.createElement('div'); row.className = 'rxrow'; d.appendChild(row); row.onclick = (e) => rxClick(e, id, +d.dataset.ts); d.addEventListener('click', (e) => { if (!e.target.closest('a,button,img')) d.classList.toggle('rxshow'); }); }
-  row.innerHTML = [...groups].map(([e, by]) => `<button type="button" class="rxchip${by.includes(me) ? ' mine' : ''}" data-e="${esc(e)}" title="${esc(by.map(rxName).join(', '))}" aria-label="${esc(`${e} from ${by.map(rxName).join(', ')}`)}">${esc(e)} ${by.length}</button>`).join('') + '<button type="button" class="rxadd" aria-label="Add a reaction" title="Add a reaction">+</button>';
+  row.innerHTML = [...groups].map(([e, by]) => `<button type="button" class="rxchip${by.includes(me) ? ' mine' : ''}" data-e="${esc(e)}" title="${esc(by.map(rxName).join(', '))}" aria-label="${esc(`${rxWords(e)} from ${by.map(rxName).join(', ')}`)}">${rxFace(e)} ${by.length}</button>`).join('') + '<button type="button" class="rxadd" aria-label="Add a reaction" title="Add a reaction">+</button>';
 }
 const rxSend = async (chat, ts, emoji) => { const r = await api('/react', { chat, ts, emoji, human: S.me }); if (r?.error) toast(r.error); };
 function rxClick(e, id, ts) {
@@ -510,8 +515,11 @@ const rxOutside = (e) => { if (!e.target.closest('#rxpick')) rxClose(); };
 const rxKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); rxClose(); } };
 function rxPick(btn, id, ts) {
   rxClose();
-  const p = document.createElement('div'); p.id = 'rxpick'; p.setAttribute('role', 'menu'); p.setAttribute('aria-label', 'Add a reaction');
-  p.innerHTML = RX_PALETTE.map((e) => `<button type="button" role="menuitem" data-e="${e}">${e}</button>`).join('');
+  const p = document.createElement('div'); p.id = 'rxpick'; p.setAttribute('role', 'dialog'); p.setAttribute('aria-label', 'Add a reaction');
+  const pack = S.rxPack || [], start = [...RX_CUDDLY.split(' ').filter((n) => pack.includes(n)).map((n) => `:${n}:`), ...RX_PALETTE].map(rxBtn).join('');
+  p.innerHTML = `${pack.length ? '<input type="search" placeholder="Search" aria-label="Search the emoji pack">' : ''}<div class="rxgrid">${start}</div>${pack.length ? '<a class="rxcredit" href="/ui/emoji/CREDITS.md" target="_blank" rel="noopener">Emoji by olivvybee and friends, CC-BY-NC-SA</a>' : ''}`;
+  const grid = p.querySelector('.rxgrid');
+  p.oninput = (e) => { const q = e.target.value.trim().toLowerCase().replace(/ /g, '_'); grid.innerHTML = q ? pack.filter((n) => n.includes(q)).slice(0, 60).map((n) => rxBtn(`:${n}:`)).join('') || '<p>No match</p>' : start; grid.scrollTop = 0; };
   p.onclick = (e) => { const b = e.target.closest('button'); if (b) { rxClose(); rxSend(id, ts, b.dataset.e); btn.focus?.(); } };
   document.body.appendChild(p);
   const r = btn.getBoundingClientRect(), w = p.offsetWidth, h = p.offsetHeight;
@@ -853,7 +861,7 @@ function showLimit(until) {
 }
 async function load() {
   api('/limit').then((l) => showLimit(l.until || 0));
-  const room = await api('/room').catch(() => ({})); rxPower(room.reactions !== 'off'); S.rx = (await api('/react').catch(() => null))?.items || {}; roomGen(room.characters || 'cast'); S.roots = room.fileRoots || {}; S.realRoots = room.fileReal || {}; S.home = room.home || ''; S.piModels = room.piModels || []; S.cursorModels = room.cursorModels || [];
+  const room = await api('/room').catch(() => ({})); rxPower(room.reactions !== 'off'); { const rx = await api('/react').catch(() => null); S.rx = rx?.items || {}; S.rxPack = rx?.pack || []; } roomGen(room.characters || 'cast'); S.roots = room.fileRoots || {}; S.realRoots = room.fileReal || {}; S.home = room.home || ''; S.piModels = room.piModels || []; S.cursorModels = room.cursorModels || [];
   const list = await api('/squiggles').catch(() => null);
   // A failed read must not empty the room: keep what's on screen and try again.
   if (!Array.isArray(list)) { setTimeout(load, 2000); return; }

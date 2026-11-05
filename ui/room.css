@@ -1149,9 +1149,13 @@ body.rxoff .rxrow { display: none }
 .rxadd { opacity: 0; width: 28px; padding: 0 } .m:hover .rxadd, .rxadd:focus-visible { opacity: 1 }
 /* No chips yet: the row has no height, so the add button sits beside the bubble rather than on its edge. */
 @media (pointer: fine) { .m:has(> .rxrow) { position: relative } .rxrow:not(:has(.rxchip)) .rxadd { position: absolute; bottom: 4px } .m.you:not(.other) > .rxrow:not(:has(.rxchip)) .rxadd { left: -34px } .m.lead > .rxrow:not(:has(.rxchip)) .rxadd, .m.you.other > .rxrow:not(:has(.rxchip)) .rxadd { right: -32px } }
-#rxpick { position: fixed; z-index: 9000; display: grid; grid-template-columns: repeat(6, 36px); gap: 2px; padding: 6px; background: #1a1e2a; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.4) }
-#rxpick button { width: 36px; height: 36px; font-size: 19px; background: none; border: 0; border-radius: 8px; cursor: pointer } #rxpick button:hover, #rxpick button:focus-visible { background: rgba(255,255,255,.1) }
-@media (pointer: coarse) { .rxchip { height: 44px; padding: 0 12px } .rxadd { display: none; opacity: 1; width: 44px; height: 44px } .m.rxshow .rxadd { display: block } #rxpick { grid-template-columns: repeat(6, 44px) } #rxpick button { width: 44px; height: 44px } .m.rxshow .rxrow { height: auto; margin-top: 4px } }
+#rxpick { position: fixed; z-index: 9000; padding: 6px; background: #1a1e2a; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.4) }
+.rxface { width: 18px; height: 18px; vertical-align: -4px }
+.rxgrid { display: grid; grid-template-columns: repeat(6, 36px); gap: 2px; max-height: 236px; overflow-y: auto } .rxgrid p { grid-column: 1 / -1; margin: 8px; font-size: 13px; opacity: .7 } .rxgrid .rxface { width: 28px; height: 28px; vertical-align: middle }
+#rxpick input { display: block; box-sizing: border-box; width: 100%; height: 32px; margin-bottom: 6px; padding: 0 8px; font: inherit; font-size: 13px; color: inherit; background: rgba(255,255,255,.07); border: 1px solid var(--line); border-radius: 8px }
+.rxcredit { display: block; margin-top: 6px; max-width: 226px; font-size: 11px; color: inherit; opacity: .7 }
+#rxpick button { width: 36px; height: 36px; padding: 0; font-size: 19px; background: none; border: 0; border-radius: 8px; cursor: pointer } #rxpick button:hover, #rxpick button:focus-visible { background: rgba(255,255,255,.1) }
+@media (pointer: coarse) { .rxchip { height: 44px; padding: 0 12px } .rxadd { display: none; opacity: 1; width: 44px; height: 44px } .m.rxshow .rxadd { display: block } .rxgrid { grid-template-columns: repeat(6, 44px); max-height: 276px } #rxpick button { width: 44px; height: 44px } #rxpick input { height: 44px; font-size: 16px } .rxcredit { max-width: 274px; padding: 14px 0; margin: 0 } .rxchip .rxface { width: 22px; height: 22px; vertical-align: -6px } .m.rxshow .rxrow { height: auto; margin-top: 4px } }
 /* Usage and waste: one line until opened; opened, it scrolls inside its own half so the team stays reachable. */
 .usage { flex: none; margin-bottom: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); font-size: 13px; color: var(--dim) }
 .usage[open] { max-height: 72%; overflow: auto }

@@ -4,7 +4,10 @@ import fs from 'node:fs';
 
 const MAX_MESSAGES = 5000, MAX_PER_MESSAGE = 40;
 const EMOJI = /^(?:\p{RI}\p{RI}|\p{Extended_Pictographic}(?:\p{EMod}|️⃣?)?(?:‍\p{Extended_Pictographic}(?:\p{EMod}|️)?)*)$/u;
-export const isEmoji = (s) => typeof s === 'string' && s.length <= 32 && EMOJI.test(s);
+// A pack: ui/emoji/<name>.svg, sent as :name:. Own licence and credits in that folder, not the repo's.
+const PACK = (fs.existsSync(new URL('./ui/emoji/', import.meta.url)) ? fs.readdirSync(new URL('./ui/emoji/', import.meta.url)) : []).filter((f) => f.endsWith('.svg')).map((f) => f.slice(0, -4)).sort(), NAMES = new Set(PACK);
+export const packNames = () => PACK;
+export const isEmoji = (s) => typeof s === 'string' && s.length <= 32 && (EMOJI.test(s) || (/^:.+:$/.test(s) && NAMES.has(s.slice(1, -1))));
 
 // The newest message the owner or a squiggle wrote in this chat, or the newest holding `match`.
 export function findMessage(events, match) {
@@ -19,7 +22,7 @@ export function createReactions(file) {
     all: read,
     // Adds the reaction, or takes it back. Returns the message's reactions, or { error }.
     toggle({ chat, ts, emoji, by }) {
-      if (!isEmoji(emoji)) return { error: 'one emoji, please' };
+      if (!isEmoji(emoji)) return { error: 'one emoji or a pack :name:, please' };
       if (!Number.isSafeInteger(ts) || ts <= 0) return { error: 'no such message' };
       const all = read(), key = `${chat}:${ts}`, list = all[key] || [];
       const i = list.findIndex((r) => r.emoji === emoji && r.by === by);

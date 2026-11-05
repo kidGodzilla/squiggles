@@ -36,3 +36,5 @@ Design: Notionists by Zoish (https://heyzoish.gumroad.com/l/notionists), CC0 1.0
 Design: Lorelei by Lisa Wischofsky (https://www.figma.com/community/file/1198749693280469639), CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/).
 
 Code (DiceBear notionists and lorelei styles): the MIT License above, Copyright (c) 2024 Florian Körner.
+
+The emoji in ui/emoji come from olivvybee's pack and its contributors, mostly under CC-BY-NC-SA. Authors and licences: ui/emoji/CREDITS.md.

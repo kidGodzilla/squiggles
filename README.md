@@ -69,3 +69,5 @@ rm -rf ~/.squiggles               # your room: charters, journals, board
 ## License
 
 Apache-2.0. Parts of the room UI and voice setup are adapted from agent-standup (MIT); see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+
+Apache-2.0 doesn't cover the emoji pack in `ui/emoji`: it's CC-BY-NC-SA (non-commercial, share-alike). See [its licence](ui/emoji/LICENSE.md) and [credits](ui/emoji/CREDITS.md).
