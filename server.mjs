@@ -1258,6 +1258,7 @@ const shareStatus = async () => ({ ...(await tailnetStatus()), cloudflare: cfSta
 const shareChanged = async () => broadcast('*room', { k: 'room', action: 'share', value: await shareStatus().catch(() => ({ cloudflare: cfStatus() })) });
 async function share(on) {
   if (!CONFIG.tailnet) throw new Error('tailnet sharing is off: set "tailnet": true in config.json');
+  if (on && !shareReady()) throw new Error(`Set a room passcode of ${MIN_CODE}+ characters first (Settings > Security): anyone on the tailnet reaches the lock screen`);
   if (on) await tsRun(['serve', '--bg', String(PORT)]); else if ((await tailnetStatus()).on) await tsRun(['serve', '--https=443', 'off']);
   const st = await shareStatus(); broadcast('*room', { k: 'room', action: 'share', value: st }); return st;
 }
@@ -1266,10 +1267,10 @@ const CF_PID = path.join(RUNS, 'cloudflared.pid');
 killStale(CF_PID);
 const tunnel = CONFIG.cloudflare ? createTunnel({ port: PORT, pidFile: CF_PID, onChange: () => shareChanged() }) : null;
 process.on('exit', () => tunnel?.stop()); // the public link goes with the server, however it exits
-const cfReady = () => pass.codeLen() >= MIN_CODE;
+const shareReady = () => pass.codeLen() >= MIN_CODE;
 async function shareCloudflare(on) {
   if (!tunnel) throw new Error('Cloudflare sharing is off: set "cloudflare": true in config.json');
-  if (on && !cfReady()) throw new Error(`Set a room passcode of ${MIN_CODE}+ characters first (Settings > Security): the link is on the public internet`);
+  if (on && !shareReady()) throw new Error(`Set a room passcode of ${MIN_CODE}+ characters first (Settings > Security): the link is on the public internet`);
   setRoom('cloudflare', !!on);
   if (on) { if (!(await tunnel.start()).on) setRoom('cloudflare', false); } else tunnel.stop(); // a failed start isn't reopened on boot
   return shareStatus();
@@ -1504,9 +1505,8 @@ const server = http.createServer(async (req, res) => {
       const b = req.method === 'POST' ? await body(req, res) : {}, c = ['set', 'clear', 'local'].includes(b.op) && await callerSquiggle(req);
       if (c) return json(res, { error: `${c} can't change the room passcode: ${USER} does, in Settings > Security` }, 403);
       if (b.op === 'unlock' && (await callerSquiggle(req))) return json(res, { error: `Squiggles can't unlock: the passcode is ${USER}'s` }, 403);
-      // While the room is on the public internet, the passcode can't go or get short: stop sharing on Cloudflare first.
-      if (tunnel && roomCfg().cloudflare && (b.op === 'clear' || (b.op === 'set' && String(b.code ?? '').length < MIN_CODE)))
-        return json(res, { error: b.op === 'clear' ? 'The room is shared on Cloudflare: stop that first (Settings > Sharing)' : `The room is shared on Cloudflare: the passcode needs ${MIN_CODE}+ characters` }, 409);
+      // While the room is on the public internet, the passcode can't go: stop sharing on Cloudflare first.
+      if (tunnel && roomCfg().cloudflare && b.op === 'clear') return json(res, { error: 'The room is shared on Cloudflare: stop that first (Settings > Sharing)' }, 409);
       try { const r = pass.op(req, b); if (r.cookie) res.setHeader('set-cookie', r.cookie); return json(res, r.body); } catch (e) { return json(res, { error: e.message }, e.code || 400); }
     }
     if (!(url.pathname === '/' || p[0] === 'ui') && !pass.ok(req)) return json(res, { error: 'locked' }, 401);
@@ -1553,7 +1553,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/share' && req.method === 'POST') {
       const b = await body(req, res);
       if (b.via !== 'cloudflare') return json(res, await share(!!b.on));
-      if (b.on && tunnel && cfReady()) { const no = shareRefusal({ caller: await callerSquiggle(req), owner: () => { try { return pass.session(req); } catch { return false; } }, user: USER }); if (no) return json(res, { error: no.error, ...(no.unlock && { unlock: true }) }, no.status); }
+      if (b.on && tunnel && shareReady()) { const no = shareRefusal({ caller: await callerSquiggle(req), owner: () => { try { return pass.session(req); } catch { return false; } }, user: USER }); if (no) return json(res, { error: no.error, ...(no.unlock && { unlock: true }) }, no.status); }
       return json(res, await shareCloudflare(!!b.on));
     }
     if (url.pathname === '/api/share') return json(res, await shareStatus());
@@ -1834,6 +1834,6 @@ server.on('error', (e) => { if (e.code === 'EADDRINUSE' && portTries-- > 0) setT
 server.listen(PORT, '127.0.0.1', () => {
   console.log(`Squiggles ${VERSION} on http://127.0.0.1:${PORT}`);
   // Shared on Cloudflare before the restart: open it again (a new URL), only while the passcode still qualifies.
-  if (tunnel && roomCfg().cloudflare && cfReady()) tunnel.start().then((st) => console.log(st.url ? `Shared on ${st.url}` : `Cloudflare: ${st.error}`));
+  if (tunnel && roomCfg().cloudflare && shareReady()) tunnel.start().then((st) => console.log(st.url ? `Shared on ${st.url}` : `Cloudflare: ${st.error}`));
 });
 for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(sig, () => shutdown(0, false, `${sig}, parent ${process.ppid}`));

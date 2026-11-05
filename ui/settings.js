@@ -41,7 +41,7 @@ const everyOpts = (cur) => withCur([0, 15, 30, 60, 180, 360, 720, 1440], cur || 
 async function renderPass() {
   const r = await api('/passcode'); if (!r || r.error) return;
   Object.assign(PASS, r);
-  $('#passNow').textContent = r.set ? `On.${r.localSkips ? " This Mac's browser skips it." : ''}` : 'Off. Anyone who can open the room gets in.';
+  $('#passNow').textContent = r.set ? `On.${r.localSkips ? " This Mac's browser skips it." : ''}` : 'Off. Only this computer can open the room.';
   $('#passSet').textContent = r.set ? 'Change' : 'Set'; $('#passClear').hidden = !r.set;
   $('#passLocal').checked = !!r.localSkips; $('#passLocal').disabled = !r.set;
 }

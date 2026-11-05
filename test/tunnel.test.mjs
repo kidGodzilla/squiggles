@@ -48,8 +48,8 @@ test('guard lets the tunnel host in only while it is up', () => {
 test('tunnel hits are never local, and the passcode keeps its length', () => {
   let store = null; const pc = makePasscode({ read: () => store, write: (p) => { store = p; } });
   const cli = { socket: { remoteAddress: '127.0.0.1' }, headers: { 'user-agent': 'node' } };
-  pc.op(cli, { op: 'set', code: '2468' }); assert.equal(pc.codeLen(), 4);
-  pc.op(cli, { op: 'set', code: 'longer-code', old: '2468' }); assert.equal(pc.codeLen(), 11); assert.equal(store.codeLen, 11);
+  pc.op(cli, { op: 'set', code: '24682468' }); assert.equal(pc.codeLen(), 8);
+  pc.op(cli, { op: 'set', code: 'longer-code', old: '24682468' }); assert.equal(pc.codeLen(), 11); assert.equal(store.codeLen, 11);
   assert.ok(pc.codeLen() >= MIN_CODE);
   const curl = { 'user-agent': 'curl/8' };
   assert.equal(pc.ok({ socket: { remoteAddress: '127.0.0.1' }, headers: { host: HOST, ...curl } }), false, 'tunnel Host');

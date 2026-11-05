@@ -14,16 +14,31 @@ const cli = { socket: { remoteAddress: '127.0.0.1' }, headers: { accept: '*/*', 
 const safari = { socket: { remoteAddress: '::1' }, headers: { 'user-agent': 'Mozilla/5.0 (iPad) Safari/605' } };
 const tok = (c) => c.match(/agents_s=([a-f0-9]*)/)[1];
 
-test('off by default: everyone passes', () => {
+test('off by default: this computer passes, a shared device does not', () => {
   const { pc } = setup();
-  assert.equal(pc.ok(remote()), true);
-  assert.deepEqual(pc.status(remote()), { set: false, ok: true, localSkips: false });
+  assert.equal(pc.ok(localBrowser()), true); assert.equal(pc.ok(cli), true); assert.equal(pc.ok(safari), true);
+  assert.equal(pc.ok(remote()), false);
+  assert.equal(pc.ok({ socket: { remoteAddress: '127.0.0.1' }, headers: { host: 'mac.example.ts.net', 'user-agent': 'curl/8' } }), false, 'tailnet Host');
+  assert.deepEqual(pc.status(remote()), { set: false, ok: false, localSkips: false });
+  assert.deepEqual(pc.status(localBrowser()), { set: false, ok: true, localSkips: false });
+  assert.throws(() => pc.op(remote(), { op: 'set', code: 'mine-now-1' }), (e) => e.code === 401, 'a shared device cannot claim the room');
+  assert.equal(pc.status(cli).set, false);
+});
+
+test('a new passcode needs 8 characters; one set before that still unlocks but counts as too short to share', async () => {
+  const crypto = await import('node:crypto');
+  for (const code of ['2468', '1234567']) assert.throws(() => setup().pc.op(cli, { op: 'set', code }), /8 to 64/);
+  assert.equal(setup().pc.op(cli, { op: 'set', code: '12345678' }).body.set, true);
+  const salt = 'ab'.repeat(16), old = { salt, hash: crypto.scryptSync('2468', salt, 32).toString('hex'), localSkips: false };
+  const pc = makePasscode({ read: () => old, write: () => {} });
+  assert.ok(pc.op(remote(), { op: 'unlock', code: '2468' }).cookie);
+  assert.equal(pc.codeLen(), 0);
 });
 
 test('set stores only a salted hash; remote needs the cookie; CLI always passes', () => {
   const s = setup();
-  s.pc.op(cli, { op: 'set', code: '2468' });
-  assert.ok(s.store.hash && s.store.salt && !JSON.stringify(s.store).includes('2468'));
+  s.pc.op(cli, { op: 'set', code: '24682468' });
+  assert.ok(s.store.hash && s.store.salt && !JSON.stringify(s.store).includes('24682468'));
   assert.equal(s.pc.ok(remote()), false);
   assert.equal(s.pc.ok(localBrowser()), false);
   assert.equal(s.pc.ok(cli), true);
@@ -34,9 +49,9 @@ test('set stores only a salted hash; remote needs the cookie; CLI always passes'
 
 test('unlock sets an HttpOnly SameSite=Strict cookie that opens the API until lock', () => {
   const s = setup();
-  s.pc.op(cli, { op: 'set', code: '2468' });
+  s.pc.op(cli, { op: 'set', code: '24682468' });
   assert.throws(() => s.pc.op(remote(), { op: 'unlock', code: '1111' }), /wrong/);
-  const r = s.pc.op(remote(), { op: 'unlock', code: '2468' });
+  const r = s.pc.op(remote(), { op: 'unlock', code: '24682468' });
   assert.match(r.cookie, /HttpOnly; SameSite=Strict; Max-Age=2592000/);
   const c = `agents_s=${tok(r.cookie)}`;
   assert.equal(s.pc.ok(remote(c)), true);
@@ -47,16 +62,16 @@ test('unlock sets an HttpOnly SameSite=Strict cookie that opens the API until lo
 
 test('sessions expire after 30 days', () => {
   const s = setup();
-  s.pc.op(cli, { op: 'set', code: '2468' });
-  const c = `agents_s=${tok(s.pc.op(remote(), { op: 'unlock', code: '2468' }).cookie)}`;
+  s.pc.op(cli, { op: 'set', code: '24682468' });
+  const c = `agents_s=${tok(s.pc.op(remote(), { op: 'unlock', code: '24682468' }).cookie)}`;
   s.tick(29 * 864e5); assert.equal(s.pc.ok(remote(c)), true);
   s.tick(2 * 864e5); assert.equal(s.pc.ok(remote(c)), false);
 });
 
 test('local skips lets this Mac\'s browser in, never a tailnet one', () => {
   const s = setup();
-  s.pc.op(cli, { op: 'set', code: '2468' });
-  s.pc.op(cli, { op: 'local', on: true, old: '2468' });
+  s.pc.op(cli, { op: 'set', code: '24682468' });
+  s.pc.op(cli, { op: 'local', on: true, old: '24682468' });
   assert.equal(s.pc.ok(localBrowser()), true);
   assert.equal(s.pc.ok(remote()), false);
   const tsHost = { socket: { remoteAddress: '127.0.0.1' }, headers: { host: 'mac.example.ts.net', 'user-agent': 'curl/8' } };
@@ -65,83 +80,84 @@ test('local skips lets this Mac\'s browser in, never a tailnet one', () => {
 
 test('guesses are rate-limited per client', () => {
   const s = setup();
-  s.pc.op(cli, { op: 'set', code: '2468' });
+  s.pc.op(cli, { op: 'set', code: '24682468' });
   for (let i = 0; i < 5; i++) assert.throws(() => s.pc.op(remote(), { op: 'unlock', code: '0000' }), /wrong/);
-  assert.throws(() => s.pc.op(remote(), { op: 'unlock', code: '2468' }), (e) => e.code === 429);
+  assert.throws(() => s.pc.op(remote(), { op: 'unlock', code: '24682468' }), (e) => e.code === 429);
   s.tick(31000);
-  assert.ok(s.pc.op(remote(), { op: 'unlock', code: '2468' }).cookie);
+  assert.ok(s.pc.op(remote(), { op: 'unlock', code: '24682468' }).cookie);
 });
 
 test('setting a new passcode ends other sessions; clear turns it off', () => {
   const s = setup();
-  s.pc.op(cli, { op: 'set', code: '2468' });
-  const c = `agents_s=${tok(s.pc.op(remote(), { op: 'unlock', code: '2468' }).cookie)}`;
-  s.pc.op(cli, { op: 'set', code: '1357', old: '2468' });
+  s.pc.op(cli, { op: 'set', code: '24682468' });
+  const c = `agents_s=${tok(s.pc.op(remote(), { op: 'unlock', code: '24682468' }).cookie)}`;
+  s.pc.op(cli, { op: 'set', code: '13571357', old: '24682468' });
   assert.equal(s.pc.ok(remote(c)), false);
-  assert.throws(() => s.pc.op(cli, { op: 'set', code: '12', old: '1357' }), /4 to 64/);
-  s.pc.op(cli, { op: 'clear', old: '1357' });
-  assert.equal(s.pc.ok(remote()), true);
+  assert.throws(() => s.pc.op(cli, { op: 'set', code: '12', old: '13571357' }), /8 to 64/);
+  s.pc.op(cli, { op: 'clear', old: '13571357' });
+  assert.equal(s.pc.status(cli).set, false);
+  assert.equal(s.pc.ok(remote(c)), false, 'clearing never opens the room to a shared device');
 });
 
 test('session: gated merges need a live unlocked cookie; the CLI and local skips do not count', () => {
   const s = setup();
   assert.throws(() => s.pc.session(cli), (e) => e.code === 403 && /Set a room passcode/.test(e.message));
-  s.pc.op(cli, { op: 'set', code: '2468' });
-  s.pc.op(cli, { op: 'local', on: true, old: '2468' });
+  s.pc.op(cli, { op: 'set', code: '24682468' });
+  s.pc.op(cli, { op: 'local', on: true, old: '24682468' });
   assert.equal(s.pc.ok(cli), true); assert.equal(s.pc.ok(localBrowser()), true);
   for (const r of [cli, localBrowser(), remote(), remote('agents_s=' + 'a'.repeat(64))]) assert.throws(() => s.pc.session(r), (e) => e.code === 403 && e.unlock === true);
-  const c = `agents_s=${tok(s.pc.op(localBrowser(), { op: 'unlock', code: '2468' }).cookie)}`;
+  const c = `agents_s=${tok(s.pc.op(localBrowser(), { op: 'unlock', code: '24682468' }).cookie)}`;
   assert.equal(s.pc.session(localBrowser(c)), true);
   assert.equal(s.pc.session(remote(c)), true);
   s.pc.op(remote(c), { op: 'lock' });
   assert.throws(() => s.pc.session(remote(c)), (e) => e.unlock === true, 'locking ends it');
-  const c2 = `agents_s=${tok(s.pc.op(remote(), { op: 'unlock', code: '2468' }).cookie)}`;
+  const c2 = `agents_s=${tok(s.pc.op(remote(), { op: 'unlock', code: '24682468' }).cookie)}`;
   s.tick(31 * 864e5); assert.throws(() => s.pc.session(remote(c2)), (e) => e.unlock === true, 'expired');
 });
 
 test('changing, clearing or loosening a set passcode needs the current one, even from the CLI', () => {
   const s = setup();
-  s.pc.op(cli, { op: 'set', code: '2468' });
-  for (const b of [{ op: 'set', code: '9999' }, { op: 'clear' }, { op: 'local', on: true }, { op: 'clear', old: '1111' }]) assert.throws(() => s.pc.op(cli, b), (e) => e.code === 403 && /wrong/.test(e.message));
+  s.pc.op(cli, { op: 'set', code: '24682468' });
+  for (const b of [{ op: 'set', code: '99999999' }, { op: 'clear' }, { op: 'local', on: true }, { op: 'clear', old: '1111' }]) assert.throws(() => s.pc.op(cli, b), (e) => e.code === 403 && /wrong/.test(e.message));
   assert.equal(s.pc.status(cli).set, true); assert.equal(s.pc.status(cli).localSkips, false);
-  s.pc.op(cli, { op: 'set', code: '9999', old: '2468' });
-  assert.throws(() => s.pc.op(cli, { op: 'clear', old: '2468' }), /wrong/);
-  s.pc.op(cli, { op: 'clear', old: '9999' });
+  s.pc.op(cli, { op: 'set', code: '99999999', old: '24682468' });
+  assert.throws(() => s.pc.op(cli, { op: 'clear', old: '24682468' }), /wrong/);
+  s.pc.op(cli, { op: 'clear', old: '99999999' });
   assert.equal(s.pc.status(cli).set, false);
-  s.pc.op(cli, { op: 'set', code: '1234' }); assert.equal(s.pc.status(cli).set, true, 'the first set needs no old code');
+  s.pc.op(cli, { op: 'set', code: '12341234' }); assert.equal(s.pc.status(cli).set, true, 'the first set needs no old code');
 });
 
 test('wrong current codes share the unlock limiter', () => {
   const s = setup(), r = remote();
-  s.pc.op(cli, { op: 'set', code: '2468' });
-  const c = `agents_s=${tok(s.pc.op(r, { op: 'unlock', code: '2468' }).cookie)}`, rc = remote(c);
+  s.pc.op(cli, { op: 'set', code: '24682468' });
+  const c = `agents_s=${tok(s.pc.op(r, { op: 'unlock', code: '24682468' }).cookie)}`, rc = remote(c);
   for (let i = 0; i < 5; i++) assert.throws(() => s.pc.op(rc, { op: 'clear', old: '0000' }), /wrong/);
-  assert.throws(() => s.pc.op(rc, { op: 'clear', old: '2468' }), (e) => e.code === 429);
-  assert.throws(() => s.pc.op(r, { op: 'unlock', code: '2468' }), (e) => e.code === 429);
+  assert.throws(() => s.pc.op(rc, { op: 'clear', old: '24682468' }), (e) => e.code === 429);
+  assert.throws(() => s.pc.op(r, { op: 'unlock', code: '24682468' }), (e) => e.code === 429);
 });
 
 test('empty codes and local scripts cannot lock the user out', () => {
   const s = setup(), r = remote(), local = localBrowser();
-  s.pc.op(cli, { op: 'set', code: '2468' });
+  s.pc.op(cli, { op: 'set', code: '24682468' });
   for (let i = 0; i < 40; i++) assert.throws(() => s.pc.op(r, { op: 'unlock' }), /wrong/);
   for (let i = 0; i < 40; i++) assert.throws(() => s.pc.op(cli, { op: 'unlock', code: '0000' }), /wrong|too many/);
-  assert.equal(s.pc.op(local, { op: 'unlock', code: '2468' }).body.ok, true, 'the local browser has its own bucket');
-  assert.equal(s.pc.op(r, { op: 'unlock', code: '2468' }).body.ok, true, 'neither counted toward the tailnet client or the global cap');
+  assert.equal(s.pc.op(local, { op: 'unlock', code: '24682468' }).body.ok, true, 'the local browser has its own bucket');
+  assert.equal(s.pc.op(r, { op: 'unlock', code: '24682468' }).body.ok, true, 'neither counted toward the tailnet client or the global cap');
 });
 
 test('room.json edits after boot are ignored: a forged session or swapped hash is refused', async () => {
   const crypto = await import('node:crypto'), sha = (x) => crypto.createHash('sha256').update(x).digest('hex');
   const s = setup(), forged = 'f'.repeat(64);
-  s.pc.op(cli, { op: 'set', code: '2468' });
+  s.pc.op(cli, { op: 'set', code: '24682468' });
   assert.equal(s.store.sessions, undefined, 'sessions never written');
   // A squiggle adds its own session line, then swaps in a hash for a code it knows.
-  const other = setup(); other.pc.op(cli, { op: 'set', code: '9999' });
+  const other = setup(); other.pc.op(cli, { op: 'set', code: '99999999' });
   Object.assign(s.store, { sessions: { [sha(forged)]: 1e12 + 864e5 } });
   for (const k of ['salt', 'hash']) s.store[k] = other.store[k];
   assert.throws(() => s.pc.session(remote(`agents_s=${forged}`)), (e) => e.code === 403 && e.unlock);
   assert.equal(s.pc.ok(remote(`agents_s=${forged}`)), false);
-  assert.throws(() => s.pc.op(remote(), { op: 'unlock', code: '9999' }), /wrong passcode/);
-  assert.ok(s.pc.op(remote(), { op: 'unlock', code: '2468' }).cookie);
+  assert.throws(() => s.pc.op(remote(), { op: 'unlock', code: '99999999' }), /wrong passcode/);
+  assert.ok(s.pc.op(remote(), { op: 'unlock', code: '24682468' }).cookie);
 });
 
 test('boot loads the hash, drops stored sessions; set and clear update memory', () => {
@@ -156,8 +172,8 @@ test('boot loads the hash, drops stored sessions; set and clear update memory', 
 test('owner: Run needs a live cookie on this computer; tailnet, CLI and local skips are refused', () => {
   const s = setup();
   assert.throws(() => s.pc.owner(cli), (e) => e.code === 401);
-  s.pc.op(cli, { op: 'set', code: '2468' }); s.pc.op(cli, { op: 'local', on: true, old: '2468' });
-  const c = `agents_s=${tok(s.pc.op(localBrowser(), { op: 'unlock', code: '2468' }).cookie)}`;
+  s.pc.op(cli, { op: 'set', code: '24682468' }); s.pc.op(cli, { op: 'local', on: true, old: '24682468' });
+  const c = `agents_s=${tok(s.pc.op(localBrowser(), { op: 'unlock', code: '24682468' }).cookie)}`;
   assert.throws(() => s.pc.owner(cli), (e) => e.code === 401, 'CLI');
   assert.throws(() => s.pc.owner(localBrowser()), (e) => e.code === 401, 'local skips');
   const proxied = { socket: { remoteAddress: '127.0.0.1' }, headers: { host: 'mac.tail1234.ts.net', 'x-forwarded-for': '100.64.0.9', 'sec-fetch-site': 'same-origin', cookie: c } };

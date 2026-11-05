@@ -108,7 +108,7 @@
       </section>
       <section class="setcard" role="tabpanel" data-stab="sharing">
         <h2>Sharing</h2>
-        <p class="sethint" id="shareTsHint">Anyone on the tailnet can open the room. CLI: <code>share on|off|status</code>.</p>
+        <p class="sethint" id="shareTsHint">Anyone on the tailnet reaches the lock screen. Needs a passcode of 8+ characters. CLI: <code>share on|off|status</code>.</p>
         <div class="setform" id="shareTs">
           <label for="shareOn">Tailnet</label><span><input type="checkbox" id="shareOn"> <label for="shareOn">Share the room</label> <button class="chip" id="shareCopy" hidden>Copy link</button></span>
         </div>
@@ -125,10 +125,10 @@
       </section>
       <section class="setcard" id="setPass" role="tabpanel" data-stab="security">
         <h2>Passcode</h2>
-        <p class="sethint">The lock screen asks for it: snoop protection for a shared iPad, not a vault. CLI: <code>room passcode set &lt;code&gt;|clear|local on|off</code>.</p>
+        <p class="sethint">The lock screen asks for it: 8 to 64 characters. Snoop protection for a shared iPad, not a vault. CLI: <code>room passcode set &lt;code&gt;|clear|local on|off</code>.</p>
         <p id="passNow"></p>
         <div class="setform">
-          <label for="passNew">Passcode</label><span><input type="password" id="passNew" autocomplete="new-password" placeholder="4 or more characters"> <button class="chip" id="passSet">Set</button> <button class="chip" id="passClear" hidden>Turn off</button></span>
+          <label for="passNew">Passcode</label><span><input type="password" id="passNew" autocomplete="new-password" placeholder="8 or more characters"> <button class="chip" id="passSet">Set</button> <button class="chip" id="passClear" hidden>Turn off</button></span>
           <label for="passLocal">This Mac</label><span><input type="checkbox" id="passLocal"> <label for="passLocal">Skip it in this Mac's browser</label></span>
         </div>
       </section>

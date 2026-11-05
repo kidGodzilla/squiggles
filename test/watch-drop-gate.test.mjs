@@ -46,8 +46,8 @@ test('an unknown caller with no session cannot drop a watch', async () => {
 test('with a passcode: no session asks to unlock, and an unlocked session drops', async () => {
   const { file, stop } = await room({});
   try {
-    await post('passcode', { op: 'set', code: '123456' });
-    const { cookie } = await post('passcode', { op: 'unlock', code: '123456' });
+    await post('passcode', { op: 'set', code: '12345678' });
+    const { cookie } = await post('passcode', { op: 'unlock', code: '12345678' });
     assert.ok(cookie);
     const r = await drop();
     assert.equal(r.status, 403, JSON.stringify(r.body));

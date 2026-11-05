@@ -5,6 +5,8 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 ## 0.1.2 (unreleased)
 
 ### Security
+- With no room passcode only this computer opens the room: a remote device gets the lock screen and nothing else. Tailnet sharing needs a passcode of 8+ characters, like Cloudflare, so a device on the tailnet can't reach an unlocked room. A room already shared with a shorter code stays behind its lock until you set a new one.
+- New passcodes need 8+ characters: a leaked hash cracks a 4-digit code in minutes. Existing shorter codes still unlock.
 - The private-data fence covers git history: in a repo holding a private folder, non-Claude squiggles can't read old versions through `git show`, `git log -p`, `git diff`, `git grep` or `git archive`. Names-only logs and history scoped to other folders still work; ordinary repos are unaffected.
 - Dropping a watch needs an unlocked session unless the caller is a squiggle the server recognises, so a plain curl or a squiggle's detached process can't drop another squiggle's watch. The terminal asks for the passcode.
 - The fence refuses shell and edit-tool writes to `watches.json`, so a squiggle can't approve its own watch by editing the file. Reads stay open; a script file still gets through.

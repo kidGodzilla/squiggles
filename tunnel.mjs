@@ -4,7 +4,7 @@
 import { spawn, execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 
-export const MIN_CODE = 8; // public internet: a 4-digit code falls to the global try cap in days
+export { MIN_CODE } from './passcode.mjs';
 export const TUNNEL_HOST = /\.trycloudflare\.com$/i;
 
 export function cloudflaredBin(env = process.env) {

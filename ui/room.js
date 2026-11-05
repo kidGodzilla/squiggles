@@ -1321,8 +1321,10 @@ async function askPasscode() {
 // With a passcode set and no session, the splash asks for it; unlocking reloads into the room.
 async function passGate() {
   Object.assign(PASS, await fetch('/api/passcode').then((r) => r.json()).catch(() => ({})));
-  if (!PASS.set || PASS.ok) return;
-  $('#joinBtn').hidden = true; $('#passForm').hidden = false; $('#lockNote').textContent = 'Enter the passcode.'; $('#passIn').focus();
+  if (PASS.ok || PASS.ok === undefined) return;
+  $('#joinBtn').hidden = true;
+  if (!PASS.set) { $('#lockNote').textContent = 'Set a room passcode on the computer running the room first.'; return new Promise(() => {}); }
+  $('#passForm').hidden = false; $('#lockNote').textContent = 'Enter the passcode.'; $('#passIn').focus();
   $('#passForm').onsubmit = async (e) => {
     e.preventDefault();
     const r = await fetch('/api/passcode', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ op: 'unlock', code: $('#passIn').value }) }).then((x) => x.json()).catch(() => ({ error: 'no connection' }));

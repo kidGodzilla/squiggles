@@ -4,9 +4,11 @@
 // restart, and gated merges check the caller's process tree first.
 // Sessions are never written, so unlocks end with a restart.
 // Local non-browser callers (the CLI, squiggles) always pass; a browser on this Mac passes only when local skips is on.
+// With no passcode set, this computer gets in and nothing else: sharing never opens an unlocked room.
 import crypto from 'node:crypto';
 
 const COOKIE = 'agents_s', DAY = 864e5, TTL = 30 * DAY;
+export const MIN_CODE = 8; // a leaked hash cracks a 4-digit code in minutes; on the public internet the try cap falls in days
 const PROXIED = /\.(ts\.net|trycloudflare\.com)$/i; // hosts only tailscale serve or cloudflared hand us
 const sha = (s) => crypto.createHash('sha256').update(s).digest('hex');
 const hashCode = (code, salt) => crypto.scryptSync(String(code), salt, 32).toString('hex');
@@ -34,7 +36,7 @@ export function makePasscode({ read, write, now = () => Date.now() }) {
 
   function ok(req) {
     const p = cfg();
-    if (!p?.hash) return true;
+    if (!p?.hash) return isLocal(req);
     if (isLocal(req) && (!isBrowser(req) || p.localSkips)) return true;
     return hasSession(req, p);
   }
@@ -104,9 +106,9 @@ export function makePasscode({ read, write, now = () => Date.now() }) {
     if (p.hash && ['set', 'clear', 'local'].includes(b.op)) check(req, p, b.old, 403);
     if (b.op === 'set') {
       const code = String(b.code ?? '');
-      if (code.length < 4 || code.length > 64) throw err('passcode: 4 to 64 characters');
+      if (code.length < MIN_CODE || code.length > 64) throw err(`passcode: ${MIN_CODE} to 64 characters`);
       const salt = crypto.randomBytes(16).toString('hex');
-      const next = { salt, hash: hashCode(code, salt), localSkips: !!p.localSkips, codeLen: code.length, sessions: {} }; // codeLen: public share needs 8+
+      const next = { salt, hash: hashCode(code, salt), localSkips: !!p.localSkips, codeLen: code.length, sessions: {} }; // codeLen: older codes may be shorter, and sharing needs MIN_CODE+
       save(next);
       // The device that set it stays unlocked; every other session ends.
       return isBrowser(req) ? { body: { ...status(req), ok: true }, cookie: cookie(req, issue(next)) } : { body: status(req) };
