@@ -136,9 +136,9 @@ export function fencedCommand(cmd, cwd = process.cwd(), home = os.homedir()) {
 }
 // Any text (file contents, a patch): a home path to a fenced folder or ~/.ssh.
 export const mentionReason = (text, home = os.homedir()) => mentionsHome(text, home) ? REASONS.dirs : mentionsSsh(text, home) ? REASONS.ssh : '';
-// git [-C dir] [-c k=v] [--flags] push, anywhere in a chain or subshell.
+// git [-C dir] [-c k=v] [--work-tree dir] [--flags] push, anywhere in a chain or subshell.
 // Also git send-pack, subtree or lfs push, an alias set to push, and push reached through a variable or eval (c=push; git $c).
-export const pushes = (cmd) => /\bgit\b(\s+(-[Cc]\s+\S+|--?[\w-]+(=\S+)?))*\s+push\b/.test(cmd) || /\bgit\b.*\bsend-pack\b/.test(cmd) || /\bgit\b[^;&|\n]*\b(subtree|lfs)\b[^;&|\n]*\bpush\b/.test(cmd)
+export const pushes = (cmd) => /\bgit\b(\s+(-[Cc]\s+\S+|--(git-dir|work-tree|namespace|exec-path|config-env|super-prefix|attr-source)\s+\S+|--?[\w-]+(=\S+)?))*\s+push\b/.test(cmd) || /\bgit\b.*\bsend-pack\b/.test(cmd) || /\bgit\b[^;&|\n]*\b(subtree|lfs)\b[^;&|\n]*\bpush\b/.test(cmd)
   || /\balias\.[\w-]+[\s=]+!?(git\s+)?push\b/.test(cmd) || (/\bpush\b/.test(cmd) && (/\$\{?\w|\beval\b/.test(cmd) || /\bxargs\b[^;&|\n]*\bgit\b/.test(cmd)) && /\bgit\b/.test(cmd));
 // Recursive reads and copies (grep -r, rg, find, cp -r, tar, du, ls -R, rsync -a, zip -r, tree) rooted at home or above reach
 // every fenced folder at once. Each simple command is checked from the folder it runs in, following cd and env -C; no path means that folder.
@@ -202,11 +202,13 @@ export const editReason = (tool, input = {}) => /edit|write|patch|replace|create
 export function pathReason(p, cwd = process.cwd(), home = os.homedir()) {
   return fencedPath(p, cwd, home) ? REASONS.dirs : sshPath(p, cwd, home) ? REASONS.ssh : '';
 }
+// Quoted strings as one word each, for option values: unquoted, git -C "my repo" push reads as git -C my repo push.
+const collapse = (cmd) => String(cmd).replace(/\\\n/g, '').replace(/"(?:[^"\\]|\\.)*"|'[^']*'/g, 'Q').replace(/\\./g, '_');
 export function commandReason(cmd, cwd = process.cwd(), home = os.homedir()) {
   if (fencedCommand(cmd, cwd, home)) return REASONS.dirs;
-  cmd = unquote(cmd);
+  const raw = cmd; cmd = unquote(cmd);
   if (mentionsSsh(cmd, home) || (startsHome(cmd, cwd, home) && /(^|[\s=;&|(`])\.ssh\b/i.test(cmd)) || relReason(cmd, cwd, home) === REASONS.ssh) return REASONS.ssh;
-  return treeReason(cmd, cwd, home) || (pushes(cmd) ? REASONS.push : '') || (watchWrite(cmd) ? REASONS.watches : '');
+  return treeReason(cmd, cwd, home) || (pushes(cmd) || pushes(collapse(raw)) ? REASONS.push : '') || (watchWrite(cmd) ? REASONS.watches : '');
 }
 
 // Private data (config privateDirs, privateTools, privateRemote): folders, tools and remote machines only Claude squiggles may
@@ -221,6 +223,15 @@ const DB_DRIVER = /\b(?:pymongo|MongoClient|psycopg2?|mongoose\.connect|pg\.(?:C
 const LOCAL = /^(localhost|127\.\d+\.\d+\.\d+|::1|\[::1\]|0\.0\.0\.0)$/i;
 const HOST_ARG = /^(?:[\w.-]+@)?([\w.-]+):(?!\/\/)/;
 const CODE_HOSTS = /^(github|gitlab|bitbucket)\.(com|org)$/i;
+// ssh://host/path (and rsync://, git+ssh://): another machine by URL.
+const URL_HOST = /^(?:ssh|rsync|git\+ssh|ssh\+git):\/\/(?:[^@/\s]+@)?([^/:\s]+)/i;
+// A word naming another machine. host:path with a bare host (an ssh alias like prod:) counts only where a git refspec
+// (main:main) can't stand: rsync and unison operands, git clone, ls-remote and remote add/set-url.
+const remoteArg = (w, bare) => {
+  const u = w.match(URL_HOST); if (u) return !CODE_HOSTS.test(u[1]);
+  const m = w.match(HOST_ARG);
+  return !!m && !CODE_HOSTS.test(m[1]) && !/^[a-z]$/i.test(m[1]) && (bare || /[.@]/.test(m[0] + m[1]));
+};
 const SHELLS = ['sh', 'bash', 'zsh', 'dash', 'ksh', 'ash', 'csh', 'tcsh', 'fish'];
 const WRAPS = ['sudo', 'exec', 'env', 'nohup', 'time', 'command', 'builtin', 'xargs', 'timeout', 'nice', ...SHELLS, 'source', '.',
   'do', 'then', 'else', 'elif', 'if', 'while', 'until', '{', ')', '!'];
@@ -425,8 +436,11 @@ function privateCommand(cmd, cwd, home, o, depth) {
       if (prog === 'tailscale' && rest[0] === 'ssh') return true;
       const host = seg.match(/(?:^|\s)(?:-h|--host)(?:=|\s*)([^\s-]\S*)/);
       if (DB_CLIENTS.includes(prog) && host && !LOCAL.test(host[1])) return true;
-      // rsync, git and unison reach another machine over ssh with host:path (code hosts and drive letters excepted).
-      if (['rsync', 'git', 'unison'].includes(prog) && rest.some((w) => { const m = w.match(HOST_ARG); return m && !CODE_HOSTS.test(m[1]) && !/^[a-z]$/i.test(m[1]) && /[.@]/.test(m[0] + m[1]); })) return true;
+      // rsync, git and unison reach another machine over ssh with host:path or an ssh:// URL (code hosts and drive letters excepted).
+      if (['rsync', 'git', 'unison'].includes(prog)) {
+        const bare = prog !== 'git' || rest.some((w) => ['clone', 'ls-remote'].includes(w)) || (rest.includes('remote') && rest.some((w) => ['add', 'set-url'].includes(w)));
+        if (rest.some((w) => remoteArg(w, bare))) return true;
+      }
     }
     if (o.dirs.length) {
       if (prog === 'git' && gitHistory(ws, here, home, o)) return true;

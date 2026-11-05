@@ -48,7 +48,8 @@ export function createFiles({ root, extra = {}, tasks = () => [] }) {
     const full = path.resolve(dir, rel);
     let real = ''; try { real = fs.realpathSync(full); } catch { return null; }
     const base = fs.realpathSync(dir);
-    return real.startsWith(base + path.sep) && !real.split(path.sep).some((x) => x.startsWith('.')) ? real : null;
+    // Dotfiles are judged below the source only: the room itself lives in ~/.squiggles, so its own path has a dot.
+    return real.startsWith(base + path.sep) && !path.relative(base, real).split(path.sep).some((x) => x.startsWith('.')) ? real : null;
   }
   // Saves base64 data as files/<name>, never overwriting (name-2.ext, name-3.ext ...).
   function add({ name, data, by, task }) {

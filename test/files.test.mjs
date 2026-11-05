@@ -45,3 +45,13 @@ test('resolve stays inside its source', () => {
   assert.equal(f.resolve('nope', 'x'), null);
   assert.equal(f.resolve('constructor', 'x'), null); assert.equal(f.resolve('__proto__', 'x'), null);
 });
+
+test('resolve serves research files when the room lives under a dot folder (~/.squiggles)', () => {
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'files-')), root = path.join(d, '.squiggles');
+  fs.mkdirSync(path.join(root, 'research', '.hidden'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'research', 'a.md'), 'hi'); fs.writeFileSync(path.join(root, 'research', '.hidden', 'b.md'), 'no');
+  const f = createFiles({ root });
+  assert.equal(f.resolve('research', 'a.md'), fs.realpathSync(path.join(root, 'research', 'a.md')));
+  assert.equal(f.resolve('research', '.hidden/b.md'), null, 'dot folders below the source stay hidden');
+  assert.equal(f.resolve('research', '../room.json'), null);
+});

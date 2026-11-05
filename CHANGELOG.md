@@ -5,6 +5,8 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 ## 0.1.2 (unreleased)
 
 ### Security
+- The fence catches git push behind a quoted, escaped or separate option value (`git -C "my repo" push`, `git --work-tree . push`).
+- The private-remote fence catches a bare ssh alias (`rsync prod:/x`, `git clone prod:x`) and ssh:// or rsync:// URLs. `git fetch prod:x` stays open: there it reads like a refspec.
 - Who sent a message comes from the process tree and the session, never the request. A request can't claim to be you: a terminal or detached process shows as From a terminal, and reaches the squiggle labelled as not a person. A squiggle can't open a message with a person's name either.
 - A page on this computer counts as you only when the socket's program is an installed browser, read from the running file: forged browser headers from a script get nowhere, with or without a passcode. A browser we don't list needs a room passcode. A process that starts a real browser itself still can't be told from you, so set a passcode.
 - People and room settings (add or edit a person, reactions, characters, lock, quit) need a page or the lead, never a plain squiggle or terminal; only you edit you. With a passcode the CLI asks for it; with none, use the page.
@@ -191,6 +193,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Settings number inputs show an accent border on focus and are 44px tall on touch screens.
 
 ### Fixed
+- Research files open when the room lives under a dot folder, as the default ~/.squiggles does. Hidden folders inside the research folder stay hidden.
 - Drawing icons no longer makes macOS ask for a keychain for Chrome, and a workspace under the temp folder no longer draws them at all. Squiggles are told to pass the same flag to any headless Chrome they start.
 - The Team tab's cards no longer overflow sideways on a phone.
 - With "This Mac's browser skips the passcode" on, a step that needs an unlocked page (Run on an ask, answering a pick) prompts for the passcode instead of reloading the page.
