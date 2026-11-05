@@ -25,6 +25,7 @@ test('asker: a terminal or a squiggle asking itself authorises nothing', () => {
   assert.equal(askerOf('lead', undefined, 'ann'), 'lead');
   assert.equal(askerOf('terminal', undefined, 'ann'), '');
   assert.equal(askerOf('harness', undefined, 'ann'), '');
+  assert.equal(askerOf('mention', undefined, 'ann'), '', 'the relay names its asker');
   assert.equal(askerOf('ann', undefined, 'ann'), '');
 });
 

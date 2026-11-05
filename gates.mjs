@@ -16,8 +16,8 @@ export function sender({ caller = '', page = false, human, people = [] } = {}) {
 }
 
 // Who asked for this turn. A squiggle can't ask itself and an unknown caller can't ask at all: askers lift the Low trust
-// refusal and allow charter edits.
-export const askerOf = (from, human, id) => (['harness', 'terminal', id].includes(from) ? '' : from === 'owner' ? human || 'owner' : from);
+// refusal and allow charter edits. A relayed @mention names its own asker.
+export const askerOf = (from, human, id) => (['harness', 'terminal', 'mention', id].includes(from) ? '' : from === 'owner' ? human || 'owner' : from);
 
 // --asked is a claim in the request body. On a Low trust squiggle it counts only for an ask the server saw: this turn, or in the last week.
 const ASK_TTL = 7 * 864e5;

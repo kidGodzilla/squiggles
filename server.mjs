@@ -716,7 +716,7 @@ function relayMentions(id, text, from, human) {
     .map((e) => `${e.k === 'say' ? (e.by ? loadSquiggle(e.by)?.name || e.by : s.name) : e.from === 'owner' ? User : e.from}: ${e.text.replace(/\s+/g, ' ').slice(0, 300)}`).join('\n');
   for (const m of ids) {
     const r = R(m); (r.relay ||= []).push(id); saveState();
-    send(m, `${Who} mentioned you in their chat with ${s.name}.${recent ? `\n\nRecent lines:\n${recent}` : ''}\n\n${Who}: ${text}\n\nReply to ${who} in plain words. Your reply at the end of this turn is posted in that chat.`, 'mention');
+    send(m, `${Who} mentioned you in their chat with ${s.name}.${recent ? `\n\nRecent lines:\n${recent}` : ''}\n\n${Who}: ${text}\n\nReply to ${who} in plain words. Your reply at the end of this turn is posted in that chat.`, 'mention', { asker: from === 'owner' ? askerOf(from, human, m) : '' }); // only a person's mention is an ask
   }
 }
 

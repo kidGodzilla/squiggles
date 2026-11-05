@@ -78,7 +78,8 @@ process.stdin.on('data', async (d) => {
   buf += d; const lines = buf.split('\\n'); buf = lines.pop();
   for (const l of lines) {
     fs.appendFileSync(path.join(home, 'inbox-' + id + '.jsonl'), l + '\\n');
-    if (l.includes('claim now')) { const add = (asked) => post('/api/tasks', { op: 'add', title: 'claim', ...(asked && { asked }) }), n = l.match(/claim now (\\w+)/)[1]; fs.writeFileSync(path.join(home, 'claim-' + n + '.json'), JSON.stringify({ owner: await add('owner'), lead: await add('lead'), none: await add(), peer: await add('pal') })); }
+    if (l.includes('claim now') && ['meek', 'shy'].includes(id)) { const add = (asked) => post('/api/tasks', { op: 'add', title: 'claim', ...(asked && { asked }) }), n = l.match(/claim now (\\w+)/)[1]; fs.writeFileSync(path.join(home, 'claim-' + n + '.json'), JSON.stringify({ owner: await add('owner'), lead: await add('lead'), none: await add(), peer: await add('pal'), mention: await add('mention') })); }
+    if (l.includes('mention peer') && id === 'pal') await post('/api/squiggles/boss/send', { text: 'claim now peermention @shy' });
     if (l.includes('peer tell')) await post('/api/squiggles/meek/send', { text: 'peer hello' });
     if (l.includes('child now')) spawn('/bin/sh', ['-c', 'NOTE=' + l.match(/child now (t\\d+)/)[1] + ' nohup "' + process.execPath + '" "' + path.join(home, 'low-child.js') + '" >/dev/null 2>&1 &'], { stdio: 'ignore' });
     if (l.includes('ops now')) { const [, plain, marked] = l.match(/ops now (t\\d+) (t\\d+)/), op = (b) => post('/api/tasks', b), idea = await op({ op: 'suggest', title: 'an idea' }); fs.writeFileSync(path.join(home, 'low-ops.json'), JSON.stringify({ split: await op({ op: 'split', id: plain, titles: ['mine'] }), asked: await op({ op: 'edit', id: plain, asked: 'owner' }), title: await op({ op: 'edit', id: plain, title: 'my idea' }), mark: await op({ op: 'edit', id: plain, split: true }), accept: await op({ op: 'accept', id: idea.body.id, goal: 'g', owner: 'meek' }), marked: await op({ op: 'split', id: marked, titles: ['part'] }), note: await op({ op: 'edit', id: plain, note: 'progress' }), suggest: idea })); }
@@ -102,7 +103,7 @@ before(async () => {
   fs.writeFileSync(secretFile, SECRET);
   fs.writeFileSync(path.join(HOME, 'lone.js'), lone); fs.writeFileSync(path.join(HOME, 'low-child.js'), lowChild);
   fs.mkdirSync(BIN); fs.mkdirSync(path.join(DATA, 'runs'), { recursive: true });
-  for (const [id, extra] of [['boss', { lead: true }], ['probe', {}], ['shut', {}], ['spare', {}], ['meek', { trust: 'low', paused: false }], ['pal', { paused: false }]]) {
+  for (const [id, extra] of [['boss', { lead: true }], ['probe', {}], ['shut', {}], ['spare', {}], ['meek', { trust: 'low', paused: false }], ['pal', { paused: false }], ['shy', { trust: 'low', paused: false }]]) {
     const d = path.join(DATA, 'squiggles', id); fs.mkdirSync(d, { recursive: true });
     fs.writeFileSync(path.join(d, 'squiggle.json'), JSON.stringify({ name: id[0].toUpperCase() + id.slice(1), role: 'Test', cwd: '~', every: 0, paused: true, permissionMode: 'auto', ...extra }));
     fs.writeFileSync(path.join(d, 'charter.md'), 'Test fixture.\n'); fs.writeFileSync(path.join(d, 'journal.md'), '');
@@ -121,7 +122,7 @@ before(async () => {
 });
 after(async () => {
   if (server && server.exitCode === null) { server.kill(); await new Promise((r) => { server.on('exit', r); setTimeout(r, 3000); }); }
-  fs.rmSync(room, { recursive: true, force: true });
+  fs.rmSync(room, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); // a stub's child can still be writing
 });
 const probed = () => JSON.parse(fs.readFileSync(probeOut, 'utf8'));
 const detached = () => JSON.parse(fs.readFileSync(loneOut, 'utf8'));
@@ -309,6 +310,19 @@ test("a peer's ask is not the owner's or the lead's", async () => {
   await sleep(300);
   await api('/api/squiggles/meek/send', { text: 'claim now peer' });
   assert.equal((await fileOf('claim-peer.json', 'meek filed')).peer.status, 403);
+});
+
+// A relay records who really asked: a person, never the word 'mention', never a peer.
+test('a relayed @mention carries its real asker', async () => {
+  const later = async (n) => { await sleep(300); await api('/api/squiggles/shy/send', { text: `claim now ${n}` }); return fileOf(`claim-${n}.json`, 'shy filed'); };
+  const codes = (r) => Object.fromEntries(['owner', 'lead', 'none', 'peer', 'mention'].map((k) => [k, r[k].status]));
+  const no = { owner: 403, lead: 403, none: 403, peer: 403, mention: 403 };
+  await api('/api/squiggles/pal/send', { text: 'mention peer', human: 'owner' }, me);
+  assert.deepEqual(codes(await fileOf('claim-peermention.json', 'peer mention relayed')), no, 'in the relayed turn');
+  assert.deepEqual(codes(await later('peerlater')), no, 'in a later turn');
+  await api('/api/squiggles/pal/send', { text: 'claim now ownermention @shy', human: 'owner' }, me);
+  assert.deepEqual(codes(await fileOf('claim-ownermention.json', 'owner mention relayed')), { ...no, owner: 200, none: 200 }, 'in the relayed turn');
+  assert.deepEqual(codes(await later('ownerlater')), { ...no, owner: 200 }, 'in a later turn');
 });
 
 test("the owner's page still can; a plain terminal gets the code prompt", async () => {
