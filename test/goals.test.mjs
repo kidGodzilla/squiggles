@@ -2,7 +2,7 @@ import test from 'node:test'; import assert from 'node:assert/strict';
 import fs from 'node:fs'; import os from 'node:os'; import path from 'node:path';
 import { createBoard } from '../board.mjs';
 
-test('goal kind: area on, back to goal, bad kind refused (t977)', () => {
+test('goal kind: area on, back to goal, bad kind refused', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'goals-'));
   const b = createBoard(dir, () => {});
   const g = b.goalOp({ op: 'add', title: 'Security', tier: 'active' });
@@ -14,7 +14,7 @@ test('goal kind: area on, back to goal, bad kind refused (t977)', () => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test('goal edit refuses an empty title (t1030)', () => {
+test('goal edit refuses an empty title', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'goals-'));
   const b = createBoard(dir, () => {});
   const g = b.goalOp({ op: 'add', title: 'Security', tier: 'active' });

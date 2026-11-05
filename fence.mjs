@@ -295,7 +295,7 @@ function expanded(text) {
     const use = new RegExp(`\\$(?:${k}\\b|\\{${k}\\})`, 'g');
     if (!out.some((t) => t.search(use) >= 0)) continue;
     out = out.flatMap((t) => vals.map((v) => t.replace(use, () => v)));
-    // Past the cap the values aren't all read, so the command is judged with $p unknown, not on the first 32. t3824
+    // Past the cap the values aren't all read, so the command is judged with $p unknown, not on the first 32.
     if (out.length > 32) return [];
   }
   return out[0] === text ? [] : out;

@@ -1,6 +1,6 @@
-// Local calendar reader (t785): reads what macOS Calendar shows (iCloud, Google, Exchange) through EventKit. Read-only.
+// Local calendar reader: reads what macOS Calendar shows (iCloud, Google, Exchange) through EventKit. Read-only.
 // calendar-reader status | allow | calendars | events [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--calendar <name>] [--notes]
-// Location and notes are written by whoever sent the invite (t925): left out unless --notes, then under "untrusted".
+// Location and notes are written by whoever sent the invite: left out unless --notes, then under "untrusted".
 // Prints JSON. Only `allow` asks for access; everything else fails with a clear error instead of prompting.
 import EventKit
 import Foundation

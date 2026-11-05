@@ -1,4 +1,4 @@
-// Avataaars generator (t833): Pablo Stanley's art via DiceBear's parts (ui/gen/avataaars-parts.js), drawn into the room's scene.
+// Avataaars generator: Pablo Stanley's art via DiceBear's parts (ui/gen/avataaars-parts.js), drawn into the room's scene.
 // look avataaars[:<top>|k=v,...]; anything not set comes from the seed. Live renders carry the blink, brow, talk and done layers.
 (() => {
   const P = DICEBEAR.avataaars, { V } = KIT, keys = (o) => Object.keys(o);

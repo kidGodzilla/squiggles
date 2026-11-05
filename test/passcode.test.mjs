@@ -120,7 +120,7 @@ test('wrong current codes share the unlock limiter', () => {
   assert.throws(() => s.pc.op(r, { op: 'unlock', code: '2468' }), (e) => e.code === 429);
 });
 
-test('empty codes and local scripts cannot lock the user out (t956)', () => {
+test('empty codes and local scripts cannot lock the user out', () => {
   const s = setup(), r = remote(), local = localBrowser();
   s.pc.op(cli, { op: 'set', code: '2468' });
   for (let i = 0; i < 40; i++) assert.throws(() => s.pc.op(r, { op: 'unlock' }), /wrong/);
@@ -129,7 +129,7 @@ test('empty codes and local scripts cannot lock the user out (t956)', () => {
   assert.equal(s.pc.op(r, { op: 'unlock', code: '2468' }).body.ok, true, 'neither counted toward the tailnet client or the global cap');
 });
 
-test('room.json edits after boot are ignored: a forged session or swapped hash is refused (t1396)', async () => {
+test('room.json edits after boot are ignored: a forged session or swapped hash is refused', async () => {
   const crypto = await import('node:crypto'), sha = (x) => crypto.createHash('sha256').update(x).digest('hex');
   const s = setup(), forged = 'f'.repeat(64);
   s.pc.op(cli, { op: 'set', code: '2468' });
@@ -144,7 +144,7 @@ test('room.json edits after boot are ignored: a forged session or swapped hash i
   assert.ok(s.pc.op(remote(), { op: 'unlock', code: '2468' }).cookie);
 });
 
-test('boot loads the hash, drops stored sessions; set and clear update memory (t1396)', () => {
+test('boot loads the hash, drops stored sessions; set and clear update memory', () => {
   const sha = 'a'.repeat(64);
   let store = { salt: 's', hash: 'b'.repeat(64), localSkips: false, sessions: { [sha]: Date.now() + 864e5 } };
   const pc = makePasscode({ read: () => store, write: (p) => { store = p; } });

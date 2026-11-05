@@ -34,12 +34,12 @@ async function loadBoard() {
 window.onBoard = () => loadBoard();
 
 // ---------- Goals: the whiteboard ----------
-// Areas (t977): ongoing responsibilities with no finish line sit in one strip above the columns, never in a tier.
+// Areas: ongoing responsibilities with no finish line sit in one strip above the columns, never in a tier.
 const isArea = (g) => g.kind === 'area';
 const openCount = (id) => B.tasks.filter((t) => t.goal === id && t.status !== 'done').length;
 // Areas strip shows short names: 'SEO: example.com' is SEO, 'Personal site: example.com' is example.com. The tooltip keeps the full title.
 const areaName = (t = '') => { const [a, b] = t.split(/:\s+/); t = (b && a.length > 4 ? b : a) || t; return !t || t.includes('.') ? t : t[0].toUpperCase() + t.slice(1); };
-// Folding (t1217): a column heading or Areas folds that column, remembered per browser. CLI: room fold|unfold <column>.
+// Folding: a column heading or Areas folds that column, remembered per browser. CLI: room fold|unfold <column>.
 const FOLDS = ['active', 'hold', 'todo', 'done', 'areas'];
 function foldGoals(tier, on = !B.gfold.has(tier)) {
   tier = tier === 'next' ? 'todo' : tier; if (!FOLDS.includes(tier)) return;
@@ -92,7 +92,7 @@ async function loadLoad() {
 }
 
 // ---------- Tasks: the cork board ----------
-// Suggestions (t825) live in their own filter until the lead accepts one; then it's a normal note.
+// Suggestions live in their own filter until the lead accepts one; then it's a normal note.
 const isSug = (t) => t.kind === 'suggestion' && t.decision !== 'accepted';
 function taskVisible(t) {
   if (B.tshow === 'suggest') return t.kind === 'suggestion' && hit(B.tq.toLowerCase(), t.title, t.evidence, t.why, ownerName(t.by));
@@ -326,7 +326,7 @@ function editTask(el, wait = false) {
 
 // ---------- Merge: branches in review across gated goals ----------
 B.merges = [];
-// The listing can take ~40s (t1129): say so until the first answer lands.
+// The listing can take ~40s: say so until the first answer lands.
 async function loadMerges() {
   if (!B.mloaded) $('#mcount').textContent = 'Loading branches…';
   const wp = api('/worktrees').catch(() => []), m = await api('/merges').catch(() => null); if (!Array.isArray(m)) { if (!B.mloaded) $('#mcount').textContent = 'Couldn’t load branches'; toast(m?.error || 'merge queue unavailable'); return; }
@@ -379,19 +379,19 @@ function fitDetail() {
   document.querySelectorAll('#mq .mdet > td').forEach((td) => { td.colSpan = n || 7; });
 }
 addEventListener('resize', fitDetail);
-// The user's steps around the button (t766 needs, t1182 after), ticked here or with task needs|after <id> done <n>.
-// Only the checkbox ticks: clicking the text is reading it (t1366).
+// The user's steps around the button, ticked here or with task needs|after <id> done <n>.
+// Only the checkbox ticks: clicking the text is reading it.
 // Each step says whose it is: a squiggle's waits on them, only the user's (and untagged) read as theirs.
 const stepWho = (x) => x.who === 'owner' ? 'You' : x.who ? (S.sq?.[x.who]?.name || x.who) : 'Untagged';
 const stepHis = (x) => !x.who || x.who === 'owner';
 const stepsHtml = (l, a, h) => l?.length ? `<div class="mneeds"><h5>${h}${l.some((x) => !x.done) ? '' : ': all done'}</h5>${l.map((x, i) => `<div class="mstep ${x.done ? 'done' : ''} ${stepHis(x) ? '' : 'theirs'}"><label class="mtick"><input type="checkbox" data-a="${a}" data-n="${i + 1}" ${x.done ? 'checked' : ''} aria-label="${x.done ? 'Not done' : 'Done'}: ${esc(x.t)}" title="${x.done ? 'Not done' : 'Mark done'}"></label><span><b class="mwho">${esc(stepWho(x))}${x.done ? ', done' : stepHis(x) ? '' : ', waiting'}:</b> ${esc(x.t)}</span></div>`).join('')}</div>` : '';
-// Merged tasks with after-merge steps left (t1182). CLI: merges lists them too.
+// Merged tasks with after-merge steps left. CLI: merges lists them too.
 function afterHtml() {
   const t = B.tasks.filter((x) => x.status === 'done' && x.after?.some((n) => !n.done)); if (!t.length) return '';
   const his = t.reduce((n, x) => n + x.after.filter((y) => !y.done && stepHis(y)).length, 0);
   return `<h3 class="wth">After merging <span>${his ? `${his} yours` : 'none yours'}</span></h3><div class="mafter">${t.map((x) => `<div class="mabox ${B.aopen.has(x.id) ? 'open' : ''}" data-merge="${esc(x.id)}">${stepsHtml(x.after, 'after', `${esc(x.id)} ${esc(x.title)}`)}</div>`).join('')}</div>`;
 }
-// Worktrees (t769): every extra worktree in the goals' repos and the task that owns it. CLI: worktrees.
+// Worktrees: every extra worktree in the goals' repos and the task that owns it. CLI: worktrees.
 function worktreesHtml() {
   const w = B.worktrees || [], orphans = w.filter((x) => x.orphan).length; if (!w.length) return '';
   const home = (p) => p.replace(/^\/Users\/[^/]+/, '~');
@@ -405,7 +405,7 @@ function worktreesHtml() {
 function diffHtml(text) {
   return text.split('\n').map((l) => { const c = l.startsWith('+++') || l.startsWith('---') ? 'f' : l.startsWith('diff ') ? 'f' : l[0] === '+' ? 'a' : l[0] === '-' ? 'd' : l.startsWith('@@') ? 'h' : ''; return c ? `<span class="${c}">${esc(l)}</span>` : esc(l); }).join('\n');
 }
-// Diff view (t176): Merge beside the title, commits and files fold to 5 lines, the diff gets the rest of the height.
+// Diff view: Merge beside the title, commits and files fold to 5 lines, the diff gets the rest of the height.
 const fold = (lines, cls) => `<div class="dfold ${cls}">${lines.length > 5 ? `<pre class="dl">${esc(lines.slice(0, 5).join('\n'))}</pre><pre class="dl dall">${esc(lines.join('\n'))}</pre><button data-a="more" data-n="${lines.length}">Show all ${lines.length}</button>` : `<pre class="dl">${esc(lines.join('\n'))}</pre>`}</div>`;
 async function openDiff(id) {
   const d = await api(`/merges/${encodeURIComponent(id)}/diff`); if (d?.error) return toast(d.error);
@@ -423,7 +423,7 @@ async function openDiff(id) {
   };
   $('#diffBox').classList.add('on'); B.diff = id; syncUrl();
 }
-// The open diff is in the URL (?view=merge&diff=<task>, t351).
+// The open diff is in the URL (?view=merge&diff=<task>).
 function closeDiff(sync = true) { $('#diffBox').classList.remove('on'); B.diff = ''; if (sync) syncUrl(); }
 async function mergeBranch(m, btn) {
   if (!confirm(`Merge ${repoName(m.repo)}:${m.branch} into ${m.base}? The branch is deleted and the task marked done.`)) return false;
@@ -432,7 +432,7 @@ async function mergeBranch(m, btn) {
   AUD.ding(); toast(!r.merged?.length ? `Already on ${r.base}; task done` : `Merged ${m.branch} ${r.merged?.length > 1 ? `into ${r.merged.length} repos` : `at ${r.sha}`}`); loadMerges(); return true;
 }
 $('#diffBox').onclick = (e) => { if (e.target.id === 'diffBox') closeDiff(); };
-// Merge review now (t599): a meeting where the squiggles with branches in review present them. CLI: meet merges.
+// Merge review now: a meeting where the squiggles with branches in review present them. CLI: meet merges.
 $('#mmeet').onclick = async () => {
   const r = await api('/meetings', { op: 'merges', by: me().id });
   if (r?.error) return toast(r.error);
@@ -446,12 +446,12 @@ $('#mrefresh').onclick = async () => {
 $('#mergeView').onclick = async (e) => {
   // Buttons in the expanded row (the only ones on phone) belong to the row above it.
   const a = e.target.closest('[data-a]')?.dataset.a, det = e.target.closest('.mdet'), row = e.target.closest('[data-merge]') || (a && det?.previousElementSibling); if (!row) return;
-  // An After merging box opens to its full title (t1366); selecting text to read it doesn't toggle.
+  // An After merging box opens to its full title; selecting text to read it doesn't toggle.
   if (!a && e.target.closest('.mabox')) { if (e.target.closest('label') || getSelection().toString()) return; const id = row.dataset.merge; B.aopen.has(id) ? B.aopen.delete(id) : B.aopen.add(id); return renderMerges(); }
   if (!a) { if (e.target.closest('button,a,label')) return; const id = row.dataset.merge; B.mopen.has(id) ? B.mopen.delete(id) : B.mopen.add(id); return renderMerges(); }
   const id = row.dataset.merge, m = B.merges.find((x) => x.id === id);
   if (a === 'diff') return openDiff(id);
-  // The owner opens a 1:1 with the item in the message box (t627). CLI: room chat <id> "<text>".
+  // The owner opens a 1:1 with the item in the message box. CLI: room chat <id> "<text>".
   if (a === 'owner') return discuss(m.owner, `About ${m.id} (${repoName(m.repo)}:${m.branch}): `);
   if (a === 'back') {
     const pre = m.conflicts?.length ? `Conflicts with ${m.base} in ${m.conflicts.join(', ')}: rebase or merge ${m.base} in and resolve.` : '';
@@ -459,7 +459,7 @@ $('#mergeView').onclick = async (e) => {
     const r = await api('/merges', { op: 'back', id, note: note.trim(), by: me().id }); if (r?.error) return toast(r.error);
     toast(`Sent back to ${ownerName(m.owner)}`); return loadMerges();
   }
-  // CLI: task base <id> <branch>|auto (t1638).
+  // CLI: task base <id> <branch>|auto.
   if (a === 'base') {
     const b = prompt(`Merge ${m.branch} into which branch? "auto" picks the one it was cut from.`, m.base); if (!b || !b.trim() || b.trim() === m.base) return;
     const r = await api('/tasks', { op: 'base', id, branch: b.trim() }); if (r?.error) return toast(r.error);
@@ -539,7 +539,7 @@ function editHuman(anchor, id) {
     };
   }, { title: h ? 'Edit person' : 'Add person', sm: true });
 }
-// Who's at this browser (t141): asked on joining when there's more than one human, switched from the top bar. Messages carry it.
+// Who's at this browser: asked on joining when there's more than one human, switched from the top bar. Messages carry it.
 S.me = localStorage.getItem('agents.me') || '';
 const me = () => B.humans.find((h) => h.id === S.me) || B.humans[0] || { id: 'owner', name: 'You', avatar: '' };
 const whoButtons = () => B.humans.map((h) => `<button class="hm" data-me="${esc(h.id)}">${humanFace(h)}<b>${esc(h.name)}</b></button>`).join('');
@@ -720,7 +720,7 @@ $('#calToday').onclick = () => { B.week = mondayOf(new Date()); B.month = monthO
 $('#calMode').onclick = (e) => setCalMode(e.target.dataset.m);
 CAL_PHONE.addEventListener('change', () => { if (B.view === 'calendar') loadCal(); });
 $('#calAdd').onclick = (e) => editMeeting(e.currentTarget);
-// New meeting (t146, was Meet now): pick who, an optional topic and presenters (t604; default: the attendees); a 30-minute meeting starts at once. CLI: meet now <id,id> ["topic"] [--presenters <id,id>].
+// New meeting (was Meet now): pick who, an optional topic and presenters (default: the attendees); a 30-minute meeting starts at once. CLI: meet now <id,id> ["topic"] [--presenters <id,id>].
 function meetNowPop(anchor, id) {
   const who = new Set([id || leadId()].filter(Boolean));
   showPop(anchor, `<label>Who</label><div class="calwho">${S.order.map((x) => `<label><input type="checkbox" value="${esc(x)}" ${who.has(x) ? 'checked' : ''}>${esc(S.sq[x].name)}</label>`).join('')}</div>
@@ -761,7 +761,7 @@ function setView(v, who, nav) {
   document.querySelectorAll('.tabs button').forEach((b) => b.classList.toggle('on', b.dataset.view === v));
   $('.tabs .tmore').classList.toggle('on', ['team', 'calendar', 'goals', 'files'].includes(v)); moreTabs(false);
   try { localStorage.agentsView = v === 'one' ? 'one:' + who : v; } catch {}
-  // The view lives in the URL (?view=tasks, ?view=one&with=<id>): back, forward, new tabs and copied links (t348).
+  // The view lives in the URL (?view=tasks, ?view=one&with=<id>): back, forward, new tabs and copied links.
   const q = viewUrl(v, who);
   if (nav !== 'none' && location.search !== q) history[nav === 'replace' ? 'replaceState' : 'pushState'](null, '', location.pathname + q);
   if (v === 'room' || office) layout(); else loadBoard();
@@ -773,8 +773,8 @@ function setView(v, who, nav) {
   if (v === 'settings') { if (typeof renderSettings === 'function') renderSettings(); loadHumans(); }
   focusOffice();
 }
-// Entering an office puts the cursor in its chat (t188), also after Join on a page opened on one (t1206); the Team tab, in its search
-// unless the user is typing somewhere (t1362). Not on touch screens: it would pop the keyboard.
+// Entering an office puts the cursor in its chat, also after Join on a page opened on one; the Team tab, in its search
+// unless the user is typing somewhere. Not on touch screens: it would pop the keyboard.
 // force: after Join, where the lead chat's own autofocus isn't the user typing.
 function focusOffice(force) {
   if (!matchMedia('(pointer: fine)').matches) return;
@@ -784,7 +784,7 @@ function focusOffice(force) {
     if ((force || !typing) && !document.body.classList.contains('locked')) $('#teamq').focus();
   });
 }
-// Phone bottom bar (t154): More opens Team, Calendar and Goals above the bar.
+// Phone bottom bar: More opens Team, Calendar and Goals above the bar.
 const moreTabs = (on) => { $('.tabs').classList.toggle('open', on); $('.tabs .tmore').setAttribute('aria-expanded', String(on)); };
 document.querySelector('.tabs').onclick = (e) => { if (e.target.closest('.tmore')) { e.stopPropagation(); return moreTabs(!$('.tabs').classList.contains('open')); } const v = e.target.dataset.view; if (v) setView(v); };
 document.addEventListener('click', (e) => { if (!e.target.closest('.tabs')) moreTabs(false); });
@@ -847,8 +847,8 @@ $('#callBar').onsubmit = async (e) => {
 $('#callLeave').onclick = async () => { const r = await api('/call', { op: 'leave' }); toast(r?.error || r); loadCall(); };
 window.onCall = loadCall;
 
-// ---------- task ids as links (t822) ----------
-// Any rendered text naming a task that exists (t227) gets a link: a popover with its title, status, owner and branch,
+// ---------- task ids as links ----------
+// Any rendered text naming a task that exists gets a link: a popover with its title, status, owner and branch,
 // and a button that opens it on the board. Skips code, links and form fields. Idempotent, so re-run after the board loads.
 const TID = /\bt\d{1,5}\b/g;
 function linkTasks(root) {
@@ -885,7 +885,7 @@ function openTaskNote(id) {
 }
 document.addEventListener('click', (e) => { const a = e.target.closest('a.tlink'); if (!a) return; e.preventDefault(); e.stopPropagation(); taskPop(a); }, true);
 
-// Gated merges need this browser unlocked with the passcode (t1384): once per device, then the 30-day session covers them.
+// Gated merges need this browser unlocked with the passcode: once per device, then the 30-day session covers them.
 // Raw fetch for unlock: api() reloads the page on 401, which a wrong code is.
 async function unlocked(go, title) {
   const r = await go(); if (!r?.unlock) return r;

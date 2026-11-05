@@ -28,12 +28,12 @@ function resolveBranch(spec, goal) {
   let repo = m ? m[1] : '', branch = (m ? m[2] : String(spec || '')).trim();
   if (!branch) throw new Error('review needs a branch: task move <id> review [repo:]<branch> ["<test result>"]');
   const repos = goal?.repos || [];
-  // A bare name (api) means the goal's repo of that name, else ~/<name> (t1197).
+  // A bare name (api) means the goal's repo of that name, else ~/<name>.
   if (repo && !/[/~]/.test(repo)) repo = repos.find((r) => path.basename(expand(r)) === repo) || `~/${repo}`;
   if (repo) { if (!hasBranch(repo, branch)) throw new Error(`no branch ${branch} in ${repo}`); return { repo, branch }; }
   if (!repos.length) return { branch };
   const found = repos.filter((r) => hasBranch(r, branch));
-  // In several repos: one task across them (t1197). The first is the task's repo; merging takes every one.
+  // In several repos: one task across them. The first is the task's repo; merging takes every one.
   if (found.length) return { repo: found[0], branch };
   throw new Error(`branch ${branch} not found in ${repos.join(' ')}: commit on it first, or give repo:branch`);
 }
@@ -44,11 +44,11 @@ function githubOf(repo) {
   return m ? `https://github.com/${m[1]}/${m[2]}` : '';
 }
 const git = (repo, args, opts = {}) => execFileSync('git', ['-C', expand(repo), ...args], { stdio: 'pipe', encoding: 'utf8', maxBuffer: 32 << 20, env: { ...process.env, GIT_EDITOR: 'true', GIT_TERMINAL_PROMPT: '0' }, ...opts }).trim();
-// Async git for the merge listing (t961): sync git per review branch froze the server for 17 s.
+// Async git for the merge listing: sync git per review branch froze the server for 17 s.
 const pexec = promisify(execFile);
 const gitA = async (repo, args) => (await pexec('git', ['-C', expand(repo), ...args], { encoding: 'utf8', maxBuffer: 32 << 20, env: { ...process.env, GIT_EDITOR: 'true', GIT_TERMINAL_PROMPT: '0' } })).stdout.trim();
 const okA = (p) => p.then(() => true, () => false);
-// Files that would conflict merging branch into base (t783), [] if clean. merge-tree exits 1 on conflicts, file names after the tree id.
+// Files that would conflict merging branch into base, [] if clean. merge-tree exits 1 on conflicts, file names after the tree id.
 const conflictsA = (repo, base, branch) => gitA(repo, ['merge-tree', '--write-tree', '--name-only', base, branch]).then(() => [],
   (e) => { if (e.code !== 1) throw e; return String(e.stdout || '').split('\n\n')[0].split('\n').slice(1).filter(Boolean); });
 async function baseOfA(repo) {
@@ -66,7 +66,7 @@ function baseOf(repo) {
   for (const b of ['main', 'master']) if (hasBranch(repo, b)) return b;
   throw new Error(`no main or master branch in ${repo}`);
 }
-// The branch a review branch was cut from (t1638): the local branch leaving the fewest commits to merge, if that is fewer
+// The branch a review branch was cut from: the local branch leaving the fewest commits to merge, if that is fewer
 // than the default base leaves (a branch off a feature branch must not drag that branch into main). Task branches don't count.
 function detectBase(repo, branch) {
   const def = baseOf(repo), n = (b) => Number(git(repo, ['rev-list', '--count', `${b}..${branch}`]));
@@ -81,7 +81,7 @@ function detectBase(repo, branch) {
 const daysSince = (d) => (d ? Math.max(0, Math.floor((Date.now() - Date.parse(d + 'T00:00:00Z')) / 864e5)) : 0);
 const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
 
-// Every harness worktree lives at ~/wt/<repo>-<task> (t769).
+// Every harness worktree lives at ~/wt/<repo>-<task>.
 export const WT = process.env.AGENTS_WT || path.join(os.homedir(), 'wt');
 const isLink = (p) => { try { return fs.lstatSync(p).isSymbolicLink(); } catch { return false; } };
 // Uncommitted changes in a worktree, not counting an untracked node_modules symlink (the usual way to share installs).
@@ -91,7 +91,7 @@ const worktreesOfA = async (repo) => { try { return parseWorktrees(await gitA(re
 const parseWorktrees = (list) => {
   return list.split(/\n\n+/).slice(1).map((b) => ({ path: b.match(/^worktree (.+)$/m)?.[1], branch: b.match(/^branch refs\/heads\/(.+)$/m)?.[1] || '', head: b.match(/^HEAD (\w+)/m)?.[1]?.slice(0, 8) || '', locked: /^locked/m.test(b), prunable: /^prunable/m.test(b) })).filter((w) => w.path);
 };
-// Worktrees on a branch or at one of the given paths (t292, t769): clean ones are removed (never --force), dirty or locked kept; then prune.
+// Worktrees on a branch or at one of the given paths: clean ones are removed (never --force), dirty or locked kept; then prune.
 // Off the event loop: removing a checkout of a big repo blocks for seconds.
 async function dropWorktreesA(repo, branch, paths = []) {
   const out = { removed: [], kept: [] };
@@ -139,7 +139,7 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
   const tasks = () => read(TASKS, { tasks: [] }).tasks;
   const write = (f, v) => { fs.writeFileSync(f, JSON.stringify(v, null, 2) + '\n'); };
   const saveGoals = (g) => write(GOALS, g);
-  // Ids never come back (t1551): tasks.json keeps the highest number ever handed out, so a dropped task's id stays retired.
+  // Ids never come back: tasks.json keeps the highest number ever handed out, so a dropped task's id stays retired.
   const num = (x) => parseInt(String(x.id).slice(1), 10) || 0;
   const lastId = (t) => Math.max(Number(read(TASKS, {}).last) || 0, ...t.map(num), 0);
   const saveTasks = (t) => write(TASKS, { last: lastId(t), tasks: t });
@@ -181,7 +181,7 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
   const GOAL_FIELDS = ['title', 'owner', 'note', 'repos', 'merge', 'kind', 'due', 'tier'];
   function goalOp({ op, id, title, tier, owner, note, index, repos, merge, kind, due }) {
     const g = goals();
-    // An area (t977) is an ongoing responsibility with no finish line; a goal finishes.
+    // An area is an ongoing responsibility with no finish line; a goal finishes.
     if (kind !== undefined && !['goal', 'area'].includes(kind)) throw new Error('kind must be goal or area');
     if (merge !== undefined && !MERGE.includes(merge)) throw new Error(`merge must be one of ${MERGE.join(', ')}`);
     // Due (t83): YYYY-MM-DD shows on the goal card and the calendar; '' or clear removes it. It must round-trip: Date.parse reads Feb 30 as Mar 2.
@@ -247,7 +247,7 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
   }
   function taskOp({ op, id, title, goal, owner, status, note, by, asked, idea, parent, split, titles, branch, act, text, n, who, repo: repoArg, evidence, why, ask, needAsk, alert }) {
     const t = tasks();
-    // Suggestions (t825): a squiggle notices something outside its task and files it for the lead, unowned and off every goal.
+    // Suggestions: a squiggle notices something outside its task and files it for the lead, unowned and off every goal.
     // Similar titles (open or declined) count as the same suggestion. accept turns it into a normal task; decline closes it.
     if (op === 'suggest') {
       if (!String(title || '').trim()) throw new Error('a suggestion needs one line saying what you noticed');
@@ -268,7 +268,7 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
     const task = t.find((x) => x.id === id);
     if (!task) throw new Error(`no task ${id}`);
     if (op === 'move' || op === 'drop') notMerging(id);
-    // task worktree <id> [repo] (t769): the only way a worktree is made. ~/wt/<repo>-<id> on the task's branch, recorded on the task.
+    // task worktree <id> [repo]: the only way a worktree is made. ~/wt/<repo>-<id> on the task's branch, recorded on the task.
     if (op === 'worktree') {
       const goal = task.goal ? TIERS.flatMap((x) => goals()[x]).find((g) => g.id === task.goal) : null;
       if (goal?.merge === 'open') throw new Error(`${goal.id} is an open goal: commit on main, no worktree`);
@@ -342,8 +342,8 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
       if (!hasBranch(task.repo, b)) throw new Error(`no branch ${b} in ${task.repo}`);
       if (b !== baseOf(task.repo)) task.base = b; else delete task.base;
     }
-    // The user's steps around the Merge button, { t, done } each: needs before merging (t766: stacked tasks, deploy
-    // order, syncs) and after merging (t1182: e.g. a one-time migration). A squiggle's own checks go on neither.
+    // The user's steps around the Merge button, { t, done } each: needs before merging (stacked tasks, deploy
+    // order, syncs) and after merging (e.g. a one-time migration). A squiggle's own checks go on neither.
     else if (op === 'needs' || op === 'after') {
       const list = task[op] || [], i = Number(n) - 1, what = op === 'needs' ? 'need' : 'after-merge step';
       if (act === 'add') {
@@ -377,7 +377,7 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
     saveTasks(t); flushTold(); return task;
   }
 
-  // A finished or dropped task takes its worktrees with it (t769): clean ones go, merged branches are deleted (-d). Dirty ones stay, and say so.
+  // A finished or dropped task takes its worktrees with it: clean ones go, merged branches are deleted (-d). Dirty ones stay, and say so.
   // After the move is saved and off the event loop: removing a big checkout takes seconds. Skipped if the task came back meanwhile.
   const retiring = new Set();
   function retire(task, dropped) {
@@ -402,7 +402,7 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
   }
   // Resolves when every pending retire is done (tests, clean shutdown).
   const retired = () => Promise.all([...retiring]);
-  // Every extra worktree in the goals' repos, with the task that owns it (t769). No live task = orphan.
+  // Every extra worktree in the goals' repos, with the task that owns it. No live task = orphan.
   async function worktrees() {
     let wtReal = WT; try { wtReal = fs.realpathSync(WT); } catch {}
     const t = tasks(), seen = new Set(), out = [], rc = {}, realOf = (r) => r ? (rc[r] ??= (() => { try { return fs.realpathSync(expand(r)); } catch { return ''; } })()) : '';
@@ -418,7 +418,7 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
     }
     return out;
   }
-  // The lead keeps one note listing orphan worktrees (t769): refreshed when the list changes, done when there are none.
+  // The lead keeps one note listing orphan worktrees: refreshed when the list changes, done when there are none.
   async function orphanNotes() {
     const list = (await worktrees()).filter((x) => x.orphan), t = tasks(), cur = t.find((x) => x.status !== 'done' && x.owner === 'lead' && String(x.title).startsWith('Orphan worktrees'));
     const note = list.map((w) => `${w.path} (${path.basename(w.repo)}${w.branch ? ` ${w.branch}` : ' detached'}${w.dirty ? `, ${w.dirty} uncommitted` : ''})`).join('; ');
@@ -456,7 +456,7 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
     } catch (e) { r.error = String(e.message || e).split('\n')[0]; }
     return r;
   }
-  // The goal's other repos carrying the same branch with commits to merge (t1197): one task, several repos.
+  // The goal's other repos carrying the same branch with commits to merge: one task, several repos.
   async function otherRepos(task, q) {
     const real = (p) => { try { return fs.realpathSync(expand(p)); } catch { return expand(p); } };
     const mine = real(task.repo), out = [];
@@ -534,7 +534,7 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
   // Concurrent callers share one listing; git runs off the event loop, 6 branches at a time.
   let listing = null;
   const merges = () => listing ||= (async () => { const q = memo(); await mergeSweep(q); return conflictSweep(await pool(inQueue(), 6, (t) => mergeInfo(t, q))); })().finally(() => { listing = null; });
-  // Auto send-back (t1189): a review branch that conflicts with its base goes back to doing with the files, and onConflict
+  // Auto send-back: a review branch that conflicts with its base goes back to doing with the files, and onConflict
   // tells the owner. Once per conflict: the same branch and base commits stay in review if resubmitted unchanged.
   async function conflictSweep(list) {
     if (!onConflict) return list;
@@ -551,7 +551,7 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
     }
     return list.filter((r) => !sent.includes(r.id));
   }
-  // Merging this task needs the user or the lead (t1384). No task: board.merge says so.
+  // Merging this task needs the user or the lead. No task: board.merge says so.
   const gated = (id) => { const t = tasks().find((x) => x.id === id); return !!t && needsUser(t); };
   function mergeTask(id) {
     const t = tasks().find((x) => x.id === id);
@@ -568,7 +568,7 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
   // worktree), merge there, but only after git merge-tree proves it conflict-free, so nothing is ever aborted over their
   // uncommitted work; git itself refuses if a dirty file would be overwritten. Otherwise merge in a temp worktree on the base.
   // Fast-forward when possible, a merge commit otherwise. A conflict is reported: send it back.
-  // by: who merged or sent back (t142), a human id from the page or a squiggle id from the CLI.
+  // by: who merged or sent back, a human id from the page or a squiggle id from the CLI.
   // One merge per task at a time: a second click joins the running one. While it only reads, a send back
   // (or move, drop) still wins and the merge stops; once git starts writing they're refused until it ends.
   const merging = new Map(), writing = new Set();
@@ -581,7 +581,7 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
   async function mergeNow(id, by) {
     const task = mergeTask(id), r = await mergeInfo(task, memo());
     mergeTask(id); writing.add(id); // sent back while git read? stop here; otherwise lock it
-    // Committed straight on the base (open goals, 'review main'): nothing to merge, it's already in (t1251).
+    // Committed straight on the base (open goals, 'review main'): nothing to merge, it's already in.
     if (r.base && r.branch === r.base && !r.others?.length) {
       const t = tasks(), x = t.find((k) => k.id === id);
       x.status = 'done'; x.finished = today(); x.finishedAt = Date.now(); x.confirmed = today(); if (by) x.mergedBy = by;
@@ -590,7 +590,7 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
     }
     if (r.error) throw new Error(r.error);
     if (r.conflicts?.length) throw new Error(`conflicts merging ${r.branch} into ${r.base}: ${r.conflicts.join(', ')}: send it back`);
-    // Every repo was checked above before any merges (t1197). If a later one still fails, the task stays in review and says which went in.
+    // Every repo was checked above before any merges. If a later one still fails, the task stays in review and says which went in.
     const sides = [{ ...r, worktrees: task.worktrees || [] }, ...(r.others || []).map((o) => ({ ...o, worktrees: task.worktrees || [] }))];
     const done = [], removed = [], kept = [];
     for (const side of sides) {
@@ -642,7 +642,7 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
     } finally { if (tmp) { try { await gitA(r.repo, ['worktree', 'remove', tmp]); } catch {} try { await gitA(r.repo, ['worktree', 'prune']); } catch {} } }
     return { sha, removed: w.removed, kept: w.kept };
   }
-  // The author hears what became of their suggestions at their next wake, once (t825).
+  // The author hears what became of their suggestions at their next wake, once.
   function suggestionNews(id) {
     const t = tasks(), mine = t.filter((x) => x.kind === 'suggestion' && x.by === id && x.untold); if (!mine.length) return [];
     for (const x of mine) delete x.untold; saveTasks(t);

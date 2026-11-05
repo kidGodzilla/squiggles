@@ -1,4 +1,4 @@
-// t3738: a pending watch runs by itself once approved, so its Approve card shows all of it: no cut command, folder, ignore, warnings.
+// a pending watch runs by itself once approved, so its Approve card shows all of it: no cut command, folder, ignore, warnings.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';

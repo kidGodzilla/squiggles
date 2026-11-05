@@ -1,7 +1,7 @@
-// Optional room passcode (t913): casual snoop protection, not Fort Knox. room.json `passcode` holds a salted scrypt hash
+// Optional room passcode: casual snoop protection, not Fort Knox. room.json `passcode` holds a salted scrypt hash
 // and the 'local skips' choice. Unlocking sets an HttpOnly SameSite=Strict cookie.
-// Read once at boot, then memory only (t1396): writing room.json can't add a session; a swapped hash counts only after a
-// restart, and gated merges check the caller's process tree first (t1423).
+// Read once at boot, then memory only: writing room.json can't add a session; a swapped hash counts only after a
+// restart, and gated merges check the caller's process tree first.
 // Sessions are never written, so unlocks end with a restart.
 // Local non-browser callers (the CLI, squiggles) always pass; a browser on this Mac passes only when local skips is on.
 import crypto from 'node:crypto';
@@ -69,7 +69,7 @@ export function makePasscode({ read, write, now = () => Date.now() }) {
     }
     fails.delete(c);
   }
-  // Gated merges (t1384): a live unlocked session cookie, from a browser that typed the passcode.
+  // Gated merges: a live unlocked session cookie, from a browser that typed the passcode.
   // Not ok(): local non-browser callers and local skips pass that. No passcode set means no sessions, so no.
   function session(req, what = 'merging gated work') {
     const p = cfg(); if (!p?.hash) throw err(`Set a room passcode first (Settings > Security): ${what} needs it`, 403);
@@ -100,7 +100,7 @@ export function makePasscode({ read, write, now = () => Date.now() }) {
       return { body: { ...status(req), ok: false }, cookie: cookie(req, '', 0) };
     }
     if (!ok(req)) throw err('locked', 401);
-    // Changing, clearing or loosening a set passcode needs the current one (t950), from anyone, CLI included.
+    // Changing, clearing or loosening a set passcode needs the current one, from anyone, CLI included.
     if (p.hash && ['set', 'clear', 'local'].includes(b.op)) check(req, p, b.old, 403);
     if (b.op === 'set') {
       const code = String(b.code ?? '');

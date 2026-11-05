@@ -2,7 +2,7 @@ import test from 'node:test'; import assert from 'node:assert/strict';
 import fs from 'node:fs'; import os from 'node:os'; import path from 'node:path';
 import { createBoard } from '../board.mjs';
 
-test('after-merge list beside needs; "After merge" refused on needs (t1182)', () => {
+test('after-merge list beside needs; "After merge" refused on needs', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'after-'));
   const b = createBoard(dir, () => {});
   const t = b.taskOp({ op: 'add', title: 'x' });

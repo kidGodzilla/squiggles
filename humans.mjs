@@ -1,4 +1,4 @@
-// The people who use the room (t138). humans.json: [{id, name, avatar}], the owner (id 'owner') first and never removed.
+// The people who use the room. humans.json: [{id, name, avatar}], the owner (id 'owner') first and never removed.
 // avatar: an emoji or a few letters, or an https:/data: image URL; empty shows the name's initial.
 import fs from 'node:fs';
 import path from 'node:path';

@@ -1,4 +1,4 @@
-// Text for `agents.mjs calendar` (t785). Every invite field is sender-written (t925): controls in one-line fields become spaces,
+// Text for `agents.mjs calendar`. Every invite field is sender-written: controls in one-line fields become spaces,
 // and location/notes (only with --notes) sit inside a fence where every line starts with `| `, split on any line break.
 const BREAK = /\r\n|[\r\n\u2028\u2029\u0085]/, CTRL = /[\p{Cc}\u2028\u2029\u0085]/gu;
 export const oneLine = (s) => String(s ?? '').replace(CTRL, ' ');

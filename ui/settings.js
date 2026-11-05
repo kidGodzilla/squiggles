@@ -1,6 +1,6 @@
-// Settings view (t836). CLI: room view settings. Characters: try a pack on everyone at tile and mini size, then use it for the room or one squiggle.
+// Settings view. CLI: room view settings. Characters: try a pack on everyone at tile and mini size, then use it for the room or one squiggle.
 const SET = { gen: '', talk: 0 };
-// Settings tabs (t917): one card group per tab; ?view=settings&tab=<x>, CLI room view settings <tab>.
+// Settings tabs: one card group per tab; ?view=settings&tab=<x>, CLI room view settings <tab>.
 function paintSetTab() {
   if (!SET_TABS.includes(B.stab) || (B.shareOff && B.stab === 'sharing')) B.stab = 'room';
   document.querySelectorAll('.settabs [data-stab]').forEach((b) => { const on = b.dataset.stab === B.stab; b.setAttribute('aria-selected', on); b.tabIndex = on ? 0 : -1; });
@@ -28,7 +28,7 @@ function renderSettings() {
   }).join('');
   setTalk(); renderSetSqs(); renderDefaults(); renderSlots(); renderPass();
 }
-// Squiggles card (t897): model, effort, cadence, paused and pack per squiggle; each change posts to /update, like the CLI's set and look.
+// Squiggles card: model, effort, cadence, paused and pack per squiggle; each change posts to /update, like the CLI's set and look.
 // Option lists shared by the Squiggles and Team defaults cards. A value outside the list (set from the CLI) is kept and shown.
 const withCur = (l, cur) => (cur != null && cur !== '' && !l.includes(cur) ? [...l, cur] : l), opt = (v, cur, label) => `<option value="${esc(v)}"${String(cur ?? '') === String(v) ? ' selected' : ''}>${esc(label)}</option>`;
 const cap = (m) => ({ xhigh: 'Extra high' })[m] || m[0].toUpperCase() + m.slice(1);
@@ -37,7 +37,7 @@ const every = (m) => (!m ? 'Only when asked' : m % 1440 === 0 ? (m === 1440 ? 'D
 const modelOpts = (cur, pi) => withCur(['', 'opus', 'sonnet', 'gpt-6.1-sol', ...(pi ? [...(S.piModels || []), ...(S.cursorModels || [])] : [])], cur).map((m) => opt(m, cur, m ? modelName(m) : 'Default (Opus 5.5)')).join('');
 const effortOpts = (cur, lead) => withCur(['', 'low', 'medium', 'high', 'xhigh', 'max'], cur).map((m) => opt(m, cur, m ? cap(m) : lead ? 'Default' : 'Medium (default)')).join('');
 const everyOpts = (cur) => withCur([0, 15, 30, 60, 180, 360, 720, 1440], cur || 0).sort((x, y) => x - y).map((m) => opt(m, cur || 0, every(m))).join('');
-// Passcode card (t913). CLI: room passcode.
+// Passcode card. CLI: room passcode.
 async function renderPass() {
   const r = await api('/passcode'); if (!r || r.error) return;
   Object.assign(PASS, r);
@@ -45,7 +45,7 @@ async function renderPass() {
   $('#passSet').textContent = r.set ? 'Change' : 'Set'; $('#passClear').hidden = !r.set;
   $('#passLocal').checked = !!r.localSkips; $('#passLocal').disabled = !r.set;
 }
-// Changing, clearing or loosening a set passcode asks for the current one (t950).
+// Changing, clearing or loosening a set passcode asks for the current one.
 const passOp = async (b, done, title) => {
   if (PASS.set) { b.old = await askCode(title, '', 'Save', 'Current passcode'); if (b.old == null) return renderPass(); }
   const r = await api('/passcode', b); if (!r || r.error) { toast(r?.error || 'Not saved'); return renderPass(); } toast(done); renderPass();
@@ -54,7 +54,7 @@ $('#passSet').onclick = () => { const code = $('#passNew').value; $('#passNew').
 $('#passNew').onkeydown = (e) => { if (e.key === 'Enter') $('#passSet').click(); };
 $('#passClear').onclick = () => passOp({ op: 'clear' }, 'Passcode off', 'Turn the passcode off');
 $('#passLocal').onchange = (e) => passOp({ op: 'local', on: e.target.checked }, e.target.checked ? "This Mac's browser skips the passcode" : "This Mac's browser asks too", "This Mac's browser and the passcode");
-// Team defaults card (t898): what a new squiggle starts with. CLI: defaults.
+// Team defaults card: what a new squiggle starts with. CLI: defaults.
 async function renderDefaults() {
   const d = await api('/defaults'); if (!d || d.error) return;
   $('#defModel').innerHTML = modelOpts(d.model); $('#defEffort').innerHTML = effortOpts(d.effort); $('#defEvery').innerHTML = everyOpts(d.every);

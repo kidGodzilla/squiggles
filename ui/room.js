@@ -4,10 +4,10 @@ const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
 const base = (f) => String(f || '').split('/').pop();
-// The URL the page opened with: views restore from it after the room has loaded (t348).
+// The URL the page opened with: views restore from it after the room has loaded.
 const URL0 = location.search;
 const fmtDur = (ms) => (ms < 1000 ? `${Math.round(ms)}ms` : ms < 60000 ? `${(ms / 1000).toFixed(1)}s` : `${Math.floor(ms / 60000)}m${Math.round((ms % 60000) / 1000)}s`);
-// Room passcode (t913): PASS mirrors /api/passcode. A 401 after unlocking means the session ended elsewhere: reload to the lock screen.
+// Room passcode: PASS mirrors /api/passcode. A 401 after unlocking means the session ended elsewhere: reload to the lock screen.
 const PASS = { set: false, ok: true };
 const api = async (p, body) => (p === '/passcode' || await GATE, fetch('/api' + p, body === undefined ? {} : { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then(async (r) => { const j = await r.json(); if (r.status === 401 && PASS.set && PASS.ok && !j?.unlock) location.reload(); return j; })); // unlock: unlocked() prompts for the code
 // Every api() call waits here until the passcode gate opens (at once when there is none).
@@ -80,7 +80,7 @@ const plain = (t) => String(t || '').replace(/```[\s\S]*?```/g, ' ').replace(/`(
 const firstSentences = (t, n = 1, max = 200) => { const s = plain(t).match(/[^.!?]+[.!?]*/g) || []; let out = s.slice(0, n).join(' ').trim(); return out.length > max ? out.slice(0, max).replace(/\s\S*$/, '') + '…' : out; };
 const estMs = (t) => Math.min(9000, 900 + t.length * 45);
 
-// cap: the bottom caption is only for words meant for the user (t976); idle chatter and squiggle-to-squiggle talk stay on the tile.
+// cap: the bottom caption is only for words meant for the user; idle chatter and squiggle-to-squiggle talk stay on the tile.
 function say(id, text, { label = '', priority = false, cap = false } = {}) {
   if (!text || !S.sq[id]) return;
   if (S.office && !S.officeIds.includes(id)) return;
@@ -137,7 +137,7 @@ function stopTalk(id) {
   if (S.present === id) $('#pcap').textContent = '';
   if ($('#speakcap').dataset.id === id) capLinger();
 }
-// The speaker is always visible (t670): in the Room their tile scrolls into view, unless the user is scrolling the
+// The speaker is always visible: in the Room their tile scrolls into view, unless the user is scrolling the
 // stage; anywhere their tile isn't on screen, a caption with their face, name and words.
 let stageTouched = 0;
 for (const ev of ['wheel', 'touchmove', 'keydown']) $('#stage').addEventListener(ev, () => (stageTouched = Date.now()), { passive: true });
@@ -154,12 +154,12 @@ function showSpeaker(id, t, text, forUser) {
     if (!(cap.classList.contains('on') && cap.dataset.id === id)) capT0 = Date.now();
     clearTimeout(capT); capT = 0;
     cap.dataset.id = id; cap.classList.add('on');
-    // Never over the field being typed in (t931): if the caption would cover it, it moves to the top.
+    // Never over the field being typed in: if the caption would cover it, it moves to the top.
     const f = document.activeElement, fr = f?.matches?.('textarea,input,[contenteditable]') && f.getBoundingClientRect();
     cap.classList.remove('top'); if (fr) { const cr = cap.getBoundingClientRect(); if (fr.bottom > cr.top && fr.top < cr.bottom) cap.classList.add('top'); } cap.onclick = (e) => { capHide(); if (!e.target.closest('.capx')) S.office ? openChat(id) : oneOnOne(id); };
   }
 }
-// After the words end the caption lingers as long again (4 to 12 s) so there's time to click it (t926);
+// After the words end the caption lingers as long again (4 to 12 s) so there's time to click it;
 // hovering or touching it holds it, leaving gives 4 s more.
 let capT = 0, capT0 = 0, capHeld = false;
 function capHide() { clearTimeout(capT); capT = 0; const c = $('#speakcap'); c.classList.remove('on'); c.dataset.id = ''; }
@@ -272,7 +272,7 @@ function attachOut(id, ev) {
   const buf = S.term[id] || [];
   for (let i = buf.length - 1; i >= 0; i--) if (buf[i].ev.tid === ev.tid) { Object.assign(buf[i], { out: ev.text, err: ev.err, imgs: ev.imgs || [], end: ev.ts }); if (ev.imgs?.length) seen(id, { view: 'image', title: buf[i].ev.file ? base(buf[i].ev.file) : buf[i].ev.name, imgs: ev.imgs.slice(0, 3) }, ev.ts); return buf[i]; }
 }
-// Visuals outrank bash (t764): the last screenshot or page a squiggle made stays on screen for VIS_FRESH, held VIS_HOLD.
+// Visuals outrank bash: the last screenshot or page a squiggle made stays on screen for VIS_FRESH, held VIS_HOLD.
 const VIS_FRESH = 90000, VIS_HOLD = 20000;
 function seen(id, m, ts) { S.vis[id] = { ...m, at: ts || Date.now() }; }
 function setTicker(id, e) {
@@ -308,9 +308,9 @@ const lineHtml = (l, view) => view === 'editor'
   ? `<div class="ln ${l.c}"><b>${esc(l.n != null ? l.n : l.c === 'add' ? '+' : l.c === 'del' ? '−' : '')}</b>${esc(l.t) || ' '}</div>`
   : `<div class="tl ${l.c}">${l.c === 'cmd' ? '<span class="ps">❯</span> ' : l.c === 'run' ? '<span class="spin"></span>' : ''}${esc(l.t)}</div>`;
 let presentTimer = null;
-// Shared screen (t664): what a squiggle put up in its 1:1 with `screen`. Stays until closed or replaced.
+// Shared screen: what a squiggle put up in its 1:1 with `screen`. Stays until closed or replaced.
 const pinOne = () => !document.body.classList.contains('v-meet') && S.officeIds.length === 1 ? S.officeIds[0] : '';
-// A unified diff as files → hunks → lines with old and new line numbers (t665).
+// A unified diff as files → hunks → lines with old and new line numbers.
 function parseDiff(rows) {
   const files = []; let f = null, h = null, o = 0, n = 0;
   for (const t of rows) {
@@ -363,7 +363,7 @@ function renderPresent() {
   if (m.view === 'diff') pb.innerHTML = m.html;
   else if (m.view === 'page') { if (pb.firstChild?.dataset?.u !== m.url) pb.innerHTML = `<iframe data-u="${esc(m.url)}" src="${esc(m.url)}" sandbox="allow-scripts allow-same-origin allow-forms allow-popups" referrerpolicy="no-referrer"></iframe>`; }
   else if (m.view === 'image') pb.innerHTML = m.imgs.map((u) => `<img src="${esc(u)}" alt="">`).join('');
-  else if (m.view === 'video') { if (pb.firstChild?.dataset?.u !== m.url) pb.innerHTML = `<video data-u="${esc(m.url)}" src="${esc(m.url)}" controls autoplay muted loop playsinline></video>`; } // t1503: fills the share area
+  else if (m.view === 'video') { if (pb.firstChild?.dataset?.u !== m.url) pb.innerHTML = `<video data-u="${esc(m.url)}" src="${esc(m.url)}" controls autoplay muted loop playsinline></video>`; } // fills the share area
   else pb.innerHTML = (m.view === 'editor' ? `<div class="ptab"><span>${esc(m.tab.file)}</span><em>${esc(m.tab.path)}</em></div>` : '') + m.lines.map((l) => lineHtml(l, m.view)).join('') + (m.view === 'term' ? '<div class="tl"><span class="ps">❯</span> <span class="cursor"></span></div>' : '');
   pb.scrollTop = m.view === 'term' ? pb.scrollHeight : 0; $('#pstat').textContent = m.stat;
   const TODO_S = ['pending', 'in_progress', 'completed']; // the agent writes status: never raw into class
@@ -385,7 +385,7 @@ function armPresent() {
   if (presenter() === S.present) return; // a presenter's screen stays up for their turn
   presentTimer = setTimeout(() => { const last = (S.term[S.present] || []).slice(-1)[0]; if (last && last.end == null) armPresent(); else hidePresent(); }, $('#present').classList.contains('pic') ? VIS_HOLD : 4500);
 }
-// The sharer's camera works like their tile (t346): their 1:1, or their chat inside an office.
+// The sharer's camera works like their tile: their 1:1, or their chat inside an office.
 $('#pcam').onclick = () => { const id = $('#pcam').dataset.id; if (!S.sq[id]) return; if (S.office) openChat(id); else oneOnOne(id); };
 $('#pcam').onkeydown = (e) => { if (e.key === 'Enter') $('#pcam').click(); };
 function hidePresent() { clearTimeout(presentTimer); $('#present')._pin = null; if (!S.present) return; S.present = null; $('#present').classList.remove('on', 'pinned'); $('#pcap').textContent = ''; layout(); sharing(); }
@@ -451,7 +451,7 @@ const chatLine = (id, ev) => {
   if (ev.k === 'end' && !s?.lead && ev.status !== 'idle' && ev.note) return { cls: 'm sys', text: `${(ev.status === 'done' && ev.proactive?.length ? 'Proactive' : STATUS_WORD[ev.status]) || ev.status}: ${ev.note}` };
   return null;
 };
-// The lead answers most team reports with just "Handled." (t801): the reply and the report it answers fold into
+// The lead answers most team reports with just "Handled.": the reply and the report it answers fold into
 // one quiet line, "7 reports handled", that opens to list them. The transcript keeps everything.
 const HANDLED = /^handled[.!]?$/i;
 function foldHandled(id, ts) {
@@ -537,7 +537,7 @@ function pinChat(box) {
 function setAct(id, text) { const el = document.querySelector(`#cw-${id} .act`); if (el) el.textContent = text || ''; }
 let zTop = 20;
 function front(cw) { document.querySelectorAll('.cw.front').forEach((x) => x.classList.remove('front')); cw.classList.add('front'); cw.style.zIndex = ++zTop; setTimeout(syncUrl); }
-// The frontmost floating chat on this page goes in the URL (?chat=<id>, t349). Not the lead's: it opens on every join anyway.
+// The frontmost floating chat on this page goes in the URL (?chat=<id>). Not the lead's: it opens on every join anyway.
 function chatParam(v) {
   const page = v === 'lead' || v === 'one' ? 'room' : v;
   const open = [...document.querySelectorAll('#chats .cw:not(.office):not(.lead)')].filter((cw) => cw.dataset.pages.split(' ').includes(page));
@@ -549,7 +549,7 @@ function saveWin(cw) {
   if (!cw.offsetWidth || !cw.offsetHeight || (S.office && S.officeIds.includes(cw.dataset.id))) return;
   const all = winPos(), prev = all[cw.dataset.id] || {}, min = cw.classList.contains('min');
   all[cw.dataset.id] = { x: cw.offsetLeft, y: cw.offsetTop, w: cw.offsetWidth, h: min ? prev.h || 520 : cw.offsetHeight }; try { localStorage.agentsWins = JSON.stringify(all); } catch {} }
-// A chat with a draft waiting (t627): the 1:1 (or the floating chat), the text in the box, not sent. An unsent draft already there wins.
+// A chat with a draft waiting: the 1:1 (or the floating chat), the text in the box, not sent. An unsent draft already there wins.
 function discuss(id, text, office = true) {
   if (!S.sq[id]) return;
   if (office) oneOnOne(id); else openChat(id);
@@ -578,18 +578,18 @@ function openChat(id) {
   cw.querySelector('textarea').focus();
   return cw;
 }
-// Phone keyboard (t152): the layout viewport doesn't shrink on iOS, so the bottom sheet rides on the visual viewport.
+// Phone keyboard: the layout viewport doesn't shrink on iOS, so the bottom sheet rides on the visual viewport.
 if (window.visualViewport) {
   const vv = visualViewport, kb = () => { const r = document.documentElement.style; r.setProperty('--kb', Math.max(0, innerHeight - vv.height - vv.offsetTop) + 'px'); r.setProperty('--vvh', vv.height + 'px'); r.setProperty('--vvt', vv.offsetTop + 'px'); };
   vv.addEventListener('resize', kb); vv.addEventListener('scroll', kb); kb();
 }
-// The header wraps on phone; the office rows sit under it (t153). Banners under the header (limit, meeting on) push fixed panels down too (t605).
+// The header wraps on phone; the office rows sit under it. Banners under the header (limit, meeting on) push fixed panels down too.
 { const bh = () => document.documentElement.style.setProperty('--bh', $('#limit').offsetHeight + $('#meetOn').offsetHeight + 'px'), ro = new ResizeObserver(bh); ro.observe($('#limit')); ro.observe($('#meetOn')); }
 new ResizeObserver(() => document.documentElement.style.setProperty('--hh', $('header').offsetHeight + 'px')).observe($('header'));
 function clearUnread(id) { if (S.unread[id]) { S.unread[id] = 0; paintTile(id); } }
 const PHONE = matchMedia('(max-width: 760px)');
 PHONE.addEventListener('change', () => renderSummary());
-// @mentions (t677): typing @ in a chat offers squiggles and people; a known @name is a chip in the input and in messages.
+// @mentions: typing @ in a chat offers squiggles and people; a known @name is a chip in the input and in messages.
 const mentionables = () => [
   ...S.order.map((id) => ({ key: /^[\w-]+$/.test(S.sq[id].name) ? S.sq[id].name : id, id, name: S.sq[id].name, role: S.sq[id].lead ? 'Lead' : S.sq[id].role, face: () => avatarSVG(P(id), undefined, 'mn_' + id) })),
   ...(typeof B !== 'undefined' ? B.humans : []).map((h) => ({ key: /^[\w-]+$/.test(h.name) ? h.name : h.id, id: h.id, name: h.name, role: 'Person', human: true, face: () => humanFace(h) })),
@@ -602,7 +602,7 @@ function mentionMirror(ta) {
   if (ta._mirror) return ta._mirror;
   const wrap = document.createElement('span'), mir = document.createElement('div');
   wrap.className = 'mwrap'; mir.className = 'mmirror'; mir.setAttribute('aria-hidden', 'true');
-  // Moving the textarea blurs it, and this runs on its first focus (t1206).
+  // Moving the textarea blurs it, and this runs on its first focus.
   const had = document.activeElement === ta;
   ta.parentNode.insertBefore(wrap, ta); wrap.append(mir, ta);
   ta.addEventListener('scroll', () => (mir.scrollTop = ta.scrollTop));
@@ -644,7 +644,7 @@ document.addEventListener('keydown', (e) => {
   else return;
   e.preventDefault(); e.stopPropagation();
 }, true);
-// Images in chat (t169): paste, drop or pick; shown as a tray above the input until sent. Big photos are scaled to
+// Images in chat: paste, drop or pick; shown as a tray above the input until sent. Big photos are scaled to
 // 2000 px JPEG in the browser so phone shots stay well under the model's 5 MB image limit.
 function wireAttach(form, ta, zone) {
   form._imgs = [];
@@ -717,12 +717,12 @@ function wireChat(cw, id) {
     if (a === 'back') return setView('room');
     if (a === 'close') { saveWin(cw); cw.remove(); syncUrl(); }
     else if (a === 'min') cw.classList.toggle('min');
-    else if ((head.downOn || e.target).closest('.tile.mini, .who b') && !cw.dragged && !cw.classList.contains('office')) oneOnOne(id); // t821
+    else if ((head.downOn || e.target).closest('.tile.mini, .who b') && !cw.dragged && !cw.classList.contains('office')) oneOnOne(id);
     else if (cw.classList.contains('min') && !cw.dragged) { cw.classList.remove('min'); clearUnread(id); }
   });
   head.addEventListener('pointerdown', (e) => {
     if (e.target.closest('button') || PHONE.matches) return;
-    // Pointer capture retargets the click to the header, so remember what was pressed (t821).
+    // Pointer capture retargets the click to the header, so remember what was pressed.
     head.downOn = e.target; const sx = e.clientX, sy = e.clientY, ox = cw.offsetLeft, oy = cw.offsetTop; cw.dragged = false; head.setPointerCapture(e.pointerId);
     const move = (m) => { const dx = m.clientX - sx, dy = m.clientY - sy; if (Math.abs(dx) + Math.abs(dy) > 3) { cw.dragged = true; cw.classList.add('dragging'); }
       cw.style.left = Math.max(0, Math.min(innerWidth - 120, ox + dx)) + 'px'; cw.style.top = Math.max(52, Math.min(innerHeight - 50, oy + dy)) + 'px'; };
@@ -773,7 +773,7 @@ function apply(id, ev, live) {
       // A presenter is heard in full (their 60-second summary); everyone else by their first sentence or two.
       if (live && !HANDLED.test(ev.text.replace(/^\s*(DONE|IDLE):.*$/gim, '').trim())) say(id, presenter() === id ? firstSentences(ev.text, 40, 1400) : firstSentences(ev.text, s.lead ? 2 : 1, s.lead ? 260 : 180), { priority: s.lead || presenter() === id, cap: S.forUser[id] || presenter() === id || /^\s*(BLOCKED|RETHINK):/m.test(ev.text) }); break;
     case 'screen':
-      if (ev.kind === 'off' || ev.gone) delete S.pin[id]; else S.pin[id] = ev;   // gone: content not kept past a restart (t854)
+      if (ev.kind === 'off' || ev.gone) delete S.pin[id]; else S.pin[id] = ev;   // gone: content not kept past a restart
       if (!ev.gone && (ev.kind === 'image' || ev.kind === 'url' || ev.kind === 'video')) seen(id, ev.kind === 'image' ? { view: 'image', title: ev.title, imgs: [ev.url] } : { view: ev.kind === 'url' ? 'page' : 'video', title: ev.title, url: ev.url }, ev.ts);
       if (pinOne() === id) syncPin(); else if (live && S.vis[id]) showPresent(id); break;
     case 'state':
@@ -805,7 +805,7 @@ async function refreshMeta(id) {
   const relook = ['look', 'lookSeed'].some((k) => (S.sq[id][k] ?? '') !== (fresh[k] ?? ''));
   Object.assign(S.sq[id], fresh); const t = tileOf(id); if (relook) reskin(id);
   if (t) { t.querySelector('.tag b').textContent = fresh.name; t.querySelector('.tag span').textContent = fresh.role; }
-  if (B.view === 'settings' && !document.activeElement?.closest('#setSqs')) renderSettings(); // CLI set/look shows live (t897)
+  if (B.view === 'settings' && !document.activeElement?.closest('#setSqs')) renderSettings(); // CLI set/look shows live
   const cw = document.getElementById('cw-' + id); if (cw) cw.querySelector('.chead b').textContent = fresh.name;
   paintTile(id);
 }
@@ -815,7 +815,7 @@ async function roomCommand(ev) {
   const v = String(ev.value ?? '').toLowerCase();
   switch (ev.action) {
     case 'slots': if (B.view === 'settings' && !document.activeElement?.closest('#setSlots')) renderSlots(); return;
-    case 'defaults': if (B.view === 'settings' && !document.activeElement?.closest('#setDefaults')) renderDefaults(); return; // t898
+    case 'defaults': if (B.view === 'settings' && !document.activeElement?.closest('#setDefaults')) renderDefaults(); return;
     case 'radio': prefs.music = v !== 'off'; if (prefs.music && STATIONS.some(([s]) => s === v)) prefs.station = v; paintSound(); break;
     case 'volume': prefs.musicVol = Math.max(0, Math.min(1, +v || 0)); paintSound(); break;
     case 'voices': prefs.voice = v !== 'off'; paintSound(); break;
@@ -824,7 +824,7 @@ async function roomCommand(ev) {
     case 'chatter': if (['quiet', 'normal', 'lively'].includes(v)) { prefs.chatter = v; paintSound(); } break;
     case 'theme': if (['flat', 'clean'].includes(v)) { prefs.theme = v; savePrefs(); applyTheme(); paintSound(); } break;
     case 'view': if (v === 'review') v = 'merge'; if (v === 'settings' && ev.id) B.stab = setTab(String(ev.id).toLowerCase()); if (v === 'calendar' && ev.id) setCalMode(String(ev.id).toLowerCase()); if (['room', 'lead', 'meeting', 'team', 'calendar', 'goals', 'tasks', 'merge', 'files', 'settings'].includes(v)) { setView(v); if (v === 'files' && ev.id) previewByName(ev.id); } else if (v === 'blocked' || v === 'rethink') openStuck(v); else if (v === '1on1' && S.sq[ev.id]) oneOnOne(ev.id); else if (v === 'keys') window.openKeys?.(); else if (v === 'jump') window.openJump?.(); break;
-    case 'fold': case 'unfold': foldGoals(v, ev.action === 'fold'); break; // t1217
+    case 'fold': case 'unfold': foldGoals(v, ev.action === 'fold'); break;
     case 'chat': if (S.sq[ev.value]) { if (S.office && !S.officeIds.includes(ev.value)) setView('room'); discuss(ev.value, ev.text, false); } break;
     case 'lock': lock(); break;
     case 'reload': reloadAsk(); break;
@@ -846,7 +846,7 @@ async function roomCommand(ev) {
   }
   savePrefs(); AUD.apply();
 }
-// Session limit banner, display only (t1284): nothing is paused, and it stays until the server says a Claude turn went through.
+// Session limit banner, display only: nothing is paused, and it stays until the server says a Claude turn went through.
 function showLimit(until) {
   $('#limit').classList.toggle('on', !!until);
   if (until) $('#limit').textContent = `Session limit hit, stated reset ${when(until)}. Wakes carry on.`;
@@ -855,7 +855,7 @@ async function load() {
   api('/limit').then((l) => showLimit(l.until || 0));
   const room = await api('/room').catch(() => ({})); rxPower(room.reactions !== 'off'); S.rx = (await api('/react').catch(() => null))?.items || {}; roomGen(room.characters || 'cast'); S.roots = room.fileRoots || {}; S.realRoots = room.fileReal || {}; S.home = room.home || ''; S.piModels = room.piModels || []; S.cursorModels = room.cursorModels || [];
   const list = await api('/squiggles').catch(() => null);
-  // A failed read must not empty the room (t671): keep what's on screen and try again.
+  // A failed read must not empty the room: keep what's on screen and try again.
   if (!Array.isArray(list)) { setTimeout(load, 2000); return; }
   S.sq = {}; for (const s of list) S.sq[s.id] = s;
   S.hist = {}; S.term = {}; S.todos = {};
@@ -1022,7 +1022,7 @@ function openNew() {
     $('#newSq').classList.remove('on'); await load(); AUD.join(); toast(`${r.name} joined the room`);
   };
   $('#newSq').classList.add('on'); $('#nName').focus();
-  api('/defaults').then((d) => { if (d && !d.error) $('#nEvery').value = d.every; }); // team default cadence (t898)
+  api('/defaults').then((d) => { if (d && !d.error) $('#nEvery').value = d.every; }); // team default cadence
 }
 for (const o of ['#sheet', '#newSq']) $(o).addEventListener('click', (e) => { if (e.target === $(o)) $(o).classList.remove('on'); });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { $('#sheet').classList.remove('on'); $('#newSq').classList.remove('on'); $('#inboxBox').classList.remove('on'); } });
@@ -1031,7 +1031,7 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { $('#shee
 //  composer, mic, header controls, joining
 // =====================================================================
 const leadId = () => S.order.find((id) => S.sq[id].lead);
-// Sound controls live in the Menu and in Settings; every copy carries data-snd and repaints from prefs (t914).
+// Sound controls live in the Menu and in Settings; every copy carries data-snd and repaints from prefs.
 const snd = (k, f) => document.querySelectorAll(`[data-snd="${k}"]`).forEach(f);
 const paintSound = () => {
   snd('station', (e) => { e.value = prefs.music ? prefs.station : 'off'; }); snd('musicVol', (e) => { e.value = prefs.musicVol; });
@@ -1045,7 +1045,7 @@ snd('chatter', (e) => { e.onchange = sndSet((t) => { prefs.chatter = t.value; })
 snd('theme', (e) => { e.onchange = sndSet((t) => { prefs.theme = t.value; applyTheme(); }); });
 paintSound();
 // Share on tailnet (tailscale serve): the toggle and its link in More. CLI: share on|off|status.
-// Only Copy link shows (t837); the URL rides on the button.
+// Only Copy link shows; the URL rides on the button.
 // Tailnet sharing off in config: the Sharing tab (Sharing and Peers cards) is hidden.
 // Cloudflare (tunnel.mjs) gets its own row; each row hides when config.json doesn't offer it.
 function paintShare(st) { paintCf(st?.cloudflare); $('#shareTs').hidden = $('#shareTsHint').hidden = !!st?.tailnetOff; B.shareOff = !!st?.off; $('.settabs [data-stab="sharing"]').hidden = B.shareOff; if (B.shareOff && B.stab === 'sharing' && typeof paintSetTab === 'function') paintSetTab(); if (typeof loadPeers === 'function' && !B.shareOff && !!st?.on !== $('#shareOn').checked) loadPeers(); $('#shareOn').checked = !!st?.on; $('#shareCopy').hidden = !st?.on; $('#shareCopy').dataset.url = st?.url || ''; }
@@ -1055,7 +1055,7 @@ function paintCf(cf) {
   $('#shareCfSt').textContent = cf.starting ? 'Starting…' : cf.error || '';
 }
 async function loadShare() { const r = await fetch('/api/share').then((x) => x.json()).catch(() => null); if (r && !r.error) paintShare(r); }
-// Copy the tailnet link (t149). The clipboard API needs a secure page (localhost or https); otherwise copy through a selection.
+// Copy the tailnet link. The clipboard API needs a secure page (localhost or https); otherwise copy through a selection.
 $('#shareCopy').onclick = $('#shareCfCopy').onclick = async (e) => {
   const b = e.currentTarget, url = b.dataset.url;
   try { await navigator.clipboard.writeText(url); } catch { const t = document.createElement('textarea'); t.value = url; document.body.append(t); t.select(); document.execCommand('copy'); t.remove(); }
@@ -1077,7 +1077,7 @@ $('#shareCfOn').onchange = async (e) => {
 };
 $('#newBtn').onclick = () => { closeMore(); openNew(); };
 // More: secondary header controls behind a chevron so the tabs never overflow.
-// Inbox (t135): parity with the CLI inbox. Text files in the data folder's inbox go to the lead when it's idle, then move to read/.
+// Inbox: parity with the CLI inbox. Text files in the data folder's inbox go to the lead when it's idle, then move to read/.
 async function openInbox() {
   const r = await api('/inbox'); if (!r?.unread) return toast(r?.error || 'Inbox unavailable');
   const when = (f) => new Date(f.mtime).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
@@ -1109,7 +1109,7 @@ function setOffice(who) {
     S.queue = S.queue.filter((q) => ids.includes(q.id));
     for (const id of [...S.speakers]) if (!ids.includes(id)) { stopTalk(id); S.src?.stop?.(); }
     hidePresent();
-    // A meeting has one shared thread (t604), not a chat per attendee.
+    // A meeting has one shared thread, not a chat per attendee.
     for (const id of ids) { tileOf(id)?.classList.add('office'); if (!document.body.classList.contains('v-meet')) openChat(id)?.classList.add('office'); }
     $('#officeBack').textContent = `Back to the Room`;
   }
@@ -1123,14 +1123,14 @@ function meetingNow(m, live) {
   if (m && live) { AUD.ding(); toast(`Meeting now: ${m.title}`); notify(`Meeting now: ${m.title}`, meetWho(m), 'meeting'); setView('meeting'); }
   else if (!m) { if (live) toast('Meeting ended'); if (B.view === 'meeting') setView('room'); }
 }
-// A meeting on now, seen from anywhere but the meeting view: a bar with Join (t222).
+// A meeting on now, seen from anywhere but the meeting view: a bar with Join.
 function paintMeetOn() {
   const m = S.meeting, on = !!m && B.view !== 'meeting';
   $('#meetOn').classList.toggle('on', on); if (on) $('#meetOnT').textContent = `${m.title} is on now`;
 }
 $('#meetOnJoin').onclick = () => setView('meeting');
-// Browser notifications (t148): about 5 minutes before and at the start, when the page is in the background. Clicking brings the room forward.
-// Permission is asked on Join (a click). The Mac alerts (t147) cover the page being closed.
+// Browser notifications: about 5 minutes before and at the start, when the page is in the background. Clicking brings the room forward.
+// Permission is asked on Join (a click). The Mac alerts cover the page being closed.
 const meetWho = (m) => `${m.start.slice(11)} to ${m.end.slice(11)} with ${m.attendees.map((id) => S.sq[id]?.name || id).join(', ')}`;
 function notify(title, body, view) {
   if (!('Notification' in window) || Notification.permission !== 'granted' || !document.hidden) return null;
@@ -1145,7 +1145,7 @@ function meetingSoon(m) {
 async function loadMeeting() {
   const r = await fetch('/api/meetings?days=1').then((x) => x.json()).catch(() => ({}));
   let was = ''; try { was = localStorage.agentsView; } catch {}
-  // ?view=meeting: the Mac's Join alert (t147) opens the room straight on the meeting.
+  // ?view=meeting: the Mac's Join alert opens the room straight on the meeting.
   const want = new URLSearchParams(URL0).get('view');
   meetingNow(r.current, false); if (r.current && (was === 'meeting' || want === 'meeting')) setView('meeting', '', 'replace');
 }
@@ -1174,7 +1174,7 @@ $('#meetEnd').onclick = async () => {
   if (r.error) toast(r.error);
 };
 $('#meetBack').onclick = () => setView('room');
-// Meeting view (t604): one shared thread under the meeting bar: every attendee's messages and the user's, in time order, one presenter at a time.
+// Meeting view: one shared thread under the meeting bar: every attendee's messages and the user's, in time order, one presenter at a time.
 function layoutMeet() {
   if (!document.body.classList.contains('v-meet')) return;
   document.documentElement.style.setProperty('--mtt', $('#meetBar').getBoundingClientRect().bottom + 12 + 'px');
@@ -1242,12 +1242,12 @@ function lock(why = '') {
   renderJoinCast(); $('#join').classList.add('on'); document.body.classList.add('locked');
 }
 $('#lockBtn').onclick = () => lock();
-// Quit (t1154) asks first, and with turns running offers to wait for them.
+// Quit asks first, and with turns running offers to wait for them.
 $('#quitBtn').onclick = () => {
   const n = S.order.filter((id) => S.sq[id].status === 'working').length, a = $('#quitAsk');
   a.innerHTML = n ? `<p>${n} working. Quit when they finish, or stop them now?</p><button class="chip primary" data-q="wait">Quit when they finish</button><button class="chip" data-q="now">Quit now</button><button class="chip" data-q="no">Cancel</button>`
     : '<p>Stop every squiggle and the server? Open Squiggles to start again.</p><button class="chip" data-q="now">Quit</button><button class="chip" data-q="no">Cancel</button>';
-  a.hidden = false; a.querySelector('.primary')?.focus(); // the safe choice is the default (t1154)
+  a.hidden = false; a.querySelector('.primary')?.focus(); // the safe choice is the default
 };
 // A due restart counts down 10s here. Not yet lets the team work on; this page asks again after 2 idle minutes.
 let restartLater = false;
@@ -1305,7 +1305,7 @@ $('#joinBtn').onclick = () => {
   if (rejoin) { S.spokeAt = performance.now(); AUD.apply(); return focusOffice(true); }
   if (!PASS.set) askPasscode();
   const lead = leadId(), chat = new URLSearchParams(URL0).get('chat');
-  // On phone the lead's chat would cover the room; its unread count sits on the Lead tab instead (t352).
+  // On phone the lead's chat would cover the room; its unread count sits on the Lead tab instead.
   if (lead) { if (!PHONE.matches) openChat(lead); say(lead, pick(['Hey. Everyone’s here.', `${(h => h < 5 ? 'Late one' : h < 12 ? 'Morning' : h < 18 ? 'Afternoon' : 'Evening')(new Date().getHours())}. The team is in.`, 'Hi. We’re all set up.']), { priority: true }); }
   if (S.sq[chat]) openChat(chat);
   focusOffice(true);

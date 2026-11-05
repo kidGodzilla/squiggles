@@ -18,7 +18,7 @@ const setup = () => {
   return { dir, A, B, b: createBoard(dir, () => {}) };
 };
 
-test('one branch in two goal repos: review takes it, merge lands both (t1197)', async () => {
+test('one branch in two goal repos: review takes it, merge lands both', async () => {
   const { dir, A, B, b } = setup();
   b.taskOp({ op: 'move', id: 't1', status: 'review', branch: 'feat', note: 'ok' });
   const [row] = await b.merges();
@@ -31,7 +31,7 @@ test('one branch in two goal repos: review takes it, merge lands both (t1197)', 
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test('a conflict in the second repo merges neither (t1197)', async () => {
+test('a conflict in the second repo merges neither', async () => {
   const { dir, A, B, b } = setup();
   B.g('checkout', '-q', 'feat'); B.commit('a', 'branch side'); B.g('checkout', '-q', 'main'); B.commit('a', 'main side');
   b.taskOp({ op: 'move', id: 't1', status: 'review', branch: 'feat', note: 'ok' });
@@ -43,7 +43,7 @@ test('a conflict in the second repo merges neither (t1197)', async () => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test('repo:branch accepts the bare repo name (t1197)', async () => {
+test('repo:branch accepts the bare repo name', async () => {
   const { dir, B, b } = setup();
   b.taskOp({ op: 'move', id: 't1', status: 'review', branch: 'app:feat', note: 'ok' });
   assert.equal(b.tasks()[0].repo, B.r);

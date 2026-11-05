@@ -69,7 +69,7 @@ export function createMeetings(root, onChange, { isSquiggle = () => true } = {})
       .sort((a, b) => a.start.localeCompare(b.start));
   }
 
-  // showtell (t131): each presenter's agenda is built from their tasks done or in review since the last one.
+  // showtell: each presenter's agenda is built from their tasks done or in review since the last one.
   const flag = (v) => v === true || v === 'true' || v === 'on' || v === 1;
   function op({ op, id, title, agenda, attendees, presenters, showtell, at, when, minutes, repeat, date, by }) {
     const m = all();
@@ -132,7 +132,7 @@ export function meetingNotes(cur, logs, names, endTs = Date.now(), user = 'the u
   return { log, journal };
 }
 
-// Past occurrences (t231): held = 'done' or never started = 'missed', with the meeting's block from runs/meetings.log when there is one.
+// Past occurrences: held = 'done' or never started = 'missed', with the meeting's block from runs/meetings.log when there is one.
 // started: keys `${id}@${start}` of meetings that began; log: the meetings.log text.
 export function markPast(occ, started, log, now = new Date()) {
   return occ.map((o) => {

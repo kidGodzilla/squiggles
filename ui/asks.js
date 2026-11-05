@@ -61,7 +61,7 @@ const askWarn = (c, more, r) => `${r.length ? `<p class="askrisk">Careful: ${esc
     ${c.hidden || more ? `<p class="askrisk">Contains ${c.hidden + more} hidden or control character${c.hidden + more === 1 ? '' : 's'}, shown in brackets.</p>` : ''}
     ${c.blank || c.pad ? `<p class="askrisk">Padded with ${c.blank ? `${c.blank} blank lines in a row` : 'long runs of spaces'}, shown in brackets.</p>` : ''}
     ${c.other ? `<p class="asknote">Contains ${c.other} non-ASCII character${c.other === 1 ? '' : 's'}.</p>` : ''}`;
-// A pending watch runs by itself once approved, so its card shows everything the hash covers, uncut (t3738).
+// A pending watch runs by itself once approved, so its card shows everything the hash covers, uncut.
 function watchBody(w) {
   const c = showCmd(w.cmd), d = showCmd(w.cwd || ''), i = showCmd(w.ignore || '');
   return `${askWarn(c, d.hidden + i.hidden, risky(w.cmd))}

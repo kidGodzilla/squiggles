@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Vendors a DiceBear style's Figma-exported SVG parts as a classic script: ui/gen/<name>-parts.js (t833).
+// Vendors a DiceBear style's Figma-exported SVG parts as a classic script: ui/gen/<name>-parts.js.
 // usage: node bin/vendor-dicebear.mjs <unpacked @dicebear/<style> package dir> <name>
 // Reads the component files as text (never imports them), keeps only their SVG templates, and drops @dicebear/core.
 // Licenses go in THIRD-PARTY-NOTICES.md: the code is MIT, the art license differs per style.

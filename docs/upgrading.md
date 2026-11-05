@@ -72,7 +72,7 @@ README paste block for Claude Code:
 
 ## Order of work
 
-1. Data dir split and `SQUIGGLES_HOME` (with t317 config).
+1. Data dir split and `SQUIGGLES_HOME` (with config).
 2. `config.json` with `schema: 1`; migration runner with no migrations.
 3. Prompt append files and `local.css`.
 4. `package.json`, `CHANGELOG.md`, tag `v0.1.0`.

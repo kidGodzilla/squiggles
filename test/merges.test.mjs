@@ -2,7 +2,7 @@ import test from 'node:test'; import assert from 'node:assert/strict';
 import fs from 'node:fs'; import os from 'node:os'; import path from 'node:path'; import { execFileSync } from 'node:child_process';
 import { createBoard } from '../board.mjs';
 
-test('merge listing: async git, merged branches swept, concurrent calls share one run, diff and merge await it (t961)', async () => {
+test('merge listing: async git, merged branches swept, concurrent calls share one run, diff and merge await it', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'merges-')), repo = path.join(dir, 'repo');
   const g = (...a) => execFileSync('git', ['-C', repo, ...a], { stdio: 'pipe', env: { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' } });
   const commit = (f, m) => { fs.writeFileSync(path.join(repo, f), m); g('add', f); g('commit', '-q', '-m', m); };
@@ -35,7 +35,7 @@ test('merge listing: async git, merged branches swept, concurrent calls share on
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test('merge listing names the files that would conflict with the base (t783)', async () => {
+test('merge listing names the files that would conflict with the base', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'merges-')), repo = path.join(dir, 'repo');
   const g = (...a) => execFileSync('git', ['-C', repo, ...a], { stdio: 'pipe', env: { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' } });
   const commit = (f, m) => { fs.writeFileSync(path.join(repo, f), m); g('add', f); g('commit', '-q', '-m', m); };
@@ -53,7 +53,7 @@ test('merge listing names the files that would conflict with the base (t783)', a
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test('conflicting review branch goes back to doing once per conflict, owner told (t1189)', async () => {
+test('conflicting review branch goes back to doing once per conflict, owner told', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'merges-')), repo = path.join(dir, 'repo');
   const g = (...a) => execFileSync('git', ['-C', repo, ...a], { stdio: 'pipe', env: { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' } });
   const commit = (f, m) => { fs.writeFileSync(path.join(repo, f), m); g('add', f); g('commit', '-q', '-m', m); };
@@ -77,7 +77,7 @@ test('conflicting review branch goes back to doing once per conflict, owner told
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test('merge of a task committed straight on the base closes it, no git merge (t1251)', async () => {
+test('merge of a task committed straight on the base closes it, no git merge', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'merges-')), repo = path.join(dir, 'repo');
   const g = (...a) => execFileSync('git', ['-C', repo, ...a], { stdio: 'pipe', env: { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' } });
   fs.mkdirSync(repo); g('init', '-q', '-b', 'main'); fs.writeFileSync(path.join(repo, 'a'), 'a'); g('add', 'a'); g('commit', '-q', '-m', 'a');
@@ -89,7 +89,7 @@ test('merge of a task committed straight on the base closes it, no git merge (t1
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test('gated: review tasks in gated goals (and goal-less ones) need the user or the lead (t1384)', () => {
+test('gated: review tasks in gated goals (and goal-less ones) need the user or the lead', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'merges-'));
   fs.writeFileSync(path.join(dir, 'goals.json'), JSON.stringify({ active: [{ id: 'g', title: 'G', merge: 'gated' }, { id: 'o', title: 'O', merge: 'open' }, { id: 'd', title: 'D' }] }));
   fs.writeFileSync(path.join(dir, 'tasks.json'), JSON.stringify({ tasks: [{ id: 't1', goal: 'g' }, { id: 't2', goal: 'o' }, { id: 't3', goal: 'd' }, { id: 't4' }, { id: 't5', goal: 'o', branch: 't5-fix' }, { id: 't6', goal: 'o', branch: 'main' }] }));
@@ -98,7 +98,7 @@ test('gated: review tasks in gated goals (and goal-less ones) need the user or t
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test('a branch cut from another branch merges into that one, not main (t1638)', async () => {
+test('a branch cut from another branch merges into that one, not main', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'merges-')), repo = path.join(dir, 'repo');
   const g = (...a) => execFileSync('git', ['-C', repo, ...a], { stdio: 'pipe', env: { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' } }).toString().trim();
   const commit = (f, m) => { fs.writeFileSync(path.join(repo, f), m); g('add', f); g('commit', '-q', '-m', m); };

@@ -16,7 +16,7 @@ const [cmd, ...a] = process.argv.slice(2);
 const UNLOCKS = /^\/(squiggles(\/[^/]+\/update)?|files|quit|slots|share|watches)$/;
 const call = (path, body) => callWithUnlock(base, path, body, process.stdin.isTTY && UNLOCKS.test(path) && (() => askCode('this change')));
 
-// The room passcode, typed at a terminal and not echoed (t950). Squiggles have no terminal, so they can't answer it.
+// The room passcode, typed at a terminal and not echoed. Squiggles have no terminal, so they can't answer it.
 async function askCode(what) {
   if (!process.stdin.isTTY) throw new Error(`${what} needs the room passcode: run it from your terminal`);
   process.stderr.write(`Room passcode for ${what}: `);
@@ -54,7 +54,7 @@ const cmds = {
       `  runs ${every(s.every)}, ${({ sonnet: 'Sonnet 5.5', 'gpt-6.1-sol': 'Codex 6.1 Sol' })[s.model] || s.model || 'Opus 5.5'}, ${s.permissionMode || 'auto'}, in ${s.cwd}`].filter(Boolean).join('\n')).join('\n\n');
   },
   wake: () => call(`/squiggles/${a[0]}/wake`, { why: a[1] || 'lead' }),
-  // tell <id> "<text>" [--image <path>]: the image goes to the squiggle as an image block and shows in its chat (t169).
+  // tell <id> "<text>" [--image <path>]: the image goes to the squiggle as an image block and shows in its chat.
   tell: async () => {
     const i = a.indexOf('--image'), img = i >= 0 ? a.splice(i, 2)[1] : '';
     if (!img) return call(`/squiggles/${a[0]}/send`, { text: a[1], from: 'lead' });
@@ -173,7 +173,7 @@ const cmds = {
     if (op === 'exec' || op === 'approve') throw new Error('only the owner runs an ask, with Run on the page');
     throw new Error('ask run "<command>" "<why>" | ask show <id> | ask deny <id> ["note"]');
   },
-  // Suggestions (t825): suggest "<one line>" [evidence path/url] files one for the lead; similar titles dedupe.
+  // Suggestions: suggest "<one line>" [evidence path/url] files one for the lead; similar titles dedupe.
   suggest: async () => {
     const r = await call('/tasks', { op: 'suggest', title: a[0], evidence: a.slice(1).join(' ') || undefined, by: process.env.AGENTS_ID });
     return r.dup ? `already suggested as ${r.id}: ${r.title}${r.decision ? ` (${r.decision}${r.why ? `: ${r.why}` : ''})` : ''}` : `${r.id} suggested; the lead sees it with the next team report`;
@@ -212,7 +212,7 @@ const cmds = {
     if (op === 'edit') return call('/tasks', { op, id: x, [y]: z ?? '' });
     return call('/tasks', { op, id: x });
   },
-  // worktrees [check]: every extra worktree in the goals' repos with its task and owner; check refreshes the lead's orphan note (t769).
+  // worktrees [check]: every extra worktree in the goals' repos with its task and owner; check refreshes the lead's orphan note.
   worktrees: async () => {
     const r = a[0] === 'check' ? (await call('/worktrees', {})).worktrees : await call('/worktrees'), home = (p) => p.replace(/^\/Users\/[^/]+/, '~');
     return r.map((w) => `${w.orphan ? 'ORPHAN  ' : `${w.task}  `}${home(w.path)}  ${w.branch || '(detached)'}${w.task ? `  ${w.status}${w.owner ? ` @${w.owner}` : ''}` : ''}${w.dirty ? `  ${w.dirty} uncommitted` : ''}${w.missing ? '  folder gone' : ''}${w.home ? '' : '  (not in ~/wt)'}`).join('\n') || 'no extra worktrees';
@@ -243,7 +243,7 @@ const cmds = {
   },
   // meet now <id,id> ["topic"] [--presenters <id,id>]: a 30-minute meeting that starts at once; presenters default to the attendees in order
   meet: async () => {
-    // meet merges (t599): squiggles with branches in review present them, most urgent first, at most 5
+    // meet merges: squiggles with branches in review present them, most urgent first, at most 5
     if (a[0] === 'merges') { const m = await call('/meetings', { op: 'merges', by: process.env.AGENTS_ID || 'owner' }); return `merge review on: ${m.presenters.join(', ')} present, in that order`; }
     if (a[0] !== 'now' || !a[1]) throw new Error('meet now <id,id> ["topic"] [--presenters <id,id>] | meet merges');
     const pi = a.indexOf('--presenters'), presenters = pi > 0 ? a.splice(pi, 2)[1] : '';
@@ -263,7 +263,7 @@ const cmds = {
     const r = await call('/call', { op: 'join', url: a[0], ...(until ? { until } : {}) });
     return `joining as ${r.name} (pid ${r.pid})${r.ends ? `; leaves at ${r.ends.slice(11)} + 5 min` : ''}; call status to follow it, call leave to hang up`;
   },
-  // screen diff <task> | url <url> | file <path> | off [--as <id>]: pin it on the shared screen beside your 1:1 (t664); a .mp4/.mov/.webm file plays as video (t1503)
+  // screen diff <task> | url <url> | file <path> | off [--as <id>]: pin it on the shared screen beside your 1:1; a .mp4/.mov/.webm file plays as video
   screen: async () => {
     const i = a.indexOf('--as'), as = i >= 0 ? a.splice(i, 2)[1] : process.env.AGENTS_ID;
     if (!as) throw new Error('screen needs --as <id> outside a squiggle');
@@ -280,7 +280,7 @@ const cmds = {
     return call('/restart', { by: process.env.AGENTS_ID || 'owner', ...(a[0] === 'force' && { force: true }) });
   },
   upgrade: async () => (await import('./upgrade.mjs')).upgrade(),
-  // peers | peer invite [name] | peer join '<code>' | peer cancel | peer add|remove|send | peer on|off (t1171, t1177): lead-to-lead link to another room over the tailnet
+  // peers | peer invite [name] | peer join '<code>' | peer cancel | peer add|remove|send | peer on|off: lead-to-lead link to another room over the tailnet
   peers: async () => {
     const r = await call('/peers'), t = (x) => new Date(x).toLocaleString('en-CA', { hour12: false }).slice(0, 17).replace(',', '');
     const rows = r.peers.map((p) => `${p.name}  ${p.url}${p.lastIn ? `  in ${t(p.lastIn)}` : ''}${p.lastOut ? `  out ${t(p.lastOut)}` : ''}${p.lastError ? `  ${p.lastErrorKind === 'unreachable' ? "can't reach" : 'key refused'} ${t(p.lastErrorAt)}: ${p.lastError}` : ''}`);
@@ -295,7 +295,7 @@ const cmds = {
     if (op === 'remove' || op === 'send') return call('/peers', { op, name, text: r.join(' ') });
     throw new Error("peer invite [name] | peer join '<code>' | peer cancel | peer add <name> <url> [key] | peer remove <name> | peer send <name> \"<text>\" | peer on|off");
   },
-  // quit [now]: end every squiggle and the server; the login item stays off until Squiggles.app opens it (t1154). Only when the user says.
+  // quit [now]: end every squiggle and the server; the login item stays off until Squiggles.app opens it. Only when the user says.
   quit: () => call('/quit', { now: a[0] === 'now', by: process.env.AGENTS_ID || 'owner' }),
   // files [query] | file add <path> [for <id>] | file rm <name>: files/ plus the read-only folders, newest first; only files/ takes adds and deletes.
   files: async () => (await call(`/files?q=${encodeURIComponent(a.join(' '))}`)).files.map((f) => `${new Date(f.mtime).toISOString().slice(0, 10)}  ${f.src === 'files' ? f.name : `${f.src}/${f.name}`}${f.by ? `  by ${f.by}` : ''}${f.task ? `  ${f.task}` : ''}\n    ${f.path}`).join('\n') || 'no files',
@@ -342,7 +342,7 @@ const cmds = {
   },
   remove: () => call(`/squiggles/${a[0]}/remove`, {}),
   // room radio <fip|fipjazz|...|off> | room volume <0-1> | room voices on|off | room reactions on|off | room chatter quiet|normal|lively | room theme flat|clean | room characters <generator> | room view room|lead|meeting|team|calendar|goals|tasks|merge|review|files|settings | room view files <name> (preview) | room view blocked|rethink | room keys | room view keys|jump | room fold|unfold active|hold|next|done|areas | room view 1on1 <id> | room view calendar week|month | room view settings [room|characters|squiggles|people|sharing|defaults|security] | room chat <id> ["<draft>"] | room lock
-  // room passcode set <code>|clear|status|local on|off (t913): optional lock-screen passcode. Once set, changing it asks for the current one.
+  // room passcode set <code>|clear|status|local on|off: optional lock-screen passcode. Once set, changing it asks for the current one.
   room: async () => {
     if (a[0] === 'passcode') {
       const op = a[1] || 'status', b = op === 'set' ? { op, code: a[2] } : op === 'local' ? { op, on: a[2] === 'on' } : { op };
@@ -359,7 +359,7 @@ const cmds = {
     }
     if (a[0] === 'reactions' && !['on', 'off'].includes(a[1])) throw new Error('room reactions on|off');
     if (a[0] === 'theme' && !['flat', 'clean'].includes(a[1])) throw new Error('room theme flat|clean');
-    // Goals columns (t1217): fold or unfold on every open page; each browser remembers it.
+    // Goals columns: fold or unfold on every open page; each browser remembers it.
     if ((a[0] === 'fold' || a[0] === 'unfold') && !['active', 'hold', 'todo', 'next', 'done', 'areas'].includes(a[1])) throw new Error(`room ${a[0]} active|hold|next|done|areas`);
     return call('/room', { action: a[0], value: a[1], ...(a[0] === 'chat' ? (a[2] ? { text: a.slice(2).join(' ') } : {}) : a[2] ? { id: a[2] } : {}) });
   },
@@ -370,7 +370,7 @@ const cmds = {
     if (a[1] == null) throw new Error('slots <claude|codex> <n>|off|default');
     return call('/slots', { [a[0]]: a[1] });
   },
-  // defaults [model|effort|every <value>] (t898): what a new squiggle starts with. 'default' clears model or effort.
+  // defaults [model|effort|every <value>]: what a new squiggle starts with. 'default' clears model or effort.
   defaults: () => {
     if (!a[0]) return call('/defaults');
     if (a[1] == null) throw new Error('defaults model|effort|every <value> (default clears model or effort)');
@@ -378,7 +378,7 @@ const cmds = {
   },
   rename: () => call(`/squiggles/${a[0]}/update`, { name: a[1], ...(a[2] ? { role: a[2] } : {}) }),
   create: () => call('/squiggles', { id: a[0], name: a[1], role: a[2], cwd: a[3], every: a[4], charter: a[5] }),
-  // look <id> [<generator>[:<options>]|<character>|auto|shuffle] (t832): the squiggle's character; auto follows the room default
+  // look <id> [<generator>[:<options>]|<character>|auto|shuffle]: the squiggle's character; auto follows the room default
   // (room characters <generator>); shuffle rerolls the seed. Options: a bare value or k=v,k=v, checked against ui/cast.js.
   look: async () => {
     if (a[1] === 'shuffle') return call(`/squiggles/${a[0]}/update`, { lookSeed: Math.floor(Math.random() * 1e9) });
@@ -394,9 +394,9 @@ const cmds = {
     const o = ks.length === 1 && ks[0] === first ? opts[first] : ks.map((k) => `${k}=${opts[k]}`).join(',');
     return call(`/squiggles/${a[0]}/update`, { look: gen + (o ? ':' + o : '') });
   },
-  // calendar [from] [to] [calendar] [--notes] [--json] | calendar list | status | allow (t785): this Mac's calendars via EventKit, read-only, local (no server).
+  // calendar [from] [to] [calendar] [--notes] [--json] | calendar list | status | allow: this Mac's calendars via EventKit, read-only, local (no server).
   // Dates YYYY-MM-DD, today or tomorrow; to is inclusive. Only `allow` shows the macOS prompt.
-  // --notes adds location and notes, which the invite's sender wrote (t925): fenced and line-prefixed as untrusted data.
+  // --notes adds location and notes, which the invite's sender wrote: fenced and line-prefixed as untrusted data.
   calendar: async () => {
     const { execFileSync } = await import('node:child_process'), fs = await import('node:fs'), os = await import('node:os'), dir = new URL('.', import.meta.url).pathname;
     // Its own .app, started by `open`: LaunchServices makes the app the responsible process, so one Allow covers

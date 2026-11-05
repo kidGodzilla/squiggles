@@ -263,7 +263,7 @@ function castPersona(s, opts = {}) {
     decor: r() < .8 ? pick(Object.keys(DECOR)) : null, room: Math.floor(r() * ROOMS.length) };
 }
 
-// Character generators (t832). Each: id, name, options (key: allowed values; the first key is what a bare value sets),
+// Character generators. Each: id, name, options (key: allowed values; the first key is what a bare value sets),
 // persona(s, opts) for the render data, render(p, o, uid) to SVG. Live renders carry the state layers room.css animates.
 const GENS = {
   cast: { id: 'cast', name: 'Squiggles', options: { character: LOOKS }, persona: castPersona, render: castSVG },
@@ -271,7 +271,7 @@ const GENS = {
 // look is '<generator>[:<options>]', options 'value' (the first option) or 'k=v,k=v'. A bare cast name ('Puff') is the cast.
 // No look, or an unknown generator, means the room default.
 let DEF = 'cast';
-const hasGen = (g) => typeof g === 'string' && Object.hasOwn(GENS, g); // own keys only: 'constructor' or '__proto__' is no generator (t878)
+const hasGen = (g) => typeof g === 'string' && Object.hasOwn(GENS, g); // own keys only: 'constructor' or '__proto__' is no generator
 const roomGen = (g) => { if (g !== undefined) DEF = hasGen(g) ? g : 'cast'; return DEF; };
 function parseLook(look) {
   const str = String(look || '').trim(); if (!str) return { gen: DEF, opts: {} };

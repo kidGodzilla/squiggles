@@ -2,7 +2,7 @@ import test from 'node:test'; import assert from 'node:assert/strict';
 import fs from 'node:fs'; import os from 'node:os'; import path from 'node:path';
 import { createBoard } from '../board.mjs';
 
-test('a dropped task id is never handed out again (t1551)', () => {
+test('a dropped task id is never handed out again', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ids-'));
   const b = createBoard(dir, () => {});
   b.taskOp({ op: 'add', title: 'one' });

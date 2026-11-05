@@ -62,9 +62,9 @@ const FILES = path.join(DATA, 'files'); // shared drop folder; chat images land 
 const STATE = path.join(RUNS, 'state.json');
 const TTS_DIR = path.join(RUNS, 'tts');
 for (const d of [SQ, RUNS, MEDIA, TTS_DIR]) fs.mkdirSync(d, { recursive: true });
-// Run by the login item (t1154)? Squiggles inherit XPC_SERVICE_NAME, so a server they start must also not be launchd's child.
+// Run by the login item? Squiggles inherit XPC_SERVICE_NAME, so a server they start must also not be launchd's child.
 const LAUNCHD = process.env.XPC_SERVICE_NAME === 'local.squiggles.server' && process.ppid === 1;
-// Every exit says why in runs/shutdowns.log (t1293). Signals can't name their sender, so the parent is logged with it.
+// Every exit says why in runs/shutdowns.log. Signals can't name their sender, so the parent is logged with it.
 const SHUTDOWNS = path.join(RUNS, 'shutdowns.log');
 let exitCause = '';
 function logExit(cause) {
@@ -86,7 +86,7 @@ const readText = (f, d = '') => { try { return fs.readFileSync(f, 'utf8'); } cat
 // ---------- squiggles on disk ----------
 const sqDir = (id) => path.join(SQ, id);
 // squiggle.json is edited outside the server too; a read caught mid-write falls back to the last good copy,
-// so a squiggle never drops out of the list (t671). Removal moves the directory, which drops it for real.
+// so a squiggle never drops out of the list. Removal moves the directory, which drops it for real.
 const lastMeta = new Map();
 function loadSquiggle(id) {
   let meta = null;
@@ -109,7 +109,7 @@ const ICONS = path.join(DATA, 'icons'), ICON_FILES = ['icon-180.png', 'icon-192.
 let iconTimer; const drawIcons = () => { clearTimeout(iconTimer); iconTimer = setTimeout(() => { const c = spawn(path.join(ROOT, 'bin', 'render-icons.sh'), [], { stdio: 'ignore', detached: true, env: { ...process.env, SQUIGGLES_HOME: DATA } }); c.on('error', () => {}); c.unref(); }, 3000); };
 if (!fs.existsSync(ICONS)) drawIcons(); // a workspace older than these icons draws its own lead once
 const roomCfg = () => { try { return JSON.parse(fs.readFileSync(ROOMCFG, 'utf8')); } catch { return {}; } };
-// Team defaults (t898): model, effort and cadence a new squiggle starts with; room.json `defaults`, set from Settings or `defaults`.
+// Team defaults: model, effort and cadence a new squiggle starts with; room.json `defaults`, set from Settings or `defaults`.
 const DEFAULT_OPTS = { model: DEFAULT_MODELS, effort: EFFORTS };
 const teamDefaults = () => ({ model: '', effort: '', every: 60, ...(roomCfg().defaults || {}) });
 function setDefaults(b) {
@@ -135,7 +135,7 @@ function createSquiggle({ id, name, role, cwd, charter, every, permissionMode = 
 const rt = new Map();
 const persisted = JSON.parse(readText(STATE, '{}'));
 const R = (id) => {
-  // A turn saved as working died with the old server. Only on load: mid-send a Codex turn is working before r.proc exists (t972).
+  // A turn saved as working died with the old server. Only on load: mid-send a Codex turn is working before r.proc exists.
   if (!rt.has(id)) { const p = { status: 'idle', ...(persisted[id] || {}), proc: null }; if (p.status === 'working') p.status = 'idle'; rt.set(id, p); }
   return rt.get(id);
 };
@@ -149,7 +149,7 @@ function saveState() {
 
 // ---------- events ----------
 const clients = new Set();
-// `stored` is what goes in runs/<id>.jsonl when it shouldn't be the whole event (screen content: t854).
+// `stored` is what goes in runs/<id>.jsonl when it shouldn't be the whole event (screen content).
 function emit(id, ev, stored) {
   ev = { ts: Date.now(), ...ev };
   // The step a squiggle is on, for the mid-turn ack.
@@ -161,7 +161,7 @@ function emit(id, ev, stored) {
 const board = createBoard(DATA, () => {
   const line = `data: ${JSON.stringify({ id: '*board', ev: { k: 'board' } })}\n\n`;
   for (const res of clients) res.write(line);
-}, { onConflict: ({ id, owner, title, note }) => { // t1189: the owner hears at once (a wake, or a message if it's mid-turn)
+}, { onConflict: ({ id, owner, title, note }) => { // the owner hears at once (a wake, or a message if it's mid-turn)
   const s = owner && loadSquiggle(owner); if (!s || s.paused) return;
   send(owner, `The merge listing sent ${id} "${String(title).slice(0, 80)}" back to doing: ${note}. If you're idle, fix it now, journal it and end with a status line.`, 'harness');
 }, whoIs: (w, namesOnly) => { // a merge step's owner tag: a squiggle, or the user ('owner', 'me' or their name)
@@ -197,7 +197,7 @@ const unstale = (id, text) => {
   return r.text;
 };
 const files = createFiles({ root: DATA, extra: Object.fromEntries(Object.entries(CONFIG.fileSources || {}).map(([k, v]) => [k, tilde(v)])), tasks: () => { try { return board.tasks(); } catch { return []; } } });
-// Awake squiggles (t294): while one with awake: true is working, caffeinate keeps the display on and the Mac from idle sleep or locking.
+// Awake squiggles: while one with awake: true is working, caffeinate keeps the display on and the Mac from idle sleep or locking.
 // -w ties it to this server, so a crash can't leave the Mac awake for good.
 function keepAwake(id, on) {
   const r = R(id);
@@ -273,7 +273,7 @@ function systemPrompt(s) {
 // Sonnet is the floor (Haiku has no auto mode); Opus is the default and the ceiling. config.model sets the default.
 const modelFor = (s) => pickModel(s, CONFIG.model);
 // Settings baked into a process's flags. A change ends the idle process before the next turn; --resume keeps the session.
-// The squiggle's settings.json (allow rules) is in it too: an edit relaunches the idle process on its next message. So is the system prompt (t1307).
+// The squiggle's settings.json (allow rules) is in it too: an edit relaunches the idle process on its next message. So is the system prompt.
 // Every tool call re-reads the whole session, so the compaction point sets the cost per call.
 const compactAt = (s) => s.autocompact ?? (s.lead ? 300000 : 120000);
 const launchSig = (s) => JSON.stringify([!!s.chrome, modelFor(s), s.permissionMode, compactAt(s), s.maxTurns, s.effort, s.cwd, readText(path.join(sqDir(s.id), 'settings.json'), ''), 'fence:claude-hook', systemPrompt(s)]);
@@ -362,7 +362,7 @@ function launch(s) {
   return proc;
 }
 
-// ---------- other providers (t165) ----------
+// ---------- other providers ----------
 // Whitelist in code, not in squiggle.json: the model picks the provider, anything unlisted runs on Claude (modelFor).
 const PROVIDERS = { codex: CODEX_MODELS };
 // config.pi: the Pi models the user set up in pi itself; a squiggle on one runs on pi. Team defaults stay Claude or Codex.
@@ -376,9 +376,9 @@ if (!listSquiggles().length) {
   saveSquiggle({ ...loadSquiggle('lead'), lead: true, look: 'avataaars:eyes=default', lookSeed: 858327934 }); // the face on the shipped app icon
 }
 const providerOf = (s) => providerFor(s, CONFIG);
-// A provider usage limit holds nothing (t971): the turn just ends and the next wake tries again; limits often reset early.
+// A provider usage limit holds nothing: the turn just ends and the next wake tries again; limits often reset early.
 // Codex: one `codex app-server` per squiggle, kept between turns, so MCP servers live on (computer use
-// keeps its window bindings, t330). Each wake is a turn on the saved thread; messages mid-turn steer it.
+// keeps its window bindings). Each wake is a turn on the saved thread; messages mid-turn steer it.
 const shortEv = (s) => (typeof s === 'string' ? s.slice(0, 6000) : '');
 // The ChatGPT app bundles a newer Codex CLI than ~/.local/bin; older CLIs reject current models on ChatGPT sign-in.
 const CODEX_APP_BIN = '/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex';
@@ -680,7 +680,7 @@ function send(id, text, from = 'owner', { replay = false, human, images = [], as
   setStatus(id, 'working', '');
   r.proc.stdin.write(JSON.stringify({ type: 'user', message: { role: 'user', content: images.length ? [{ type: 'text', text: content }, ...images.map(imageBlock).filter(Boolean)] : content } }) + '\n');
 }
-// Chat images (t169): the page or CLI sends data URLs; each is saved under files/ and sent to the squiggle as an image block.
+// Chat images: the page or CLI sends data URLs; each is saved under files/ and sent to the squiggle as an image block.
 function saveImage(url) {
   const m = /^data:image\/(png|jpeg|gif|webp);base64,([A-Za-z0-9+/=]+)$/.exec(url || '');
   if (!m) throw new Error('images must be png, jpeg, gif or webp data URLs');
@@ -698,7 +698,7 @@ function imageBlock(f) {
   return { type: 'image', source: { type: 'base64', media_type: `image/${ext === 'jpg' ? 'jpeg' : ext}`, data: buf.toString('base64') } };
 }
 
-// @mentions in a chat (t657): "@lead" or "@<id or name>" in a message to one squiggle also goes to the mentioned one,
+// @mentions in a chat: "@lead" or "@<id or name>" in a message to one squiggle also goes to the mentioned one,
 // with the chat's last few lines; its reply at the end of that turn is posted back into the original chat.
 function relayMentions(id, text, from, human) {
   const s = loadSquiggle(id), all = listSquiggles(), lead = all.find((x) => x.lead);
@@ -715,7 +715,7 @@ function relayMentions(id, text, from, human) {
   }
 }
 
-// Shared screen in a 1:1 (t664): what a squiggle pins beside its chat until it (or the user) closes it or pins something else.
+// Shared screen in a 1:1: what a squiggle pins beside its chat until it (or the user) closes it or pins something else.
 // diff <task> from the merge queue, url <http(s) page> in a frame, file <path> (text, or an image), off.
 const SCREEN_MAX = 400000, IMG = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp' };
 const VIDEO = { '.mp4': 'video/mp4', '.m4v': 'video/mp4', '.mov': 'video/quicktime', '.webm': 'video/webm' };
@@ -728,7 +728,7 @@ async function screen(id, { kind, arg, by } = {}) {
   else if (kind === 'file') {
     const f = path.resolve(home(String(arg || ''))), ext = path.extname(f).toLowerCase(), st = fs.statSync(f);
     if (!st.isFile()) throw new Error('not a regular file');
-    // Videos (t1503) stream from the file through /api/squiggles/<id>/media (Range requests); the path stays on the server.
+    // Videos stream from the file through /api/squiggles/<id>/media (Range requests); the path stays on the server.
     if (VIDEO[ext]) ev = { k: 'screen', kind: 'video', title: path.basename(f), file: f, type: VIDEO[ext] };
     else if (IMG[ext]) { if (st.size > 5e6) throw new Error('image over 5 MB'); ev = { k: 'screen', kind: 'image', title: path.basename(f), url: `data:${IMG[ext]};base64,${fs.readFileSync(f).toString('base64')}` }; }
     else {
@@ -738,14 +738,14 @@ async function screen(id, { kind, arg, by } = {}) {
       ev = { k: 'screen', kind, title: f.replace(os.homedir(), '~'), text: buf.toString('utf8'), cut: st.size > SCREEN_MAX };
     }
   } else throw new Error('screen diff <task> | url <url> | file <path> | off');
-  // Content goes out live only; the transcript keeps {kind,title}, and the full event stays in memory for reloads (t854).
+  // Content goes out live only; the transcript keeps {kind,title}, and the full event stays in memory for reloads.
   ev = { ts: Date.now(), ...ev, ...(by && { by }) };
   if (ev.kind === 'video') { const { file, ...pub } = ev; mediaFile.set(id, file); ev = { ...pub, url: `/api/squiggles/${encodeURIComponent(id)}/media?v=${ev.ts}` }; }
   if (ev.kind === 'off') { liveScreen.delete(id); mediaFile.delete(id); emit(id, ev); } else { liveScreen.set(id, ev); emit(id, ev, { k: 'screen', kind: ev.kind, title: ev.title, ...(by && { by }), gone: true }); }
   return { ok: true, kind: ev.kind, title: ev.title || '' };
 }
 
-// The shared video, with Range support so the player can seek and Safari plays it (t1503).
+// The shared video, with Range support so the player can seek and Safari plays it.
 function serveMedia(req, res, f) {
   let st; try { st = f && fs.statSync(f); } catch {}
   if (!st?.isFile()) { res.writeHead(404); return res.end(); }
@@ -850,7 +850,7 @@ function flushInbox() {
   send(lead.id, reportsText(inbox.splice(0), USER), 'harness');
 }
 
-// Session limit: display info only (t1284: the stated reset is guidance the user can change; never schedule around it).
+// Session limit: display info only (the stated reset is guidance the user can change; never schedule around it).
 // Nothing waits on it or times off it: a limited turn just ends, the next wake tries again, and the banner clears when a Claude
 // turn next succeeds. Not persisted.
 const limit = { until: 0, reported: 0 }; delete persisted['*limit'];
@@ -917,7 +917,7 @@ function restartOp(op, by) {
   if (op === 'ready') { if (gate?.phase !== 'later') return 'nothing postponed'; gate = null; restartPending = true; setTimeout(maybeRestart, 100); return 'restart due again'; }
   throw new Error('op must be now, later or ready');
 }
-// Self-reported, so one short line: no control chars to forge log lines (t1436).
+// Self-reported, so one short line: no control chars to forge log lines.
 const whoAsked = (by) => String(by || '').replace(/[\x00-\x1f\x7f]+/g, ' ').trim().slice(0, 40);
 const supervised = process.env.XPC_SERVICE_NAME === 'local.squiggles.server';
 const working = () => [...rt.values()].filter((r) => r.status === 'working' && (r.proc || r.cx)).length;
@@ -936,7 +936,7 @@ function maybeRestart() {
   if (!supervised) spawn(process.execPath, process.argv.slice(1), { detached: true, stdio: 'inherit', env: { ...process.env, SQUIGGLES_RESPAWN: '1' } }).unref();
   shutdown(0, false, `restart by ${restartBy || 'unknown'}${supervised ? '' : ', replacement started'}`);
 }
-// Quit (t1154): every squiggle process and the server end, and the login item stays off until Squiggles.app is opened
+// Quit: every squiggle process and the server end, and the login item stays off until Squiggles.app is opened
 // (it deletes runs/quit, then starts the job). Held turns go out on the next start, like a restart's.
 const QUIT = path.join(RUNS, 'quit');
 function quit(now, by) {
@@ -1076,7 +1076,7 @@ setInterval(async () => {
 // ---------- meetings: at the start time, wake the attendees with the agenda and open the meeting view ----------
 // One meeting at a time; it closes at its end time (or `meeting end`). Started occurrences are remembered so a restart doesn't repeat them.
 const meetingNow = () => persisted['*meeting'] || null;
-// Deferred questions (t1529): a blocked note saying "for review <meeting id or title>" joins that meeting's agenda.
+// Deferred questions: a blocked note saying "for review <meeting id or title>" joins that meeting's agenda.
 function withDeferred(m) {
   let ts = []; try { ts = board.tasks(); } catch {}
   const keys = [m.id, m.title].filter(Boolean).map((k) => `for review ${String(k).toLowerCase()}`);
@@ -1105,8 +1105,8 @@ function startMeeting(m, by = 'calendar') {
   }
   return cur;
 }
-// Meet now (t146): an unscheduled meeting that starts at once, 30 minutes unless said otherwise.
-// Presenters (t604): given order, else the attendees in the order given; one presenter at a time.
+// Meet now: an unscheduled meeting that starts at once, 30 minutes unless said otherwise.
+// Presenters: given order, else the attendees in the order given; one presenter at a time.
 function meetNow({ attendees, presenters, topic = '', agenda, minutes = 30, by = 'owner' } = {}) {
   const list = (v) => (Array.isArray(v) ? v : String(v || '').split(',')).map((x) => String(x).trim()).filter(Boolean);
   const ids = list(attendees), pres = list(presenters);
@@ -1116,7 +1116,7 @@ function meetNow({ attendees, presenters, topic = '', agenda, minutes = 30, by =
   const s = new Date(), e = new Date(s.getTime() + (Number(minutes) || 30) * 60000), t = String(topic).trim();
   return startMeeting({ id: `now-${s.getTime().toString(36)}`, title: t || 'Meet now', agenda: agenda ?? t, attendees: ids, presenters: pres.length ? pres : ids, start: local(s), end: local(e) }, by);
 }
-// Merge review now (t599): squiggles with branches in review present them, urgent or prod first, then security, then most commits and oldest; at most 5.
+// Merge review now: squiggles with branches in review present them, urgent or prod first, then security, then most commits and oldest; at most 5.
 async function mergeMeeting(by = 'owner') {
   const hot = (x) => /\burgent\b|\bprod\b|outage|hotfix/i.test(x.title), sec = (x) => x.owner === 'security' || /secur|vuln|cve|secret/i.test(x.title);
   const per = {};
@@ -1129,7 +1129,7 @@ async function mergeMeeting(by = 'owner') {
     + ids.map((id) => `${loadSquiggle(id)?.name || id}:\n${per[id].map(line).join('\n')}`).join('\n');
   return meetNow({ attendees: ids, presenters: ids, topic: 'Merge review', agenda, by });
 }
-// Show and tell (t131): since the last time this meeting ran (else a week ago); a presenter's agenda is their notes done or in review since then.
+// Show and tell: since the last time this meeting ran (else a week ago); a presenter's agenda is their notes done or in review since then.
 function lastShow(m) {
   const prev = (persisted['*started'] || []).filter((k) => k.startsWith(`${m.id}@`)).map((k) => k.slice(m.id.length + 1)).filter((s) => s < m.start).sort().pop();
   return (prev || local(new Date(new Date(m.start).getTime() - 7 * 864e5))).slice(0, 10);
@@ -1176,7 +1176,7 @@ function endMeeting() {
   } catch (e) { console.error('meeting notes:', e.message); }
   return { ...cur, ended: true };
 }
-// Meeting alerts on the Mac (t147), 5 minutes before and at the start, only when no page is open here: an open page chimes and opens the meeting view itself.
+// Meeting alerts on the Mac, 5 minutes before and at the start, only when no page is open here: an open page chimes and opens the meeting view itself.
 // At the start a dialog offers Join, which opens the room on the meeting view.
 const pageOpenHere = () => [...clients].some((c) => c.local);
 const asStr = (s) => `"${String(s).replace(/[\x00-\x1f]/g, ' ').replace(/[\\"]/g, '\\$&')}"`;
@@ -1205,7 +1205,7 @@ function meetingSoon(now) {
   for (const m of meetings.upcoming(new Date(now + 4 * 60000), new Date(now + 5 * 60000 + 30000))) {
     const key = `${m.id}@${m.start}`; if (warned.has(key)) continue;
     persisted['*warned'] = [...warned, key].slice(-100); saveState();
-    broadcast('*room', { k: 'room', action: 'meetingSoon', value: m }); // open pages alert themselves (t148)
+    broadcast('*room', { k: 'room', action: 'meetingSoon', value: m }); // open pages alert themselves
     macAlert(`In 5 minutes: ${m.title}`, `${m.start.slice(11)} to ${m.end.slice(11)} with ${m.attendees.map((id) => loadSquiggle(id)?.name || id).join(', ')}`);
   }
 }
@@ -1220,7 +1220,7 @@ function meetingTick() {
   if (due) startMeeting(due);
 }
 setInterval(() => { try { timed('meetings', meetingTick); } catch (e) { console.error('meetings:', e.message); } }, 20000);
-// Orphan worktrees (t769): hourly, the lead's one note is refreshed (or closed when none are left).
+// Orphan worktrees: hourly, the lead's one note is refreshed (or closed when none are left).
 setInterval(() => board.orphanNotes().catch((e) => console.error('worktrees:', e.message)), 3600000);
 
 // ---------- inbox: text files the user drops in <data>/inbox wake the lead, then move to inbox/read/ ----------
@@ -1373,7 +1373,7 @@ async function callLeave() {
   return 'left the call';
 }
 
-// Request bodies stop at 200 MB (t891): past it the client gets 413 and the handler never runs.
+// Request bodies stop at 200 MB: past it the client gets 413 and the handler never runs.
 const BODY_MAX = 200 * 1024 * 1024;
 function body(req, res, max = BODY_MAX) {
   return new Promise((resolve) => {
@@ -1385,10 +1385,10 @@ function body(req, res, max = BODY_MAX) {
   });
 }
 const json = (res, v, code = 200) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(v)); };
-// CSP (t912): the UI runs only its own scripts and can't be framed; dropped files and media are sandboxed so an HTML or SVG never runs as this origin.
+// CSP: the UI runs only its own scripts and can't be framed; dropped files and media are sandboxed so an HTML or SVG never runs as this origin.
 const UI_CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: https://icecast.radiofrance.fr; connect-src 'self'; frame-src http: https:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
 const FILE_CSP = 'sandbox allow-scripts allow-forms allow-popups';
-// Pages revalidate every file (t907): no-cache plus an ETag from size and mtime, so an upgrade never runs a stale cast.js and unchanged files cost a 304.
+// Pages revalidate every file: no-cache plus an ETag from size and mtime, so an upgrade never runs a stale cast.js and unchanged files cost a 304.
 function serveFile(res, file, csp = FILE_CSP) {
   const st = fs.statSync(file, { throwIfNoEntry: false });
   if (!st?.isFile()) return json(res, { error: 'not found' }, 404);
@@ -1409,13 +1409,13 @@ function tailEvents(id, n = 400) {
 // Tailnet sharing off: only the local names are allowed, and tailscale is never asked.
 const tailnet = CONFIG.tailnet ? tailnetName(TS) : { get: () => '', seen: () => {} };
 const refuse = makeGuard(PORT, tailnet.get, () => tunnel?.host() || '');
-// Optional room passcode (t913): the page and its files always load (the lock screen asks); everything else needs it.
+// Optional room passcode: the page and its files always load (the lock screen asks); everything else needs it.
 const pass = makePasscode({ read: () => roomCfg().passcode, write: (v) => { const c = roomCfg(); if (v) c.passcode = v; else delete c.passcode; fs.writeFileSync(ROOMCFG, JSON.stringify(c, null, 2) + '\n'); } });
-// Gated merges (t1384): the user or the lead, never another squiggle. A squiggle sets `by` and AGENTS_ID itself; it can't
+// Gated merges: the user or the lead, never another squiggle. A squiggle sets `by` and AGENTS_ID itself; it can't
 // choose whose child its shell is, so a caller whose process chain runs through a squiggle's claude process is that squiggle.
 // Anyone else needs a browser session unlocked with the room passcode, so gated merges need one set. Unknown callers are
 // refused: a squiggle's detached process looks like the user's terminal.
-// Process tree before the cookie (t1423): a squiggle holding a session cookie is still a squiggle.
+// Process tree before the cookie: a squiggle holding a session cookie is still a squiggle.
 const realRoots = () => Object.fromEntries(Object.entries(files.SOURCES).map(([k, d]) => { try { return [k, fs.realpathSync(d)]; } catch { return [k, d]; } }).filter(([k, d]) => d !== files.SOURCES[k]));
 async function callerSquiggle(req) {
   // The turn process, and a Codex app-server (per squiggle, cleared on exit) so its background children count between turns.
@@ -1453,7 +1453,7 @@ async function peersOp(b) {
   if (b.op === 'join') return await peers.join(b.code, self.name, self.url);
   throw new Error('op: invite, join, cancel, add, remove, send, on or off');
 }
-// Another room's lead (t1171): its key is the only pass, so this sits before the passcode. Reaches us only from this Mac or
+// Another room's lead: its key is the only pass, so this sits before the passcode. Reaches us only from this Mac or
 // through tailscale serve (the server listens on 127.0.0.1); never from Funnel or a Cloudflare tunnel, the public internet.
 async function peerMessage(req, res) {
   if (req.headers['tailscale-funnel-request']) return json(res, { error: 'not over Funnel' }, 403);
@@ -1467,7 +1467,7 @@ async function peerMessage(req, res) {
   send(lead.id, fence(r.peer, b.text), `peer:${r.peer}`);
   return json(res, { ok: true });
 }
-// Another room spends our pairing code (t1177). Same footing as a message: tailnet only, before the passcode.
+// Another room spends our pairing code. Same footing as a message: tailnet only, before the passcode.
 async function peerJoin(req, res) {
   if (req.headers['tailscale-funnel-request']) return json(res, { error: 'not over Funnel' }, 403);
   if (req.headers['cf-connecting-ip'] || TUNNEL_HOST.test(String(req.headers.host || ''))) return json(res, { error: 'not over Cloudflare' }, 403);
@@ -1594,7 +1594,7 @@ const server = http.createServer(async (req, res) => {
         if (!['on', 'off'].includes(v)) return json(res, { error: 'room reactions on|off' }, 400);
         fs.writeFileSync(ROOMCFG, JSON.stringify({ ...roomCfg(), reactions: v }, null, 2) + '\n'); b.value = v;
       }
-      if (b.action === 'characters') {   // the room's default character generator (t832), saved so every page agrees
+      if (b.action === 'characters') {   // the room's default character generator, saved so every page agrees
         const gens = Object.keys(castCtx().GENS), g = String(b.value || '').toLowerCase();
         if (!gens.includes(g)) return json(res, { error: `generators: ${gens.join(', ')}` }, 400);
         fs.writeFileSync(ROOMCFG, JSON.stringify({ ...roomCfg(), characters: g }, null, 2) + '\n'); b.value = g; drawIcons();
@@ -1629,7 +1629,7 @@ const server = http.createServer(async (req, res) => {
       b.needAsk = b.op === 'move' && b.status === 'review' && !!(await callerSquiggle(req));
       const r = await board.taskOp(b);
       if (b.op === 'add' && r.alert === 'serious' && r.owner && loadSquiggle(r.owner) && !loadSquiggle(r.owner).paused) try { send(r.owner, alertWake(r, (r.by && loadSquiggle(r.by)?.name) || r.by, USER), 'harness'); } catch (e) { console.error('alert wake', r.id, e.message); }
-      // A new suggestion rides along with the next team report to the lead; it never wakes anyone on its own (t825).
+      // A new suggestion rides along with the next team report to the lead; it never wakes anyone on its own.
       if (b.op === 'suggest' && !r.dup) inbox.push(`[${(r.by && loadSquiggle(r.by)?.name) || r.by || 'Someone'} · SUGGESTION] ${r.id} ${r.title}${r.evidence ? ` (evidence: ${r.evidence})` : ''}`);
       return json(res, r);
     }
@@ -1800,7 +1800,7 @@ const server = http.createServer(async (req, res) => {
         case 'remove': return json(res, removeSquiggle(id));
         case 'update': {
           const { charter, ...meta } = b;
-          checkModelEffort(meta, EXTRA_MODELS); // t905: only allowed models and efforts reach squiggle.json and the launch args
+          checkModelEffort(meta, EXTRA_MODELS); // only allowed models and efforts reach squiggle.json and the launch args
           if ('trust' in meta) meta.trust = trustLevel(meta.trust) ?? undefined; // the user or the lead sets it, never the squiggle itself
           const c = await callerSquiggle(req), owner = () => { try { return pass.session(req); } catch { return false; } };
           const leadId = listSquiggles().find((x) => x.lead)?.id || '';

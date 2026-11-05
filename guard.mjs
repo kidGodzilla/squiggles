@@ -1,4 +1,4 @@
-// Who may talk to the server (t762). It listens on 127.0.0.1, but any web page the user opens can still
+// Who may talk to the server. It listens on 127.0.0.1, but any web page the user opens can still
 // send it requests: a "simple" cross-site POST (text/plain) or an <img> GET, or a DNS-rebinding page
 // that reads everything. Only this Mac's own names get through: localhost, 127.0.0.1 and, when shared,
 // its tailnet name (tailscale serve keeps the Host header) and its Cloudflare tunnel name (cloudflared keeps it too).

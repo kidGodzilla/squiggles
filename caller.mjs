@@ -1,4 +1,4 @@
-// Who is on the other end of a local request (t1384). A squiggle can put anything in the body (by, AGENTS_ID),
+// Who is on the other end of a local request. A squiggle can put anything in the body (by, AGENTS_ID),
 // but not change whose child its shell is: the process holding the client socket, and its parent chain, can't lie.
 import { execFile } from 'node:child_process';
 

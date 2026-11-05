@@ -1,4 +1,4 @@
-// Settings > Sharing > Peers (t1174). CLI: peers, peer invite|join|cancel|remove|on|off.
+// Settings > Sharing > Peers. CLI: peers, peer invite|join|cancel|remove|on|off.
 const PEER = { d: null, panel: '', code: '', exp: '', err: '', busy: false, confirm: '', note: '', paste: '', timer: 0 };
 const peerTime = (iso) => new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 const peerAgo = (iso) => { const m = Math.round((Date.now() - new Date(iso)) / 60000); return m < 1 ? 'just now' : m < 60 ? `${m}m ago` : m < 1440 ? `${Math.round(m / 60)}h ago` : `${Math.round(m / 1440)}d ago`; };
