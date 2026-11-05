@@ -228,3 +228,11 @@ test('a for list past the cap is judged as unknown, and a pipe to a shell may ha
     'echo x | sh 2>/dev/null', 'echo x | bash 2>&1', 'echo x | sh > o', 'echo x | sh -', 'echo x | sh # c']) assert.equal(bash(c), P, c);
   for (const c of [`for p in ${names}; do echo $p; done`, "grep 'a| sh > o' x.txt", 'echo x | shasum > o']) assert.equal(bash(c), '', c);
 });
+
+test('remote: a bare ssh alias host and ssh:// URLs', () => {
+  for (const c of ['rsync -av ./site/ prod:/var/www/', 'rsync -a prod:logs/ ./logs', 'unison . ssh://prod/x', 'unison . prod:x', 'git clone prod:repo.git', 'git ls-remote prod:repo.git', 'git remote add live prod:app.git', 'git clone ssh://prod/srv/app.git', 'rsync -a x rsync://box/mod/'])
+    assert.equal(bash(c), P, c);
+  for (const c of ['git fetch origin main:main', 'git pull origin dev:dev', 'git clone ssh://git@github.com/x/y.git', 'git clone https://github.com/x/y.git', 'rsync -a C:/data /tmp/x', 'rsync -a src/ /tmp/x/'])
+    assert.equal(bash(c), '', c);
+  assert.equal(bash('rsync -av ./site/ prod:/var/www/', cwd, privateRules({})), '', 'off without privateRemote');
+});
