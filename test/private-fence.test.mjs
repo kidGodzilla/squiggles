@@ -236,3 +236,15 @@ test('remote: a bare ssh alias host and ssh:// URLs', () => {
     assert.equal(bash(c), '', c);
   assert.equal(bash('rsync -av ./site/ prod:/var/www/', cwd, privateRules({})), '', 'off without privateRemote');
 });
+
+test('other spellings of hidden shell forms are refused; everyday ones pass', () => {
+  for (const c of ['cat ${p:-~/team/alpha}/a.txt', 'function f { ssh box; }; f', 'x+=1 ssh box', 'x[0]=1 ssh box', 'echo ssh | xargs -I{} {} box', 'echo x | sh >| o',
+    'cat ${p:=~/team/alpha}/a.txt', 'cat ${p-~/team/alpha}/a.txt', 'cat ${a:-${b:-~/team/alpha}}/a.txt', "bash -c 'cat ${p:-~/team/alpha}/a.txt'",
+    'function { ssh box; }', 'function f\n{\n  ssh box\n}', 'function f { $(echo ssh) box; }', 'x+=$(date) ssh box', 'x[0]=$(date) ssh box', 'x[a b]=1 ssh box', 'x[$(echo 0)]=1 ssh box', 'x+=1 $(echo ssh) box',
+    'echo ssh | xargs -I % % box', "echo ssh | xargs -I'{}' {} box", 'echo ssh | xargs -i {} box', 'echo ssh | xargs --replace {} box', 'echo ssh | xargs -I{} sudo {} box', 'echo ssh | xargs -I{} /usr/bin/{} box',
+    'ls | xargs -n1 echo; echo ssh | xargs -I{} {} box', 'echo ssh | xargs -d , -I{} {} box', 'echo x | sh >|o', 'echo x | sh 2>| o', 'x=$(date) ssh box', 'case x in x) ssh box;; esac'])
+    assert.equal(bash(c), P, c);
+  for (const c of ['x+=1', 'x+=1; echo $x', 'x[0]=1; echo ok', '((i+=1))', 'function f { echo hi; }; f', 'function f() { echo hi; }; f', 'echo ${x:-hello}', 'cat ${TMPDIR:-/tmp}/a.txt', 'cat ${p:-docs}.txt',
+    'ls | xargs -I{} cat {}', 'ls | xargs -I{} echo {}', 'ls | xargs -n1 echo', 'ls | xargs -0 -I{} cp {} /tmp', 'echo x | tee a >| o', "grep 'function f {' x.sh", 'x=$(date); echo $x', 'x=$(date) node app.js', 'case x in x) echo hi;; esac'])
+    assert.equal(bash(c), '', c);
+});

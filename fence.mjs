@@ -249,7 +249,7 @@ const WRAPS = ['sudo', 'exec', 'env', 'nohup', 'time', 'command', 'builtin', 'xa
 const SHELL = `(?:\\S*/)?(?:${SHELLS.join('|')})`;
 const LEAD = `(?:(?:\\w+=(?:"[^"\\n]*"|[^\\s"])*|-\\S+|\\d+[smh]?|(?:\\S*/)?(?:${WRAPS.map((w) => w.replace(/[.{)!]/, '\\$&')).join('|')}))\\s+)*`;
 // `echo 'ssh x' | nohup sh`, `| sh -s -- a`, `| sh 2>&1`, `| sh -`: the script is only on the pipe.
-const PIPED = new RegExp(`\\|&?\\s*${LEAD}${SHELL}(?:(?:\\s+-\\S*|\\s*\\d*&?[<>]+&?\\s*[^\\s;&|)'"]+)*(?:\\s+#.*)?\\s*(?:$|[;&|)])|(?:\\s+-\\S+)*\\s+-\\w*s\\b)`, 'm');
+const PIPED = new RegExp(`\\|&?\\s*${LEAD}${SHELL}(?:(?:\\s+-\\S*|\\s*\\d*&?[<>]+[&|]?\\s*[^\\s;&|)'"]+)*(?:\\s+#.*)?\\s*(?:$|[;&|)])|(?:\\s+-\\S+)*\\s+-\\w*s\\b)`, 'm');
 // `$(echo ssh) box`, `sh <(echo x)`, `sh -c "$(cat x)"`: the program or script only exists once it runs. Not `x=$(date)`.
 const BUILT = new RegExp(`(?:^|[;&|\\n(]|\\$\\()\\s*${LEAD}(?:<+\\s*)?[^\\s=]*(?:\\$\\(|\`|<\\()`, 'm');
 // Quoted text is data, unless it runs something: 'a|sh' goes, 's'h and "$(x)" stay.
@@ -414,12 +414,42 @@ function gitHistory(ws, here, home, o) {
   const paths = dash >= 0 ? rest.slice(dash + 1) : operands.filter((w) => inside.some((d) => fs.existsSync(path.resolve(d, w))));
   return blind || !paths.length || paths.some((p) => /[*?[:]/.test(p) || inside.some((d) => o.hit(p, d) || o.reach(p, d)));
 }
+// `x=$(date) ssh box`, `case x in x) ssh box;; esac`: the program sits after a value or a pattern the segment split can't see past.
+const SUBST = '\\$\\((?:[^()]|\\((?:[^()]|\\([^()]*\\))*\\))*\\)|`[^`]*`';
+const ASSIGNED = new RegExp(`(^|[\\s;&|(])(\\w+=)((?:"(?:[^"\\\\$\`]|\\\\[\\s\\S]|${SUBST}|\\$(?!\\())*"|'[^']*'|${SUBST}|[^\\s;&|()<>"'\`$]|\\$(?!\\())*)`, 'gm');
+const flat = (text) => (/\bcase\s+\S+\s+in\b/.test(text) ? text.replace(/\bcase\s+\S+\s+in\s+\(?[^;()\n]*\)|;;&?\s*\(?[^;()\n]*\)|;&\s*\(?[^;()\n]*\)/g, ';') : text)
+  .replace(ASSIGNED, (m, at, key, value) => (/\$\(|`/.test(value) ? `${at}${key}S` : m));
+// `echo ssh | xargs -I{} {} box`: the program itself comes in on stdin.
+const XARGS_RUNS = new RegExp(`(?:^|[\\s;&|(/])xargs((?:\\s+-(?:[EIJLPRSadns]\\s*\\S+|[\\w-]+(?:=\\S*)?))*)\\s+${LEAD}(\\S+)`, 'gm');
+function xargsProgram(text) {
+  for (const [, opts, prog] of text.matchAll(XARGS_RUNS)) {
+    const mark = opts.match(/\s(?:-[IJ]\s*|-i|--replace=)(\S+)/)?.[1] ?? (/\s(?:-i|--replace)(?![\w-])/.test(opts) ? '{}' : '');
+    if (mark && prog.includes(mark)) return true;
+  }
+  return false;
+}
+// The same command in the spelling the checks read: `function f {` as `() {`, `x+=1` and `x[0]=1` as `x=1`, `${p:-~/a}` as its default.
+// Read as well as the original, not instead: `${p:-docs}` could still be anything else. Nesting too deep to unwrap comes back null.
+function respelled(text) {
+  let t = text.replace(/(^|[\s;&|({])function\s+(?:[^\s(){};&|]+\s+)*\{/g, '$1() {')
+    .replace(/(^|[\s;&|(])(\w+)(?:\[[^\]\n]{0,200}\]\+?|\+)=/g, '$1$2=');
+  for (let i = 0; i < 8; i++) {
+    const next = t.replace(/\$\{\w+:?[-=+]([^{}]*)\}/g, '$1');
+    if (next === t) return t;
+    t = next;
+  }
+  return null;
+}
 function privateCommand(cmd, cwd, home, o, depth) {
   const raw = String(cmd), text = inlineHelpers(unquote(raw)), here = [...new Set(places(text, cwd, home))];
   // Code the fence can't read is refused once there is a folder or machine to protect. Tools alone are matched by name.
   const strict = o.remote || o.dirs.length > 0;
+  const again = strict ? respelled(raw) : raw;
+  if (again === null || again !== raw && privateCommand(again, cwd, home, o, depth)) return true;
   const bare = strict ? plain(raw) : raw, code = masked(bare);
-  if (strict && (PIPED.test(bare) || PIPED.test(code) || BUILT.test(code))) return true;
+  if (strict && (PIPED.test(bare) || PIPED.test(code) || BUILT.test(code) || xargsProgram(code))) return true;
+  const level = strict ? flat(bare) : bare;
+  if (level !== bare && privateCommand(level, cwd, home, o, depth)) return true;
   const values = strict ? expanded(text) : [];
   if (values.some((t) => privateCommand(t, cwd, home, o, depth))) return true;
   if (o.remote) {
