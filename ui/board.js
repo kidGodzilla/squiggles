@@ -27,7 +27,7 @@ async function loadBoard() {
   if (B.seen) for (const t of B.tasks) if (!before.has(t.id)) B.fresh.add(t.id);
   B.seen = true;
   renderGoals(); renderTasks(); B.fresh.clear(); linkAll();
-  if (B.view === 'team') { renderTeam(); loadHumans(); loadCost(); loadWatches(); }
+  if (B.view === 'team') { renderTeam(); loadHumans(); loadCost(); loadUsage(); loadWatches(); }
   if (B.view === 'calendar') loadCal();
   if (B.view === 'merge') loadMerges();
 }
@@ -476,11 +476,49 @@ const modelName = (m) => ({ opus: 'Opus 5.5', sonnet: 'Sonnet 5.5', 'claude-opus
 // Spend per squiggle: cost ledger over 7 days, refreshed when Team shows (at most once a minute). CLI: cost [days].
 B.cost = {}; B.costAt = 0;
 async function loadCost() { if (Date.now() - B.costAt < 6e4) return; B.costAt = Date.now(); const r = await api('/cost?days=7'); if (Array.isArray(r)) { B.cost = Object.fromEntries(r.map((x) => [x.id, x])); renderTeam(); } }
+// Usage: the weekly limit from the provider's own readings, and shares of Claude use. The limit in the summary; past weeks and per-squiggle use when opened. Information only. CLI: usage [days].
+B.usageAt = 0;
+const weekPct = (v) => { if (v == null) return 'None'; const p = v * 100; return !p ? '0%' : p < 0.05 ? 'Under 0.1%' : p >= 10 ? `${Math.round(p)}%` : `${p.toFixed(1)}%`; };
+function renderUsage() { // again on each Team render: on a cold load the numbers can land before the squiggle names
+  const u = B.usage, el = $('#usage'); if (!u?.weeks?.length || !el) return;
+  const now = Date.now(), l = u.limits?.seven_day, live = l && !l.stale, weeks = u.weeks, w = weeks.at(-1), prev = weeks.at(-2);
+  const wk = weekPct, used = (x) => (x?.limit != null ? `${Math.round(x.limit * 100)}%` : 'No reading');
+  const n = (v) => v.toLocaleString('en-US'), pc = (v) => `${Math.round(v * 100)}%`, day = (t) => new Date(t).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const resets = live && new Date(l.resetsAt).toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit' }).replace(':00', '');
+  const through = live ? Math.min(1, Math.max(0, 1 - (l.resetsAt - now) / (7 * 864e5))) : 0;
+  const pace = live && through > 0.05 ? l.used / through : null; // straight line from the week so far
+  const meter = (v, tick) => `<span class="ugbar"${tick == null ? '' : ` title="${pc(v)} of the limit used, ${pc(tick)} of the week gone"`}><i style="width:${Math.min(100, v * 100)}%"></i>${tick == null ? '' : `<u style="left:${tick * 100}%"></u>`}</span>`;
+  const sum = live ? `<span class="ugk">Weekly limit</span><b>${pc(l.used)}</b>${meter(l.used, through)}<span class="ugr">Resets ${esc(resets)}</span>` : `<span class="ugk">Weekly limit</span><span class="ugr">No current reading</span>`;
+  const head = `${sum}<span class="ugs">${n(w.merged)} merged${w.perMerged == null ? '' : `, ${wk(w.perMerged)} each`}</span>`;
+  const tile = (k, v, was) => `<div class="ugt"><span>${k}</span><b>${v}</b><small>${esc(was)}</small></div>`;
+  const row = (x) => `<tr><td>${day(x.from)} to ${day(x.to)}${x.soFar ? ' <small>so far</small>' : ''}</td><td class="ugl">${x.limit == null ? 'No reading' : `${meter(x.limit)}${pc(x.limit)}`}</td><td class="ugh">${n(x.finished)}</td><td>${n(x.merged)}</td><td>${wk(x.perMerged)}</td></tr>`;
+  const paid = u.squiggles.filter((s) => s.share > 0), top = paid[0]?.share || 1, free = u.squiggles.filter((s) => !s.share);
+  const sq = (s) => { const made = s.share - s.nothingShare, some = s.nothingShare >= 5e-4, tip = `${ownerName(s.id)}: ${wk(s.share)} of Claude use over ${s.turns} turns, ${wk(s.nothingShare)} produced nothing, ${s.reread ?? 0} read per 1 written`;
+    return `<div class="ugq" title="${esc(tip)}"><span>${esc(ownerName(s.id))}</span><span class="ugst"><i style="width:${made / top * 100}%"></i>${some ? `<em style="width:${s.nothingShare / top * 100}%"></em>` : ''}</span><b>${wk(s.share)}</b><small>${some ? `${wk(s.nothingShare)} nothing` : ''}</small></div>`; };
+  const t = u.turns, html = `<p class="ugp">${!live ? 'No limit reading this week yet.' : `The week is ${pc(through)} through.${pace == null ? '' : pace >= 1 ? ' At this pace the limit runs out before it resets.' : ` At this pace it ends near ${pc(pace)}.`}`}</p>
+    <div class="ugts">${tile('Used so far', used(w), `${used(prev)} last week`)}${tile('Finished', n(w.finished), `${n(prev?.finished ?? 0)} last week`)}${tile('Merged', n(w.merged), `${n(prev?.merged ?? 0)} last week`)}${tile('Per merged task', wk(w.perMerged), `${wk(prev?.perMerged)} last week`)}</div>
+    <h4>Last ${weeks.length} limit weeks</h4>
+    <div class="ugw"><table><thead><tr><th>Week</th><th class="ugl">Limit used</th><th class="ugh">Finished</th><th>Merged</th><th>Per merged</th></tr></thead><tbody>${weeks.slice().reverse().map(row).join('')}</tbody></table></div>
+    <h4>Use by squiggle, last ${u.days} days</h4>
+    <p class="ugp">${wk(t.nothing.share)} of Claude use produced nothing. <span class="ugkey"><i></i>Produced something</span> <span class="ugkey"><em></em>Produced nothing</span></p>
+    <div class="ugqs">${paid.map(sq).join('')}</div>
+    ${free.length ? `<p class="ugn">Not on the Claude limit: ${esc(free.map((s) => ownerName(s.id)).join(', '))}.</p>` : ''}
+    <p class="ugn">${esc(u.text?.definition || '')} Rereading: ${u.tokens?.reread ?? 0} tokens read per 1 written.</p>`;
+  if (head !== B.usageHead) $('#usageSum').innerHTML = B.usageHead = head;
+  if (html !== B.usageHtml) $('#usageBody').innerHTML = B.usageHtml = html;
+  el.hidden = false;
+}
+async function loadUsage() {
+  renderUsage();
+  if (Date.now() - B.usageAt < 6e4) return; B.usageAt = Date.now();
+  B.usage = await api('/usage?days=7').catch(() => null) || B.usage; renderUsage();
+}
 const tokens = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : `${Math.round(n / 1e3)}k`);
 const spend = (c) => (c.cost ? `$${c.today.toFixed(2)} today, $${c.cost.toFixed(2)} in 7 days` : `${tokens(c.in + c.out)} tokens in 7 days`);
 // Team card detail row: data-k lets the phone hide charter lines; title keeps the full text of a clamped field.
 const dd = (k, label, text) => `<dt data-k="${k}">${label}</dt><dd data-k="${k}" title="${esc(text)}">${esc(text)}</dd>`;
 function renderTeam() {
+  renderUsage();
   const q = ($('#teamq').value || '').trim().toLowerCase();
   const all = S.order.map((id) => S.sq[id]).filter(Boolean);
   const rank = (s) => (s.paused ? 2 : { blocked: 0, rethink: 1 }[s.status] ?? 2);
@@ -766,7 +804,7 @@ function setView(v, who, nav) {
   if (nav !== 'none' && location.search !== q) history[nav === 'replace' ? 'replaceState' : 'pushState'](null, '', location.pathname + q);
   if (v === 'room' || office) layout(); else loadBoard();
   if (v === 'merge') loadMerges();
-  if (v === 'team') { renderTeam(); loadHumans(); loadCost(); loadWatches(); }
+  if (v === 'team') { renderTeam(); loadHumans(); loadCost(); loadUsage(); loadWatches(); }
   if (v === 'calendar') loadCal();
   if (v === 'goals') loadLoad();
   if (v === 'files' && typeof loadFiles === 'function') loadFiles();

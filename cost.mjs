@@ -22,6 +22,9 @@ export function createLedger(file) {
   };
   return { add, rows, summary };
 }
+// Only Claude rows count toward its limit; a row with no provider predates the field and is Claude.
+export const onClaude = (r) => !r.provider || r.provider === 'claude';
+export const share = (v) => { const p = (v || 0) * 100; return !p ? '0%' : p < 0.05 ? 'under 0.1%' : p >= 10 ? `${Math.round(p)}%` : `${p.toFixed(1)}%`; };
 export const usd = (n) => `$${(n || 0).toFixed(2)}`;
 const tok = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}k` : String(n || 0));
 export const describeCost = (r) => `${usd(r.cost)} in ${r.turns} turns, ${tok(r.in)} in / ${tok(r.out)} out tokens${r.today ? `; ${usd(r.today)} today` : ''}`;

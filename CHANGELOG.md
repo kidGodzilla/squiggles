@@ -51,6 +51,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Private data fence (off until configured): config `privateDirs`, `privateTools` and `privateRemote` name folders, tools and remote reach that only Claude squiggles get. Codex, Cursor and Pi guards refuse them, including walks from a parent folder, symlinks and globs; config is read each call and an unreadable config refuses. `notes` leaves private folders out for those squiggles.
 
 ### Added
+- Usage: `usage [days]` and a line on the Team tab show the weekly Claude limit, each squiggle's share of Claude use, what each limit week finished, and turns that produced nothing.
 - Emoji reactions in chats: tap + under a message (or the chip itself, to take it back) to react, and squiggles react with `react <chat> <emoji> [words]`. Reactions wake nobody. Settings turns them off for the whole room (`room reactions on|off`).
 - Watches: a squiggle files a read-only check (`watch add "<command>" --every 30m`), you approve the exact text on the Team tab, and the room runs it on schedule and wakes the squiggle only when the output changes. Drop one there or with `watch drop`. Nothing else checks that a command only reads, so read it before you approve.
 - Quiet wakes: a scheduled wake is skipped when the last turn ended IDLE or WAITING and nothing it would act on (its open notes, untold suggestion answers, its charter) has changed. A real wake still runs every 6 hours. Squiggles that watch outside things can be set to always wake (squiggle sheet, set by the user or the lead).

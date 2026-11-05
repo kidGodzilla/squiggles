@@ -27,6 +27,7 @@ import { trustLevel, trustOf, trustRules, updateRefusal, createRefusal, quitRefu
 import { KEYS, DEFAULT_SLOTS, slotKey, rankOf, limitOf, enqueue, drain, leave, checkSlots } from './slots.mjs';
 import { dropStale } from './stale.mjs';
 import { createLedger } from './cost.mjs';
+import { usage as usageReport } from './usage.mjs';
 import { load as ownerLoad } from './load.mjs';
 import { modelFor as pickModel, DEFAULT_MODELS, EFFORTS, checkModelEffort } from './models.mjs';
 import { fenced as cursorFenced, HOOKS as CURSOR_HOOKS } from './cursor/install.mjs';
@@ -49,6 +50,7 @@ const home = (p) => String(p || '').replace(/^~(?=\/|$)/, os.homedir());
 // Code (ROOT) is written by git only; the room lives in DATA. See docs/upgrading.md.
 const ROOT = path.dirname(new URL(import.meta.url).pathname);
 const DATA = dataDir();
+const usageCache = {};
 try { const m = await migrate(DATA); if (m) console.log(`Migrated data schema ${m.from} to ${m.to}; backup in ${m.backup}`); } catch (e) { console.error(e.message); process.exit(1); }
 const CONFIG = loadConfig(DATA);
 const PORT = CONFIG.port;
@@ -1560,6 +1562,8 @@ const server = http.createServer(async (req, res) => {
     // The user's load: reads every chat log, so one minute's cache per day count.
     if (url.pathname === '/api/load') { const n = Math.max(1, Math.min(90, +url.searchParams.get('days') || 7)), c = loadCache[n];
       return json(res, c && Date.now() - c.at < 60e3 ? c.v : (loadCache[n] = { at: Date.now(), v: ownerLoad({ root: DATA, days: n }) }).v); }
+    if (url.pathname === '/api/usage') { const n = Math.max(1, Math.min(28, +url.searchParams.get('days') || 7)), c = usageCache[n];
+      return json(res, await (c && Date.now() - c.at < 60e3 ? c.v : (usageCache[n] = { at: Date.now(), v: usageReport({ root: DATA, days: n }) }).v)); }
     if (url.pathname === '/api/cost') return json(res, ledger.summary(Math.max(1, Math.min(90, +url.searchParams.get('days') || 1))));
     if (url.pathname === '/api/quit' && req.method === 'POST') { // the lead or the unlocked page; `by` from the process tree, not the body
       const b = await body(req, res), c = await callerSquiggle(req), passcode = !!roomCfg().passcode?.hash, owner = () => { try { return pass.session(req); } catch { return false; } };
