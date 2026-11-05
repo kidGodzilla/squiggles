@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createReactions, findMessage, isEmoji } from '../reactions.mjs';
+import { roomRefusal } from '../gates.mjs';
 
 const store = () => createReactions(path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'rx-')), 'reactions.json'));
 const src = (f) => fs.readFileSync(new URL(`../${f}`, import.meta.url), 'utf8');
@@ -45,8 +46,10 @@ test('off refuses new reactions, and who reacted never comes from a squiggle-con
 });
 
 test('a plain squiggle cannot flip the toggle; UI and CLI both can reach it', () => {
+  assert.equal(roomRefusal({ action: 'reactions', caller: 'ann', page: true })?.status, 403);
+  assert.equal(roomRefusal({ action: 'reactions', caller: 'lead', lead: true }), null);
   const s = src('server.mjs');
-  assert.match(s, /action === 'reactions'[\s\S]{0,260}c && !loadSquiggle\(c\)\?\.lead/);
+  assert.ok(s.indexOf('roomRefusal({') < s.indexOf("b.action === 'reactions'"), 'gated before it acts');
   assert.match(src('bin/agents.mjs'), /a\[0\] === 'reactions'/);
   assert.match(src('ui/index.html'), /id="reactOn"/);
   assert.match(src('ui/settings.js'), /action: 'reactions'/);

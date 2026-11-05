@@ -13,7 +13,7 @@ const afterMerge = async () => {
 const [cmd, ...a] = process.argv.slice(2);
 
 // Your terminal unlocks squiggle settings, charters, hiring, quitting, deleting shared files and sharing on the internet; merges stay browser-only.
-const UNLOCKS = /^\/(squiggles(\/[^/]+\/update)?|files|quit|slots|share|watches)$/;
+const UNLOCKS = /^\/(squiggles(\/[^/]+\/update)?|files|quit|slots|share|watches|humans|room)$/;
 const call = (path, body) => callWithUnlock(base, path, body, process.stdin.isTTY && UNLOCKS.test(path) && (() => askCode('this change')));
 
 // The room passcode, typed at a terminal and not echoed. Squiggles have no terminal, so they can't answer it.
@@ -57,11 +57,11 @@ const cmds = {
   // tell <id> "<text>" [--image <path>]: the image goes to the squiggle as an image block and shows in its chat.
   tell: async () => {
     const i = a.indexOf('--image'), img = i >= 0 ? a.splice(i, 2)[1] : '';
-    if (!img) return call(`/squiggles/${a[0]}/send`, { text: a[1], from: 'lead' });
+    if (!img) return call(`/squiggles/${a[0]}/send`, { text: a[1] });
     const { readFileSync } = await import('node:fs'), { resolve, extname } = await import('node:path');
     const type = { '.png': 'png', '.jpg': 'jpeg', '.jpeg': 'jpeg', '.gif': 'gif', '.webp': 'webp' }[extname(img).toLowerCase()];
     if (!type) throw new Error('--image must be png, jpg, gif or webp');
-    return call(`/squiggles/${a[0]}/send`, { text: a[1] || '', from: 'lead', images: [`data:image/${type};base64,${readFileSync(resolve(img)).toString('base64')}`] });
+    return call(`/squiggles/${a[0]}/send`, { text: a[1] || '', images: [`data:image/${type};base64,${readFileSync(resolve(img)).toString('base64')}`] });
   },
   stop: () => call(`/squiggles/${a[0]}/stop`, {}),
   clear: () => call(`/squiggles/${a[0]}/clear`, {}),

@@ -570,8 +570,8 @@ function editHuman(anchor, id) {
     pop.onclick = async (e) => {
       const a = e.target.dataset.a; if (!a) return;
       let r;
-      if (a === 'save') { const f = { name: pop.querySelector('#hmN').value.trim(), avatar: pop.querySelector('#hmA').value.trim() }; r = await api('/humans', h ? { op: 'edit', id: h.id, ...f } : { op: 'add', ...f }); if (!r?.error) toast(h ? `Saved ${r.name}` : `Added ${r.name}`); }
-      if (a === 'remove') { if (!confirm(`Remove ${h.name}?`)) return; r = await api('/humans', { op: 'remove', id: h.id }); if (!r?.error) toast(`Removed ${h.name}`); }
+      if (a === 'save') { const f = { name: pop.querySelector('#hmN').value.trim(), avatar: pop.querySelector('#hmA').value.trim() }; r = await unlocked(() => api('/humans', h ? { op: 'edit', id: h.id, ...f } : { op: 'add', ...f }), 'Unlock this browser'); if (r === null) return; if (!r?.error) toast(h ? `Saved ${r.name}` : `Added ${r.name}`); }
+      if (a === 'remove') { if (!confirm(`Remove ${h.name}?`)) return; r = await unlocked(() => api('/humans', { op: 'remove', id: h.id }), 'Unlock this browser'); if (r === null) return; if (!r?.error) toast(`Removed ${h.name}`); }
       if (r?.error) return toast(r.error);
       closePop(); loadHumans();
     };

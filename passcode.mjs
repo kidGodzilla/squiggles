@@ -13,7 +13,7 @@ const PROXIED = /\.(ts\.net|trycloudflare\.com)$/i; // hosts only tailscale serv
 const sha = (s) => crypto.createHash('sha256').update(s).digest('hex');
 const hashCode = (code, salt) => crypto.scryptSync(String(code), salt, 32).toString('hex');
 
-export function makePasscode({ read, write, now = () => Date.now() }) {
+export function makePasscode({ read, write, now = () => Date.now(), localBrowser = async () => false }) {
   const disk = (p) => (p?.hash ? { salt: p.salt, hash: p.hash, localSkips: !!p.localSkips, ...(p.codeLen && { codeLen: p.codeLen }) } : null);
   let mem = disk(read());
   if (read()?.sessions) write(mem); // sessions an older server stored
@@ -88,6 +88,15 @@ export function makePasscode({ read, write, now = () => Date.now() }) {
     return true;
   }
 
+  // The person at a page: an unlocked session, or on this computer a real browser. Headers alone prove nothing (`localBrowser`
+  // asks who holds the socket), so a detached child forging them stays a terminal.
+  async function page(req) {
+    const p = cfg();
+    if (p?.hash && hasSession(req, p)) return true;
+    if (p?.hash && !p.localSkips) return false;
+    return isLocal(req) && isBrowser(req) && await localBrowser(req);
+  }
+
   // Returns { body, cookie? }. Throws Error with .code for HTTP status.
   function op(req, b = {}) {
     const p = cfg() || {};
@@ -119,5 +128,5 @@ export function makePasscode({ read, write, now = () => Date.now() }) {
     throw err('op: unlock, lock, set, clear, local or status');
   }
 
-  return { ok, status, op, session, owner, codeLen: () => mem?.codeLen || 0 };
+  return { ok, status, op, session, owner, page, codeLen: () => mem?.codeLen || 0 };
 }

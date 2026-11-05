@@ -5,6 +5,10 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 ## 0.1.2 (unreleased)
 
 ### Security
+- Who sent a message comes from the process tree and the session, never the request. A request can't claim to be you: a terminal or detached process shows as From a terminal, and reaches the squiggle labelled as not a person. A squiggle can't open a message with a person's name either.
+- A page on this computer counts as you only when the socket's program is an installed browser, read from the running file: forged browser headers from a script get nowhere, with or without a passcode. A browser we don't list needs a room passcode. A process that starts a real browser itself still can't be told from you, so set a passcode.
+- People and room settings (add or edit a person, reactions, characters, lock, quit) need a page or the lead, never a plain squiggle or terminal; only you edit you. With a passcode the CLI asks for it; with none, use the page.
+- The screen fence binds every caller, the lead and pages included: fenced folders and room.json never show, private folders only to Claude squiggles, and a squiggle can't take another's screen.
 - With no room passcode only this computer opens the room: a remote device gets the lock screen and nothing else. Tailnet sharing needs a passcode of 8+ characters, like Cloudflare, so a device on the tailnet can't reach an unlocked room. A room already shared with a shorter code stays behind its lock until you set a new one.
 - New passcodes need 8+ characters: a leaked hash cracks a 4-digit code in minutes. Existing shorter codes still unlock.
 - The private-data fence covers git history: in a repo holding a private folder, non-Claude squiggles can't read old versions through `git show`, `git log -p`, `git diff`, `git grep` or `git archive`. Names-only logs and history scoped to other folders still work; ordinary repos are unaffected.

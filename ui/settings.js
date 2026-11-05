@@ -114,8 +114,8 @@ function setTalk() {
 }
 $('#setGen').onchange = (e) => { SET.gen = e.target.value; renderSettings(); };
 $('#setTalk').onchange = setTalk;
-$('#reactOn').onchange = async (e) => { const r = await api('/room', { action: 'reactions', value: e.target.checked ? 'on' : 'off' }); if (r && r.error) { toast(r.error); e.target.checked = S.rxOn; } };
-$('#setRoom').onclick = async () => { const r = await api('/room', { action: 'characters', value: SET.gen }); if (r && r.error) return toast(r.error); roomGen(SET.gen); S.order.forEach(reskin); renderSettings(); };
+$('#reactOn').onchange = async (e) => { const r = await unlocked(() => api('/room', { action: 'reactions', value: e.target.checked ? 'on' : 'off' }), 'Unlock this browser'); if (r === null || r.error) { if (r) toast(r.error); e.target.checked = S.rxOn; } };
+$('#setRoom').onclick = async () => { const r = await unlocked(() => api('/room', { action: 'characters', value: SET.gen }), 'Unlock this browser'); if (r === null) return; if (r && r.error) return toast(r.error); roomGen(SET.gen); S.order.forEach(reskin); renderSettings(); };
 $('#setGrid').onclick = async (e) => {
   const id = e.target.closest('[data-use]')?.dataset.use; if (!id) return;
   const s = S.sq[id], look = s.look && parseLook(s.look).gen === SET.gen ? s.look : SET.gen;

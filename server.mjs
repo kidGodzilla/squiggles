@@ -19,6 +19,7 @@ import { needsList, alertWake } from './needs.mjs';
 import { reportHoldMs, reportsText, reportLines } from './focus.mjs';
 import { quietSig, skipWake, alwaysWakes, ownEnd } from './quiet.mjs';
 import { HOME_FENCE } from './fence.mjs';
+import { sender, askerOf, labelled, screenRefusal, humansRefusal, roomRefusal } from './gates.mjs';
 import { wantsPrecheck, precheckPrompt, runPrecheck, PRECHECK_MODEL } from './precheck.mjs';
 import { createWaits, bgStarted, bgEnded, ownRuns } from './waits.mjs';
 import { createWatches } from './watches.mjs';
@@ -41,7 +42,7 @@ import { makeGuard, tailnetName } from './guard.mjs';
 import { makePasscode } from './passcode.mjs';
 import { createTunnel, killStale, MIN_CODE, TUNNEL_HOST } from './tunnel.mjs';
 import { createPeers, fence, checkName } from './peers.mjs';
-import { callerChain } from './caller.mjs';
+import { callerChain, browserCaller } from './caller.mjs';
 import * as codexHook from './codex/guard.mjs';
 import { withHook as claudeFence } from './claude/guard.mjs';
 import { codeStamp, codeChanged } from './codestamp.mjs';
@@ -627,7 +628,7 @@ function send(id, text, from = 'owner', { replay = false, human, images = [], as
   const raw = text; text = stampWake(text);
   // Who asked this turn (Proactive): the user, a person, the lead, or a non-scheduled wake. Tasks filed while it runs are theirs, not the squiggle's own idea.
   if (!replay && r.status !== 'working') { r.asked = []; charterAtStart(s); } // checked again at turn end
-  asker ||= from === 'harness' ? '' : from === 'owner' ? human || 'owner' : from;
+  asker ||= askerOf(from, human, id);
   if (s.lead && from === 'owner' && !replay) r.userAt = Date.now(); // team reports hold while the user talks with the lead
   if (asker && !(r.asked ||= []).includes(asker)) r.asked.push(asker);
   // A pending restart waits for everyone to be idle; new turns would starve it (a report wakes the lead, the lead wakes someone).
@@ -650,7 +651,8 @@ function send(id, text, from = 'owner', { replay = false, human, images = [], as
     }
   }
   const who = from === 'owner' && (humans.all().find((h) => h.id === (human || 'owner')) || { id: human, name: human });
-  let content = (who ? `From ${who.name}: ${text}` : text) + (images.length ? `\n\n(Attached: ${images.map((f) => path.join(FILES, f)).join(', ')})` : '');
+  const leadId = listSquiggles().find((x) => x.lead)?.id, peer = from === 'terminal' ? 'a terminal or detached process' : loadSquiggle(from)?.name;
+  let content = labelled(text, { from, who: who?.name, leadId, name: peer }) + (images.length ? `\n\n(Attached: ${images.map((f) => path.join(FILES, f)).join(', ')})` : '');
   const shown = { k: 'user', text, from, ...(who && { human: who.id }), ...(images.length && { imgs: images.map((f) => `/files/${f}`) }) };
   // Mid-turn: the owner hears at once that it landed, and the squiggle answers it before carrying on.
   const midTurn = () => {
@@ -1413,7 +1415,7 @@ function tailEvents(id, n = 400) {
 const tailnet = CONFIG.tailnet ? tailnetName(TS) : { get: () => '', seen: () => {} };
 const refuse = makeGuard(PORT, tailnet.get, () => tunnel?.host() || '');
 // Optional room passcode: the page and its files always load (the lock screen asks); everything else needs it.
-const pass = makePasscode({ read: () => roomCfg().passcode, write: (v) => { const c = roomCfg(); if (v) c.passcode = v; else delete c.passcode; fs.writeFileSync(ROOMCFG, JSON.stringify(c, null, 2) + '\n'); } });
+const pass = makePasscode({ read: () => roomCfg().passcode, write: (v) => { const c = roomCfg(); if (v) c.passcode = v; else delete c.passcode; fs.writeFileSync(ROOMCFG, JSON.stringify(c, null, 2) + '\n'); }, localBrowser: browserCaller });
 // Gated merges: the user or the lead, never another squiggle. A squiggle sets `by` and AGENTS_ID itself; it can't
 // choose whose child its shell is, so a caller whose process chain runs through a squiggle's claude process is that squiggle.
 // Anyone else needs a browser session unlocked with the room passcode, so gated merges need one set. Unknown callers are
@@ -1424,6 +1426,11 @@ async function callerSquiggle(req) {
   // The turn process, and a Codex app-server (per squiggle, cleared on exit) so its background children count between turns.
   const procs = new Map([...rt].flatMap(([id, r]) => [r.proc?.pid, r.cx?.proc?.pid].filter(Boolean).map((p) => [p, id])));
   return (await callerChain(req)).map((p) => procs.get(p)).find(Boolean) || '';
+}
+// Who a route's request is: the process tree first, then a person's page, never `from` or `human` in the body.
+async function whoSent(req, human) {
+  const caller = await callerSquiggle(req);
+  return { caller, ...sender({ caller, page: await pass.page(req), human, people: humans.all() }) };
 }
 async function merger(req, b) {
   const id = await callerSquiggle(req);
@@ -1548,7 +1555,13 @@ const server = http.createServer(async (req, res) => {
       try { const r = await peersOp(b); broadcast('*room', { k: 'room', action: 'peers' }); return json(res, r); }
       catch (e) { return json(res, { error: e.message, ...(e.kind ? { kind: e.kind } : {}) }, 400); }
     }
-    if (url.pathname === '/api/humans') return json(res, req.method === 'POST' ? humans.op(await body(req, res)) : { humans: humans.all() });
+    if (url.pathname === '/api/humans') {
+      if (req.method !== 'POST') return json(res, { humans: humans.all() });
+      const b = await body(req, res), c = await callerSquiggle(req);
+      const no = humansRefusal({ id: b.id, caller: c, lead: !!(c && loadSquiggle(c)?.lead), page: await pass.page(req), passcode: !!roomCfg().passcode?.hash });
+      if (no) return json(res, { error: no.error, ...(no.unlock && { unlock: true }) }, no.status);
+      return json(res, humans.op(b));
+    }
     if (url.pathname === '/api/config') { const { userName, model, codex, tailnet } = CONFIG; return json(res, { userName, model, codex, tailnet, call: fs.existsSync(CALL_DIR), version: VERSION, schema: CONFIG.schema }); }
     if (url.pathname === '/api/share' && req.method === 'POST') {
       const b = await body(req, res);
@@ -1591,10 +1604,11 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/voice') return json(res, kokoro.status());
     // Room controls (radio, voices, chatter, tabs, chat windows) so the lead can do whatever the user can.
     if (url.pathname === '/api/room' && req.method === 'POST') {
-      const b = await body(req, res);
+      const b = await body(req, res), rc = await callerSquiggle(req);
+      const no = roomRefusal({ action: b.action, caller: rc, lead: !!(rc && loadSquiggle(rc)?.lead), page: await pass.page(req), passcode: !!roomCfg().passcode?.hash });
+      if (no) return json(res, { error: no.error, ...(no.unlock && { unlock: true }) }, no.status);
       if (b.action === 'reactions') { // on or off for the whole room. Stored reactions stay, so off then on brings them back.
-        const c = await callerSquiggle(req), v = String(b.value || '').toLowerCase();
-        if (c && !loadSquiggle(c)?.lead) return json(res, { error: 'Only the owner and the lead turn reactions on or off' }, 403);
+        const v = String(b.value || '').toLowerCase();
         if (!['on', 'off'].includes(v)) return json(res, { error: 'room reactions on|off' }, 400);
         fs.writeFileSync(ROOMCFG, JSON.stringify({ ...roomCfg(), reactions: v }, null, 2) + '\n'); b.value = v;
       }
@@ -1603,7 +1617,7 @@ const server = http.createServer(async (req, res) => {
         if (!gens.includes(g)) return json(res, { error: `generators: ${gens.join(', ')}` }, 400);
         fs.writeFileSync(ROOMCFG, JSON.stringify({ ...roomCfg(), characters: g }, null, 2) + '\n'); b.value = g; drawIcons();
       }
-      broadcast('*room', { k: 'room', ...b }); return json(res, 'ok');
+      broadcast('*room', { ...b, k: 'room' }); return json(res, 'ok');
     }
     if (url.pathname === '/api/react' && req.method === 'POST') { // `by` is the process tree first; only a person's page names itself
       const b = await body(req, res), c = await callerSquiggle(req), chat = String(b.chat || '');
@@ -1796,11 +1810,17 @@ const server = http.createServer(async (req, res) => {
       switch (p[3]) {
         case 'events': return json(res, tailEvents(id, Number(url.searchParams.get('n') || 400)));
         case 'journal': return json(res, readText(path.join(sqDir(id), 'journal.md')));
-        case 'send': send(id, b.text || '', b.from || 'owner', { human: b.human, images: (b.images || []).slice(0, 8).map(saveImage) }); relayMentions(id, b.text || '', b.from || 'owner', b.human); return json(res, 'ok');
-        case 'wake': return json(res, wake(id, b.why || 'asked', b.why && b.why !== 'asked' ? 'lead' : 'owner'));
+        case 'send': { const w = await whoSent(req, b.human); send(id, b.text || '', w.from, { human: w.human, images: (b.images || []).slice(0, 8).map(saveImage) }); relayMentions(id, b.text || '', w.from, w.human); return json(res, 'ok'); }
+        case 'wake': { const w = await whoSent(req); return json(res, wake(id, b.why || 'asked', askerOf(w.from, w.human, id))); }
         case 'stop': stop(id); return json(res, 'ok');
         case 'clear': return json(res, clearChat(id));
-        case 'screen': return json(res, await screen(id, b));
+        case 'screen': {
+          const w = await whoSent(req, b.by), cs = w.caller && loadSquiggle(w.caller);
+          // Before screen() touches the path, so a refusal can't tell whether a fenced file exists.
+          const no = screenRefusal({ id, kind: b.kind, file: path.resolve(home(String(b.arg || ''))), caller: w.caller, lead: !!cs?.lead, claude: !!cs && !providerOf(cs), config: ROOMCFG }, { dir: DATA });
+          if (no) return json(res, { error: no.error }, no.status);
+          return json(res, await screen(id, { ...b, by: w.human || w.from }));
+        }
         case 'remove': return json(res, removeSquiggle(id));
         case 'update': {
           const { charter, ...meta } = b;

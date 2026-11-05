@@ -443,7 +443,7 @@ const chatLine = (id, ev) => {
     return h === (S.me || 'owner') ? { cls: 'm you', text: ev.text, html: mentionHtml(esc(ev.text)) + imgs } : { cls: 'm you other', text: ev.text, html: mentionHtml(esc(`${B.humans.find((x) => x.id === h)?.name || h}: ${ev.text}`)) + imgs };
   }
   if (ev.k === 'user') {
-    const from = ev.from === 'lead' ? 'From the lead' : ev.from === 'mention' ? 'Mentioned' : ev.from === 'harness' ? (/^Team reports/.test(ev.text) ? 'Team reports' : 'Woke up') : ev.from;
+    const from = ev.from === 'lead' ? 'From the lead' : ev.from === 'mention' ? 'Mentioned' : ev.from === 'terminal' ? 'From a terminal' : ev.from === 'harness' ? (/^Team reports/.test(ev.text) ? 'Team reports' : 'Woke up') : ev.from;
     const rep = /^Team reports/.test(ev.text) ? ev.text.split('\n').filter((l) => l.startsWith('[')) : null;
     return { cls: 'm sys', rep, text: rep ? `${from}: ${ev.text.split('\n').filter((l) => l.startsWith('[')).length}` : `${from}: ${ev.text.split('\n')[0].slice(0, 80)}` };
   }
