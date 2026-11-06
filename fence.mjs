@@ -14,6 +14,7 @@ export const REASONS = { dirs: 'Downloads, Desktop and Documents are off limits'
   peer: "that squiggle's transcript, journal and private notes are closed to other squiggles: ask the lead",
   secret: 'credentials stay off the screen',
   tree: 'a recursive read or copy from home or above reaches Downloads, Desktop, Documents and ~/.ssh: name a folder inside home',
+  word: 'a word this long with braces in it is too big to check, so it is refused; put it in a file',
   crash: 'guard could not read the tool call, so it is refused' };
 export const REASON = REASONS.dirs;
 // The main of every hook guard: exit 2 with a reason refuses. Codex runs the tool on any other exit, and on exit 2 with empty stderr.
@@ -42,22 +43,52 @@ const under = (names, p, cwd, home) => {
 };
 export const fencedPath = (p, cwd = process.cwd(), home = os.homedir()) => under(DIRS, p, cwd, home);
 export const sshPath = (p, cwd = process.cwd(), home = os.homedir()) => under(['.ssh'], p, cwd, home);
-// A shell glob as a regex source: * ? [abc] [!a] [^a] {a,b}.
+// A shell glob: * ? [abc] [!a] [^a] {a,b}.
 // Braces nest ({s{s,}h,x}); a ] first in a class is literal ([]s], [!]x]).
-const braceEnd = (g, i) => { for (let d = 0; i < g.length; i++) { if (g[i] === '{') d++; else if (g[i] === '}' && !--d) return i; } return -1; };
-const topSplit = (s) => { const out = ['']; let d = 0;
-  for (const ch of s) { if (ch === ',' && !d) { out.push(''); continue; } if (ch === '{') d++; else if (ch === '}') d--; out[out.length - 1] += ch; }
+const topSplit = (s) => { const out = []; let d = 0, a = 0;
+  for (let i = 0; i < s.length; i++) { if (s[i] === ',' && !d) { out.push(s.slice(a, i)); a = i + 1; } else if (s[i] === '{') d++; else if (s[i] === '}') d--; }
+  out.push(s.slice(a));
   return out; };
-const globSrc = (g) => { let r = '';
-  for (let i = 0; i < g.length; i++) {
-    const ch = g[i], neg = ch === '[' && /[!^]/.test(g[i + 1] || ''), j = ch === '[' ? g.indexOf(']', i + (neg ? 3 : 2)) : ch === '{' ? braceEnd(g, i) : -1;
-    if (ch === '*') r += '.*'; else if (ch === '?') r += '.';
-    else if (ch === '[' && j > 0) { r += `[${neg ? '^' : ''}${g.slice(i + (neg ? 2 : 1), j).replace(/[\\\]]/g, '\\$&')}]`; i = j; }
-    else if (ch === '{' && j > 0) { r += `(?:${topSplit(g.slice(i + 1, j)).map(globSrc).join('|')})`; i = j; }
-    else r += ch.replace(/[.+^$(){}|[\]\\]/g, '\\$&');
+// A glob is walked, never turned into a regex or a tree: repeated {*,*} backtracks for ever, and spelling out a long glob costs more
+// than the check. The walk holds every place in t the glob can have reached and stops when none is left, so a long glob that can't
+// match costs a few characters (t4201). Group ends and the next ] come from tables built once. Past 64 deep, or at a class no regex
+// can read, it throws, and every caller reads a throw as a match. A bad class the walk never reaches can't match either.
+const LINE_END = /[\n\r\u2028\u2029]/;
+const globTables = (g) => {
+  const close = new Int32Array(g.length).fill(-1), shut = new Int32Array(g.length + 4).fill(-1), open = [];
+  for (let i = 0; i < g.length; i++) { if (g[i] === '{') open.push(i); else if (g[i] === '}' && open.length) close[open.pop()] = i; }
+  for (let i = g.length - 1; i >= 0; i--) shut[i] = g[i] === ']' ? i : shut[i + 1];
+  return { close, shut, units: new Map() };
+};
+const globWalk = (g, { close, shut, units }, t, at, a, b, depth) => {
+  if (depth > 64) throw new Error('glob nested too deep');
+  const unit = (s) => { if (!units.has(s)) units.set(s, new RegExp(`^${s}$`, 'i')); return units.get(s); };
+  const step = (re, out) => { for (const p of at) if (p < t.length && re.test(t[p])) out.add(p + 1); };
+  for (let i = a; i < b && at.size; i++) {
+    const ch = g[i], neg = ch === '[' && i + 1 < b && /[!^]/.test(g[i + 1]), c = ch === '[' ? shut[i + (neg ? 3 : 2)] : -1, j = c >= b ? -1 : ch === '{' ? close[i] : c, out = new Set();
+    if (ch === '*') for (const p of at) { out.add(p); for (let q = p; q < t.length && !LINE_END.test(t[q]) && !out.has(q + 1); q++) out.add(q + 1); }
+    else if (ch === '?') step(unit('.'), out);
+    else if (ch === '[' && j > 0) { step(unit(`[${neg ? '^' : ''}${g.slice(i + (neg ? 2 : 1), j).replace(/[\\\]]/g, '\\$&')}]`), out); i = j; }
+    else if (ch === '{' && j > 0) {
+      let s = i + 1;
+      const alt = (e) => { for (const p of globWalk(g, { close, shut, units }, t, at, s, e, depth + 1)) out.add(p); s = e + 1; };
+      for (let k = s; k < j; k++) { if (g[k] === ',') alt(k); else if (g[k] === '{' && close[k] > 0) k = close[k]; }
+      alt(j); i = j;
+    } else step(unit(ch.replace(/[.+^$(){}|[\]\\]/g, '\\$&')), out);
+    at = out;
   }
-  return r; };
-const globRe = (g) => new RegExp(`^${globSrc(g)}$`, 'i');
+  return at;
+};
+// The last one read is kept: callers test one glob against every fenced folder in turn.
+let lastGlob, lastTables;
+const globRe = (g) => {
+  if (g !== lastGlob) { lastTables = globTables(g); lastGlob = g; }
+  const tables = lastTables;
+  return { test: (t) => globWalk(g, tables, t, new Set([0]), 0, g.length, 0).has(t.length) };
+};
+// Past this size a word with a brace in it is refused unread: no real command needs one, and spelling it out costs seconds (t4201).
+const WORD_MAX = 65536;
+const bigBrace = (cmd) => { let n = 0; for (const w of String(cmd).replace(/\\\n/g, '').split(/[\s;|&()<>`]+/)) if (w.length > 1024 && /[{}]/.test(w) && (n += w.length) > WORD_MAX) return true; return false; };
 const globHits = (seg, names = DIRS) => /[*?[{]/.test(seg) && names.some((d) => { try { return globRe(seg).test(d); } catch { return true; } });
 const homeRef = (home) => new RegExp(`(?:~|\\$HOME|\\$\\{HOME\\}|${esc(home)})["']?/["']?([^/\\s"';|&)]*)`, 'gi');
 // Any text (file contents too): a folder reached from home, in any case or by glob (~/downloads, "$HOME"/Desktop, ~/Down*).
@@ -85,18 +116,29 @@ function places(cmd, cwd, home) {
 }
 const startsHome = (cmd, cwd, home) => places(cmd, cwd, home).some((d) => d.toLowerCase() === home.toLowerCase());
 // {a,b} spelled out, so a brace can hold the home path or a folder above it ({~,x}/.ssh, {/home/me,/x}/Downloads).
-// {} and {x} stay literal, as in the shell. Capped: past the cap a word keeps its braces and globSrc reads them.
+// {} and {x} stay literal, as in the shell. Capped: past the cap a word keeps its braces and globRe reads them.
 // Depth capped too: thousands of groups overflowed the stack.
+// The leftmost { that closes with a comma of its own, in one pass: asking of each { in turn was quadratic on nested groups (t4201).
+const firstGroup = (w) => {
+  const open = [], comma = []; let first = -1, end = -1;
+  for (let i = w.indexOf('{'); i >= 0 && i < w.length; i++) {
+    if (w[i] === '{') { open.push(i); comma.push(false); } else if (!open.length) continue;
+    else if (w[i] === ',') comma[comma.length - 1] = true;
+    else if (w[i] === '}') {
+      const o = open.pop();
+      if (comma.pop() && (first < 0 || o < first)) { first = o; end = i; }
+      if (!open.length && first >= 0) break;
+    }
+  }
+  return [first, end];
+};
 const braces = (w, n = 64, depth = 0) => {
   if (depth >= n) return [w];
-  for (let i = w.indexOf('{'); i >= 0; i = w.indexOf('{', i + 1)) {
-    const j = braceEnd(w, i), alts = j > 0 ? topSplit(w.slice(i + 1, j)) : [];
-    if (alts.length < 2) continue;
-    const out = [];
-    for (const a of alts) for (const x of braces(w.slice(0, i) + a + w.slice(j + 1), n, depth + 1)) { out.push(x); if (out.length >= n) return out; }
-    return out;
-  }
-  return [w];
+  const [i, j] = firstGroup(w);
+  if (i < 0) return [w];
+  const out = [];
+  for (const a of topSplit(w.slice(i + 1, j))) for (const x of braces(w.slice(0, i) + a + w.slice(j + 1), n, depth + 1)) { out.push(x); if (out.length >= n) return out; }
+  return out;
 };
 // Glob segments against a path's segments; ** spans any number. Reaching the end of the path means the glob gets to it or inside.
 const segsMatch = (g, t) => {
@@ -252,6 +294,7 @@ function pushesInside(cmd) {
   return quotedBodies(cmd).some(pushesInside);
 }
 export function commandReason(cmd, cwd = process.cwd(), home = os.homedir()) {
+  if (bigBrace(cmd)) return REASONS.word;
   if (fencedCommand(cmd, cwd, home)) return REASONS.dirs;
   const raw = cmd; cmd = unquote(cmd);
   if (mentionsSsh(cmd, home) || (startsHome(cmd, cwd, home) && /(^|[\s=;&|(`])\.ssh\b/i.test(cmd)) || relReason(cmd, cwd, home) === REASONS.ssh) return REASONS.ssh;

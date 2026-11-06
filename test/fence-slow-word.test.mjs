@@ -4,8 +4,11 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { commandReason, pathReason, privateReason } from '../fence.mjs';
 import piGuard from '../pi/guard.ts';
+import { check } from '../codex/guard.mjs';
 
 const word = 'a/'.repeat(20000) + 'a', read = '/tmp/private-x/a', cwd = '/tmp', home = os.homedir(), key = ['~', '.ssh', 'id_rsa'].join('/');
 const rules = { dirs: ['/tmp/private-x'], tools: [], remote: false }, strict = (command) => privateReason('Bash', { command }, cwd, home, rules);
@@ -58,4 +61,29 @@ test('a word that climbs back out of the depth lands where the shell would', () 
 });
 test('a long run of > or -e that names no owned file takes under 1 s', () => {
   for (const c of ['>'.repeat(200000), `node -e x ${' -e'.repeat(13000)}`]) fast(c.slice(0, 11), () => commandReason(c, cwd));
+});
+
+// t4201: nested braces took seconds, then no answer at all. Too big to expand, so refused unread; the real guard answers too.
+const huge = ['{a,'.repeat(250000) + 'b' + '}'.repeat(250000), '{'.repeat(500000) + '}'.repeat(500000), '{a,b}'.repeat(200000)];
+const guard = fileURLToPath(new URL('../codex/guard.sh', import.meta.url));
+test('a 1 MB nested-brace word is refused under 1 s, with or without a fenced read after it', () => {
+  for (const w of huge) for (const tail of ['', ...[` ${key}`]]) for (const dir of ['/tmp', home]) {
+    const ev = { tool_name: 'Bash', tool_input: { command: `cat ${w}${tail}` }, cwd: dir };
+    let why; fast(w.slice(0, 9), () => { why = check(ev); });
+    assert.ok(why, `${w.slice(0, 9)} ${tail} from ${dir}`);
+  }
+});
+test('the real guard script answers a 1 MB nested-brace word', () => {
+  for (const w of huge) for (const tail of ['', ...[` ${key}`]]) {
+    const r = spawnSync('sh', [guard], { input: JSON.stringify({ tool_name: 'Bash', tool_input: { command: `cat ${w}${tail}` }, cwd: home }), timeout: 30000, encoding: 'utf8' });
+    assert.equal(r.status, 2, `${w.slice(0, 9)} ${tail}: ${r.signal || r.status}`);
+  }
+});
+test('many long brace words add up: 1 MB of 8,000-character words is refused under 1 s', () => {
+  const line = Array.from({ length: 125 }, (_, i) => '{a,b}'.repeat(1600) + i).join(' ');
+  let why; fast('125 words', () => { why = commandReason(`cat ${line}`, cwd); });
+  assert.ok(why);
+});
+test('ordinary brace words stay allowed, however many', () => {
+  assert.equal(commandReason(`cat ${'{a,b}/x '.repeat(5000)}`, cwd), '');
 });
