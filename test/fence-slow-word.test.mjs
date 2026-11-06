@@ -87,3 +87,6 @@ test('many long brace words add up: 1 MB of 8,000-character words is refused und
 test('ordinary brace words stay allowed, however many', () => {
   assert.equal(commandReason(`cat ${'{a,b}/x '.repeat(5000)}`, cwd), '');
 });
+test('a long run of > or -e that names no owned file takes under 1 s', () => {
+  for (const c of ['>'.repeat(200000), `node -e x ${' -e'.repeat(13000)}`]) fast(c.slice(0, 11), () => commandReason(c, cwd));
+});

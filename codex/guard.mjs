@@ -4,14 +4,14 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { check as cursorCheck } from '../cursor/guard.mjs';
-import { hookMain, mentionReason, pathReason, peerReason, privateCheck, REASONS, watchesPath } from '../fence.mjs';
+import { hookMain, mentionReason, ownedFileReason, pathReason, peerReason, privateCheck } from '../fence.mjs';
 
 const PATCH = /^(apply_patch|Edit|Write)$/;
 export function check(ev) {
   const cwd = path.resolve(ev.cwd || process.cwd(), ev.tool_input?.workdir || '.');
   if (!PATCH.test(ev.tool_name || '')) return cursorCheck({ ...ev, cwd });
   const text = String(ev.tool_input?.command ?? '');
-  for (const m of text.matchAll(/^\*\*\* (?:Add|Update|Delete) File: (.+)$|^\*\*\* Move to: (.+)$/gm)) { const p = (m[1] || m[2]).trim(), r = (watchesPath(p) && REASONS.watches) || pathReason(p, cwd) || peerReason('', { path: p }, { cwd }); if (r) return r; }
+  for (const m of text.matchAll(/^\*\*\* (?:Add|Update|Delete) File: (.+)$|^\*\*\* Move to: (.+)$/gm)) { const p = (m[1] || m[2]).trim(), r = ownedFileReason(p) || pathReason(p, cwd) || peerReason('', { path: p }, { cwd }); if (r) return r; }
   return mentionReason(text) || privateCheck(ev.tool_name, ev.tool_input, cwd) || cursorCheck({ ...ev, cwd, tool_input: { ...ev.tool_input, command: undefined } });
 }
 // Args for codex: the hook inline (-c) as a session flag. App-server runs it only once trusted: codex keeps the trust in

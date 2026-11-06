@@ -11,6 +11,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - A page on this computer counts as you only when the socket's program is an installed browser, read from the running file: forged browser headers from a script get nowhere, with or without a passcode. A browser we don't list needs a room passcode. A process that starts a real browser itself still can't be told from you, so set a passcode.
 - That browser check also needs the maker's code signature on the running process, so a program swapped in at a browser's path doesn't pass. Chrome, Edge, Brave, Arc, Dia, Opera, Firefox and Safari are recognised; other browsers, Chromium and Vivaldi included, unlock with the room passcode.
 - Peers (turning them on, adding, sending, inviting, joining) need a page or the lead, never a plain squiggle or terminal. Your terminal can unlock with the room passcode.
+- A squiggle can't write any `squiggle.json`, from the shell or an edit tool: the file holds lead-only fields like trust, so writing it would grant what the API refuses.
 - A Low trust squiggle's `--asked` counts only for an ask a person or the lead made, seen by the server this turn or in the last week: it can't claim a request nobody made.
 - A relayed @mention counts as an ask only when a person wrote it.
 - A Low trust squiggle can't split, accept or relabel notes to file its own ideas, unless a note is marked for splitting. While any squiggle is Low, a terminal or detached process needs the room passcode to make or relabel a note.

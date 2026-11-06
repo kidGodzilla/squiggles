@@ -11,6 +11,7 @@ export const DIRS = ['downloads', 'desktop', 'documents'];
 export const HOME_FENCE = ['Downloads', 'Desktop', 'Documents', '.ssh'].flatMap((d) => [`Read(~/${d}/**)`, `Edit(~/${d}/**)`, `Write(~/${d}/**)`]);
 export const REASONS = { dirs: 'Downloads, Desktop and Documents are off limits', ssh: '~/.ssh is off limits', push: 'git push is off limits: squiggles commit, you push',
   watches: 'watches.json is written only by the watch commands: reading it is fine',
+  squiggle: 'squiggle.json is written only by the server: use bin/agents.mjs, or ask the lead. Reading it is fine',
   peer: "that squiggle's transcript, journal and private notes are closed to other squiggles: ask the lead",
   secret: 'credentials stay off the screen',
   tree: 'a recursive read or copy from home or above reaches Downloads, Desktop, Documents and ~/.ssh: name a folder inside home',
@@ -256,17 +257,23 @@ function treeReason(cmd, cwd, home) {
 }
 // A watch runs what its entry says and the hash has no key, so writing watches.json would approve a command with no one looking.
 // Rough like the rest of the fence: reads stay open, and a script file, a glob or code piped into an interpreter still get through.
-const WATCH_WRITES = [
-  />\|?\s*\S*watches\.json/i,
-  /\b(?:cp|mv|ln|install|rsync|ditto|tee|truncate|dd|patch|touch|rm|ed|ex|vim?|nano)\b[^\n;|&]*watches\.json/i,
-  /\b(?:g?sed|perl|ruby)\b[^\n;|&]*\s-\w*i\S*\s[^\n;|&]*watches\.json/i,
-  /\b(?:node|bun|deno|python[\d.]*|ruby|perl|php|osascript)\b[^\n;|&]*(?:\s-\w*[ecp]\b|\s--eval\b|\s--print\b|\s-(?:\s|$)|<<)[\s\S]*watches\.json/im,
+const writesTo = (f) => [
+  new RegExp(String.raw`>\|?\s*\S*${f}`, 'i'),
+  new RegExp(String.raw`\b(?:cp|mv|ln|install|rsync|ditto|tee|truncate|dd|patch|touch|rm|ed|ex|vim?|nano)\b[^\n;|&]*${f}`, 'i'),
+  new RegExp(String.raw`\b(?:g?sed|perl|ruby)\b[^\n;|&]*\s-\w*i\S*\s[^\n;|&]*${f}`, 'i'),
+  new RegExp(String.raw`\b(?:node|bun|deno|python[\d.]*|ruby|perl|php|osascript)\b[^\n;|&]*(?:\s-\w*[ecp]\b|\s--eval\b|\s--print\b|\s-(?:\s|$)|<<)[\s\S]*${f}`, 'im'),
 ];
+const WATCH_WRITES = writesTo(String.raw`watches\.json`);
+// Lead-only fields are checked by the API and read from this file, so writing it grants what the API refuses. As rough as above.
+const SQUIGGLE_WRITES = writesTo(String.raw`squiggle\.json`);
 // The name first: the patterns are quadratic on a long run of > or -e, and a command that never names the file needs none of them.
 const watchWrite = (cmd) => /watches\.json/i.test(cmd) && WATCH_WRITES.some((re) => re.test(cmd));
+const squiggleWrite = (cmd) => /squiggle\.json/i.test(cmd) && SQUIGGLE_WRITES.some((re) => re.test(cmd));
 export const watchesPath = (p) => /(?:^|[\\/])watches\.json$/i.test(String(p).trim());
+const squigglePath = (p) => /(?:^|[\\/])squiggle\.json$/i.test(String(p).trim());
+export const ownedFileReason = (p) => (watchesPath(p) && REASONS.watches) || (squigglePath(p) && REASONS.squiggle) || '';
 // Edit and write tools: a path argument that is the file. Contents that name it pass.
-export const editReason = (tool, input = {}) => /edit|write|patch|replace|create/i.test(tool || '') && Object.entries(input || {}).some(([k, v]) => /path|file|target/i.test(k) && typeof v === 'string' && watchesPath(v)) ? REASONS.watches : '';
+export const editReason = (tool, input = {}) => (/edit|write|patch|replace|create/i.test(tool || '') && Object.entries(input || {}).map(([k, v]) => /path|file|target/i.test(k) && typeof v === 'string' && ownedFileReason(v)).find(Boolean)) || '';
 // The reason a path or shell command is refused, or ''.
 export function pathReason(p, cwd = process.cwd(), home = os.homedir()) {
   return fencedPath(p, cwd, home) ? REASONS.dirs : sshPath(p, cwd, home) ? REASONS.ssh : '';
@@ -298,7 +305,7 @@ export function commandReason(cmd, cwd = process.cwd(), home = os.homedir()) {
   if (fencedCommand(cmd, cwd, home)) return REASONS.dirs;
   const raw = cmd; cmd = unquote(cmd);
   if (mentionsSsh(cmd, home) || (startsHome(cmd, cwd, home) && /(^|[\s=;&|(`])\.ssh\b/i.test(cmd)) || relReason(cmd, cwd, home) === REASONS.ssh) return REASONS.ssh;
-  return treeReason(cmd, cwd, home) || (pushes(cmd) || pushesInside(raw) ? REASONS.push : '') || (watchWrite(cmd) ? REASONS.watches : '');
+  return treeReason(cmd, cwd, home) || (pushes(cmd) || pushesInside(raw) ? REASONS.push : '') || (watchWrite(cmd) ? REASONS.watches : squiggleWrite(cmd) ? REASONS.squiggle : '');
 }
 
 // Private data (config privateDirs, privateTools, privateRemote): folders, tools and remote machines only Claude squiggles may
