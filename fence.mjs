@@ -31,7 +31,14 @@ const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 let memo = null;
 const real = (abs) => {
   if (memo?.has(abs)) return memo.get(abs);
-  const segs = path.resolve(abs).split('/'), at = (k) => { try { return fs.realpathSync(segs.slice(0, k).join('/') || '/'); } catch { return null; } };
+  const segs = path.resolve(abs).split('/'), at = (k) => {
+    const p = segs.slice(0, k).join('/') || '/', key = `\0${p}`;
+    if (memo?.has(key)) return memo.get(key);
+    let r = null;
+    try { r = fs.realpathSync.native(p); } catch {}
+    memo?.set(key, r);
+    return r;
+  };
   let lo = 1, hi = segs.length, base = '/';
   while (lo <= hi) { const k = (lo + hi) >> 1, r = at(k); if (r === null) hi = k - 1; else { base = r; lo = k + 1; } }
   const r = path.join(base, segs.slice(hi).join('/'));
@@ -330,18 +337,23 @@ const remoteArg = (w, bare) => {
   return !!m && !CODE_HOSTS.test(m[1]) && !/^[a-z]$/i.test(m[1]) && (bare || /[.@]/.test(m[0] + m[1]));
 };
 const SHELLS = ['sh', 'bash', 'zsh', 'dash', 'ksh', 'ash', 'csh', 'tcsh', 'fish'];
-const WRAPS = ['sudo', 'exec', 'env', 'nohup', 'time', 'command', 'builtin', 'xargs', 'timeout', 'nice', ...SHELLS, 'source', '.',
+const WRAPS = ['sudo', 'exec', 'env', 'nohup', 'time', 'command', 'builtin', 'xargs', 'timeout', 'nice', 'busybox', 'setsid', 'stdbuf', 'caffeinate', ...SHELLS, 'source', '.',
   'do', 'then', 'else', 'elif', 'if', 'while', 'until', '{', ')', '!'];
 // Code hidden from the word-by-word check below. LEAD is what may stand before a program, as in that check's wrapper loop.
 const SHELL = `(?:\\S*/)?(?:${SHELLS.join('|')})`;
-const LEAD = `(?:(?:\\w+=(?:"[^"\\n]*"|[^\\s"])*|-\\S+|\\d+[smh]?|(?:\\S*/)?(?:${WRAPS.map((w) => w.replace(/[.{)!]/, '\\$&')).join('|')}))\\s+)*`;
+const lead = (words) => `(?:(?:\\w+=(?:"[^"\\n]*"|[^\\s"])*|-\\S+|\\d+[smh]?|(?:\\S*/)?(?:${words.map((w) => w.replace(/[.{)!]/, '\\$&')).join('|')}))\\s+)*`;
+const LEAD = lead(WRAPS), RUNS_TEXT = [...SHELLS, 'source', '.'];
 // `echo 'ssh x' | nohup sh`, `| sh -s -- a`, `| sh 2>&1`, `| sh -`: the script is only on the pipe.
-const PIPED = new RegExp(`\\|&?\\s*${LEAD}${SHELL}(?:(?:\\s+-\\S*|\\s*\\d*&?[<>]+[&|]?\\s*[^\\s;&|)'"]+)*(?:\\s+#.*)?\\s*(?:$|[;&|)])|(?:\\s+-\\S+)*\\s+-\\w*s\\b)`, 'm');
-// `$(echo ssh) box`, `sh <(echo x)`, `sh -c "$(cat x)"`: the program or script only exists once it runs. Not `x=$(date)`.
-const BUILT = new RegExp(`(?:^|[;&|\\n(]|\\$\\()\\s*${LEAD}(?:<+\\s*)?[^\\s=]*(?:\\$\\(|\`|<\\()`, 'm');
+const PIPED = new RegExp(`\\|&?[\\s(]*${LEAD}${SHELL}(?:(?:\\s+-\\S*|\\s*\\d*&?[<>]+[&|]?\\s*[^\\s;&|)'"]+)*(?:\\s+#.*)?\\s*(?:$|[;&|)])|(?:\\s+-\\S+)*\\s+-\\w*s\\b)`, 'm');
+// `$(echo ssh) box`, `"a $(echo ssh)" box`, `sh <(echo x)`, `sh -c "$(cat x)"`: the program or script only exists once it runs. Not `x=$(date)`, nor `sh -c "echo $(date)"`.
+const BUILT = new RegExp(`(?:^|[;&|\\n(]|\\$\\()\\s*${LEAD}(?:<+\\s*)?[^\\s=)]*(?:\\$\\(|\`|<\\()|(?:^|[;&|\\n(]|\\$\\()\\s*${lead(WRAPS.filter((w) => !RUNS_TEXT.includes(w)))}"[^"\\n]*(?:\\$\\(|\`)`, 'm');
+const SUBST = '\\$\\((?:[^()]|\\((?:[^()]|\\([^()]*\\))*\\))*\\)|`[^`]*`';
+// Inside "a; $(x)" only the $(x) is code: the ; around it is text.
+// A `case x in a)` closes SUBST early, so such a quote stays as it is.
+const calmed = (q) => /\bcase\b/.test(q) ? q : q.split(new RegExp(`(${SUBST})`)).map((p, i) => (i % 2 ? p : p.replace(/[;&|\n]|(?<!\$)\(/g, ' '))).join('');
 // Quoted text is data, unless it runs something: 'a|sh' goes, 's'h and "$(x)" stay.
 const masked = (raw) => raw.replace(/\\\n/g, '').replace(/'[^']*'|"(?:[^"\\]|\\.)*"/g, (q) =>
-  q[0] === '"' && /\$\(|`/.test(q) ? q : /[\s|;&()<>]/.test(q) ? 'Q' : q.slice(1, -1));
+  q[0] === '"' && /\$\(|`/.test(q) ? calmed(q) : /[\s|;&()<>]/.test(q) ? 'Q' : q.slice(1, -1));
 // A line feeding its heredoc to something that runs it: `bash <<'E'`, `$(sh <<'E'`, or a compound's closing `done <<'E'`.
 const FED = new RegExp(`(?:^|[\\s;&|(/\`])(?:${[...SHELLS, 'source', 'eval', 'xargs', '\\.'].join('|')})(?=[\\s;&|)<\`]|$)|^\\s*(?:done|fi|esac|[})])`);
 const HEREDOC = /<<(-?)\s*(?:'([\w.-]+)'|"([\w.-]+)"|\\([\w.-]+)|([\w.-]+))(?=[\s;&|<>]|$)/y;
@@ -396,7 +408,7 @@ function plain(raw) {
 // `p=dumps; cat ~/$p/a.txt`, `for p in a b`: the command read again with the values it set.
 function expanded(text) {
   const sets = new Map(), add = (k, v) => sets.set(k, [...(sets.get(k) || []), ...v]);
-  for (const m of text.matchAll(/(?:^|[\s;&|(])(\w+)=([^\s;&|`$()<>]+)(?=[\s;&|)]|$)/gm)) add(m[1], [m[2]]);
+  for (const m of text.matchAll(/(?:^|[\s;&|(])(\w+)=([^\s;&|`$()<>"]+)(?=[\s;&|)]|$)/gm)) add(m[1], [m[2]]);
   for (const m of text.matchAll(/\bfor\s+(\w+)\s+in\s+([^;\n$`]+)/g)) add(m[1], m[2].trim().split(/\s+/));
   let out = [text];
   for (const [k, vals] of sets) {
@@ -408,6 +420,8 @@ function expanded(text) {
   }
   return out[0] === text ? [] : out;
 }
+// The text `expanded` reads: quotes dropped, except around a substitution, or x="a; $(date)" would read as two commands.
+const keeping = (raw) => raw.split(/("(?:[^"\\]|\\.)*")/).map((p, i) => (i % 2 && /\$\(|`/.test(p) ? p : unquote(p))).join('');
 // A variable or $(...) further along a path stands for anything, so it counts as a glob. `$root/x` at the start doesn't.
 const starred = (p) => p.replace(/(?<=.)\$(?:\{[^}]*\}|\w+|$)/g, '*');
 const WALKERS = ['rg', 'ag', 'fd', 'find', 'tree', 'tar', 'zip', 'du', '7z'];
@@ -504,7 +518,6 @@ function gitHistory(ws, here, home, o) {
   return blind || !paths.length || paths.some((p) => /[*?[:]/.test(p) || inside.some((d) => o.hit(p, d) || o.reach(p, d)));
 }
 // `x=$(date) ssh box`, `case x in x) ssh box;; esac`: the program sits after a value or a pattern the segment split can't see past.
-const SUBST = '\\$\\((?:[^()]|\\((?:[^()]|\\([^()]*\\))*\\))*\\)|`[^`]*`';
 const ASSIGNED = new RegExp(`(^|[\\s;&|(])(\\w+=)((?:"(?:[^"\\\\$\`]|\\\\[\\s\\S]|${SUBST}|\\$(?!\\())*"|'[^']*'|${SUBST}|[^\\s;&|()<>"'\`$]|\\$(?!\\())*)`, 'gm');
 const flat = (text) => (/\bcase\s+\S+\s+in\b/.test(text) ? text.replace(/\bcase\s+\S+\s+in\s+\(?[^;()\n]*\)|;;&?\s*\(?[^;()\n]*\)|;&\s*\(?[^;()\n]*\)/g, ';') : text)
   .replace(ASSIGNED, (m, at, key, value) => (/\$\(|`/.test(value) ? `${at}${key}S` : m));
@@ -527,10 +540,10 @@ function xargsProgram(text) {
   }
   return false;
 }
-// The same command in the spelling the checks read: `function f {` as `() {`, `x+=1` and `x[0]=1` as `x=1`, `${p:-~/a}` as its default.
+// The same command in the spelling the checks read: `s\h` as `sh`, `function f {` as `() {`, `x+=1` and `x[0]=1` as `x=1`, `${p:-~/a}` as its default.
 // Read as well as the original, not instead: `${p:-docs}` could still be anything else. Nesting too deep to unwrap comes back null.
 function respelled(text) {
-  let t = text.replace(/(^|[\s;&|({])function((?:\s+[^\s(){};&|]+)*)(\s+\{)?/g, (m, at, names, brace) => (brace ? `${at}() {` : m)) // takes the whole run of names in one match: retrying from each word is quadratic
+  let t = text.replace(/(?<!<<-?\s*)\\(?=[a-z])/gi, '').replace(/(^|[\s;&|({])function((?:\s+[^\s(){};&|]+)*)(\s+\{)?/g, (m, at, names, brace) => (brace ? `${at}() {` : m)) // takes the whole run of names in one match: retrying from each word is quadratic
     .replace(/(^|[\s;&|(])(\w+)(?:\[[^\]\n]{0,200}\]\+?|\+)=/g, '$1$2=');
   for (let i = 0; i < 8; i++) {
     const next = t.replace(/\$\{\w+:?[-=+]([^{}]*)\}/g, '$1');
@@ -539,6 +552,7 @@ function respelled(text) {
   }
   return null;
 }
+const NO_READ = ['echo', 'printf', 'test', '[', ':', 'export'], SYSTEM_VARS = ['HOME', 'PWD', 'TMPDIR'];
 function privateCommand(cmd, cwd, home, o, depth) {
   const raw = String(cmd), text = inlineHelpers(unquote(raw)), here = [...new Set(places(text, cwd, home))];
   // Code the fence can't read is refused once there is a folder or machine to protect. Tools alone are matched by name.
@@ -549,7 +563,10 @@ function privateCommand(cmd, cwd, home, o, depth) {
   if (strict && (PIPED.test(bare) || PIPED.test(code) || BUILT.test(code) || fedByXargs(bare) || xargsProgram(code))) return true;
   const level = strict ? flat(bare) : bare;
   if (level !== bare && privateCommand(level, cwd, home, o, depth)) return true;
-  const values = strict ? expanded(text) : [];
+  const values = strict ? expanded(inlineHelpers(keeping(raw))) : [];
+  // Words the shell will read as paths: not single-quoted text, nor double-quoted prose, but "$p/a b" still is.
+  const cwdVars = [...raw.matchAll(/(?:^|[\s;&|(])(\w+)=\$\(pwd\)(?=[\s;&|)]|$)/gm)].map((m) => m[1]);
+  const open = strict && !depth && o.dirs.length && !values.length ? unquote(bare.replace(/'[^']*'/g, 'Q').replace(/"(?!\$\{?\w+\}?\/)[^"]*"/g, 'Q')) : '';
   if (values.some((t) => privateCommand(t, cwd, home, o, depth))) return true;
   if (o.remote) {
     if (DB_DRIVER.test(raw)) return true;
@@ -570,6 +587,8 @@ function privateCommand(cmd, cwd, home, o, depth) {
     // `$c "ls"`: a program held in a variable can't be checked. `sh $D/x.sh` too, in the command itself:
     // inside a script `$DIR/lib.sh` is everyday, and refusing it would stop ordinary scripts.
     if (strict && (/^\$/.test(prog) || !depth && /^\$/.test(ws[0].replace(/^\$\{?HOME\}?(?=\/)/, '')))) return true;
+    // `cat $p/a`: a variable nothing here set, leading a path, could be anywhere. Same limit as above: the command itself, not scripts.
+    if (open && !NO_READ.includes(prog) && rest.some((w) => { const m = w.match(/^[<>]*\$\{?(\w+)\}?\//); return m && open.includes(w) && (w.includes('/../') || !(SYSTEM_VARS.includes(m[1]) || cwdVars.includes(m[1]))); })) return true;
     if (o.remote) {
       if (REMOTE_SHELLS.includes(prog) && rest.join(' ') !== '-V') return true;
       if (prog === 'tailscale' && rest[0] === 'ssh') return true;
@@ -607,6 +626,9 @@ function privateCommand(cmd, cwd, home, o, depth) {
   }
   if (!o.dirs.length) return false;
   const words = text.split(/[\s;|&()<>`]+/).filter(Boolean).flatMap((w) => braces(w));
+  // `cat ~/te$(echo am)/alpha/a`: a substitution inside a path counts as a glob.
+  const globs = strict ? text.replace(new RegExp(SUBST, 'g'), '*').split(/[\s;|&()<>]+/).filter((w) => w.includes('*') && w.includes('/')) : [];
+  if (here.some((dir) => globs.some((w) => o.reach(w, dir) === 'in'))) return true;
   return here.some((dir) => words.some((w) => w.split('=').some((part) => {
     const p = values.length ? part : starred(part);
     return p && (o.hit(p, dir) || (isGlob(p) && o.reach(p, dir) === 'in'));
