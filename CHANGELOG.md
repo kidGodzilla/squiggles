@@ -340,6 +340,8 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Inbox button tooltip no longer names a fixed folder; the Inbox panel shows the real path.
 - Merge detail centers the GitHub links; the After merging card heading stays on one line.
 - Review scrolls as one page, so a tall card can't hide the branches. A long path no longer clips cards on a phone.
+- A fresh install shows Settings > Sharing, Peers included: with no sharing set up it says which `config.json` key turns it on.
+- Peers: Invite a peer enables as soon as Share the room is on, without a refresh; a slow save no longer unticks the box or closes the code.
 
 ### Migrations
 - Codex squiggles: run `node ~/squiggles/bin/codex-trust-guard.mjs` once, so Codex trusts the room's hook. Until then their turns are refused.

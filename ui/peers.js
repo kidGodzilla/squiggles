@@ -1,5 +1,5 @@
 // Settings > Sharing > Peers. CLI: peers, peer invite|join|cancel|remove|on|off.
-const PEER = { d: null, panel: '', code: '', exp: '', err: '', busy: false, confirm: '', note: '', paste: '', timer: 0 };
+const PEER = { d: null, panel: '', code: '', exp: '', err: '', busy: false, confirm: '', note: '', paste: '', name: '', timer: 0, read: 0, last: 0, writes: 0 };
 const peerTime = (iso) => new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 const peerAgo = (iso) => { const m = Math.round((Date.now() - new Date(iso)) / 60000); return m < 1 ? 'just now' : m < 60 ? `${m}m ago` : m < 1440 ? `${Math.round(m / 60)}h ago` : `${Math.round(m / 1440)}d ago`; };
 const peerHost = (u) => { try { return new URL(u).hostname; } catch { return u || ''; } };
@@ -12,7 +12,9 @@ function peerCode(s) {
   } catch { return null; }
 }
 async function loadPeers() {
-  const d = await fetch('/api/peers').then((r) => r.json()).catch(() => null); if (!d || d.error) return;
+  const n = ++PEER.read, d = await fetch('/api/peers').then((r) => r.json()).catch(() => null); if (!d || d.error) return;
+  if (n <= PEER.last || PEER.writes) return; // older than what's on screen, or a save is running: its reload follows
+  PEER.last = n;
   // Our invite was spent or ran out since the last look.
   if (PEER.panel === 'code' && !d.pending) {
     if (new Date(PEER.exp) <= Date.now()) { PEER.panel = 'name'; PEER.err = 'Expired. Make a new code.'; } else PEER.panel = '';
@@ -21,6 +23,9 @@ async function loadPeers() {
   if (d.pending) PEER.timer = setTimeout(loadPeers, Math.max(1000, new Date(d.pending.expires) - Date.now() + 500));
   paintPeers();
 }
+// Share changed: Invite a peer depends on it. The Share box is no guide, the click has already flipped it.
+// No tailnet in config.json: peers can't reach this Mac, so the hint says how to set it up.
+function peersShare(on, noTailnet) { const was = PEER.noTailnet; PEER.noTailnet = noTailnet; if (PEER.d && (on !== !!PEER.d.self?.url || was !== noTailnet)) loadPeers(); }
 function peerLast(p) {
   const t = [p.lastIn && `in ${peerAgo(p.lastIn)}`, p.lastOut && `out ${peerAgo(p.lastOut)}`].filter(Boolean).join(', ');
   const title = [p.lastIn && `In ${new Date(p.lastIn).toLocaleString()}`, p.lastOut && `out ${new Date(p.lastOut).toLocaleString()}`].filter(Boolean).join(', ');
@@ -42,21 +47,22 @@ function paintPeers() {
   const table = rows.length ? `<table class="ptable"><thead><tr><th>Peer</th><th class="hide-s">Address</th><th class="hide-s">Last message</th><th>Status</th><th aria-label="Actions"></th></tr></thead><tbody>${rows.join('')}</tbody></table>` : '<p class="sethint">No peers yet.</p>';
   const err = PEER.err ? `<span class="err" role="alert">${esc(PEER.err)}</span>` : '';
   let panel = '';
-  if (PEER.panel === 'name') panel = `<div class="ppanel"><label for="peerName">This room's name, as they'll see it</label><input type="text" id="peerName" value="${esc(d.self?.name || '')}" autocomplete="off" spellcheck="false">${err}<div class="row"><button class="chip primary" data-p="make" ${PEER.busy ? 'disabled' : ''}>Make code</button><button class="chip" data-p="close">Cancel</button></div></div>`;
+  if (PEER.panel === 'name') panel = `<div class="ppanel"><label for="peerName">This room's name, as they'll see it</label><input type="text" id="peerName" value="${esc(PEER.name || d.self?.name || '')}" autocomplete="off" spellcheck="false">${err}<div class="row"><button class="chip primary" data-p="make" ${PEER.busy ? 'disabled' : ''}>${PEER.busy ? 'Making…' : 'Make code'}</button><button class="chip" data-p="close">Cancel</button></div></div>`;
   if (PEER.panel === 'code') panel = `<div class="ppanel"><label for="peerCodeOut">Send them this code. Works once. Expires at ${esc(peerTime(PEER.exp))}.</label><textarea id="peerCodeOut" class="code" rows="4" readonly>${esc(PEER.code)}</textarea><div class="row"><button class="chip primary" data-p="copy">Copy code</button><button class="chip" data-p="cancel">Cancel invite</button></div></div>`;
   if (PEER.panel === 'add') {
     const c = peerCode(PEER.paste);
     const pre = !PEER.paste.trim() ? '' : c ? `<span class="pnote">Room <b>${esc(c.name)}</b> at ${esc(peerHost(c.url))}</span>` : '<span class="pnote">That isn\'t a pairing code.</span>';
     panel = `<div class="ppanel"><label for="peerPaste">Paste their pairing code</label><textarea id="peerPaste" class="code" rows="4" spellcheck="false">${esc(PEER.paste)}</textarea><span id="peerPre">${pre}</span>${err}<div class="row"><button class="chip primary" data-p="link" ${c && !PEER.busy ? '' : 'disabled'}>${PEER.busy ? 'Linking…' : 'Link'}</button><button class="chip" data-p="close">Cancel</button></div></div>`;
   }
-  const acts = PEER.panel ? '' : `<div class="pact"><button class="chip primary" data-p="invite" ${share ? '' : 'disabled'}>Invite a peer</button><button class="chip" data-p="add">Add peer</button></div>${share ? '' : '<p class="sethint">Turn on Share the room first: they need to reach this Mac.</p>'}`;
+  const acts = PEER.panel ? '' : `<div class="pact"><button class="chip primary" data-p="invite" ${share ? '' : 'disabled'}>Invite a peer</button><button class="chip" data-p="add">Add peer</button></div>${share ? '' : PEER.noTailnet ? '<p class="sethint">Peers link over Tailscale: add <code>"tailnet": true</code> to <code>config.json</code>, restart, then turn on Share the room.</p>' : '<p class="sethint">Turn on Share the room first: they need to reach this Mac.</p>'}`;
   el.innerHTML = table + panel + acts + (PEER.note ? `<p class="sethint" role="status">${esc(PEER.note)}</p>` : '');
   for (const t of el.querySelectorAll('textarea.code')) { t.style.height = 'auto'; t.style.height = `${t.scrollHeight + 2}px`; } // the whole code, no scrolling
 }
-const peerPost = (b) => fetch('/api/peers', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) }).then((r) => r.json()).catch((e) => ({ error: e.message }));
+const peerPost = (b) => { PEER.writes++; return fetch('/api/peers', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) }).then((r) => r.json()).catch((e) => ({ error: e.message })).finally(() => { PEER.writes--; PEER.last = PEER.read; }); };
 // A locked browser gets the passcode prompt, then the write runs again. null means they cancelled it.
 const peerWrite = (b) => unlocked(() => peerPost(b), 'Unlock to change peers');
-$('#peersOn').onchange = async (e) => { const r = await peerWrite({ op: e.target.checked ? 'on' : 'off' }); if (r?.error) toast(r.error); loadPeers(); };
+// Shows at once: a save can take seconds. A refusal reverts on the reload.
+$('#peersOn').onchange = async (e) => { const on = e.target.checked; if (PEER.d) { PEER.d = { ...PEER.d, on }; paintPeers(); } const r = await peerWrite({ op: on ? 'on' : 'off' }); if (r?.error) toast(r.error); loadPeers(); };
 $('#peerBody').oninput = (e) => {
   if (e.target.id !== 'peerPaste') return;
   PEER.paste = e.target.value; PEER.err = ''; e.target.style.height = 'auto'; e.target.style.height = `${e.target.scrollHeight + 2}px`; const c = peerCode(PEER.paste);
@@ -68,7 +74,7 @@ $('#peerBody').onclick = async (e) => {
   const b = e.target.closest('[data-p]'); if (!b) return;
   const a = b.dataset.p, focus = (id) => setTimeout(() => $(id)?.focus(), 0);
   PEER.note = '';
-  if (a === 'invite') { PEER.panel = 'name'; PEER.err = ''; paintPeers(); focus('#peerName'); return; }
+  if (a === 'invite') { PEER.panel = 'name'; PEER.err = ''; PEER.name = ''; paintPeers(); focus('#peerName'); return; }
   if (a === 'add') { PEER.panel = 'add'; PEER.err = ''; PEER.paste = ''; paintPeers(); focus('#peerPaste'); return; }
   if (a === 'close') { PEER.panel = ''; PEER.err = ''; document.activeElement?.blur(); paintPeers(); return; }
   if (a === 'confirm') { PEER.confirm = b.dataset.n; paintPeers(); return; }
@@ -80,11 +86,11 @@ $('#peerBody').onclick = async (e) => {
   if (a === 'remove') { const r = await peerWrite({ op: 'remove', name: b.dataset.n }); PEER.confirm = ''; if (r === null) return loadPeers(); if (r.error) toast(r.error); else PEER.note = 'Removed. Their side stays until they remove you.'; return loadPeers(); }
   if (a === 'cancel') { if (await peerWrite({ op: 'cancel' }) === null) return; PEER.panel = ''; PEER.code = ''; return loadPeers(); }
   if (a === 'make') {
-    const name = $('#peerName').value.trim(); PEER.busy = true; paintPeers();
-    const r = await peerWrite({ op: 'invite', name }); PEER.busy = false; document.activeElement?.blur();
+    const name = $('#peerName').value.trim(); PEER.name = name; PEER.busy = true; document.activeElement?.blur(); paintPeers();
+    const r = await peerWrite({ op: 'invite', name }); PEER.busy = false;
     if (r === null) return paintPeers();
     if (r.error) { PEER.err = r.error.replace(/^name: /, 'Name: '); paintPeers(); return; }
-    PEER.panel = 'code'; PEER.code = r.code; PEER.exp = r.expires; PEER.err = ''; return loadPeers();
+    PEER.panel = 'code'; PEER.code = r.code; PEER.exp = r.expires; PEER.err = ''; paintPeers(); return loadPeers();
   }
   if (a === 'link') {
     PEER.busy = true; PEER.err = ''; document.activeElement?.blur(); paintPeers();

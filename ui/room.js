@@ -1073,9 +1073,9 @@ snd('theme', (e) => { e.onchange = sndSet((t) => { prefs.theme = t.value; applyT
 paintSound();
 // Share on tailnet (tailscale serve): the toggle and its link in More. CLI: share on|off|status.
 // Only Copy link shows; the URL rides on the button.
-// Tailnet sharing off in config: the Sharing tab (Sharing and Peers cards) is hidden.
+// Sharing not set up in config.json: the Sharing tab says how; Peers still lists, adds and removes.
 // Cloudflare (tunnel.mjs) gets its own row; each row hides when config.json doesn't offer it.
-function paintShare(st) { paintCf(st?.cloudflare); $('#shareTs').hidden = $('#shareTsHint').hidden = !!st?.tailnetOff; B.shareOff = !!st?.off; $('.settabs [data-stab="sharing"]').hidden = B.shareOff; if (B.shareOff && B.stab === 'sharing' && typeof paintSetTab === 'function') paintSetTab(); if (typeof loadPeers === 'function' && !B.shareOff && !!st?.on !== $('#shareOn').checked) loadPeers(); $('#shareOn').checked = !!st?.on; $('#shareCopy').hidden = !st?.on; $('#shareCopy').dataset.url = st?.url || ''; }
+function paintShare(st) { paintCf(st?.cloudflare); $('#shareTs').hidden = $('#shareTsHint').hidden = !!st?.tailnetOff; $('#shareOffHint').hidden = !st?.off; if (typeof peersShare === 'function') peersShare(!!st?.on, !!st?.tailnetOff); $('#shareOn').checked = !!st?.on; $('#shareCopy').hidden = !st?.on; $('#shareCopy').dataset.url = st?.url || ''; }
 function paintCf(cf) {
   $('#shareCf').hidden = $('#shareCfHint').hidden = !cf || !!cf.off; if (!cf || cf.off) return;
   $('#shareCfOn').checked = !!(cf.on || cf.starting); $('#shareCfCopy').hidden = !cf.on; $('#shareCfCopy').dataset.url = cf.url || '';
