@@ -105,3 +105,19 @@ test('many -c texts stay quick', () => {
   const { user, system } = process.cpuUsage(start);
   assert.ok(user + system < 4e6, `${(user + system) / 1e6} s`);
 });
+
+test('a home reached through a symlink: globs and variables in a path still reach the folder', () => {
+  const link = `${H}-link`;
+  fs.symlinkSync(H, link);
+  try {
+    for (const c of ['cat ~/te${x}am/alpha/a', 'cat ~/te*/alpha/a', "p=~/te${x}am/alpha; bash -c 'cat $p/a'", "p=~/team/al*; sh -c 'cat $p/a'"])
+      assert.equal(privateReason('Bash', { command: c }, `${link}/app`, link, rules), REASONS.private, c);
+    for (const c of ['cat ~/app/${x}/a', 'cat src/${x}.js', "p=/tmp; bash -c 'cat $p/a'"])
+      assert.equal(privateReason('Bash', { command: c }, `${link}/app`, link, rules), '', c);
+  } finally { fs.unlinkSync(link); }
+});
+
+test('an assigned value holding a substitution or an unknown variable leaves the variable open', () => {
+  refused(["p=~/te$(echo am)/alpha; sh -c 'cat $p/a'", "p=/tmp$(echo x); sh -c 'cat $p/a'", `p="/a b$(echo x)"; sh -c 'cat $p/a'`, "q=$(echo ~/team); p=$q/alpha; sh -c 'cat $p/a'", "p=$unk/x; sh -c 'cat $p/a'"]);
+  passes(["p=/tmp; bash -c 'cat $p/a'", "d=/tmp bash -c 'cat $d/a'", "d=/tmp bash -c 'cat $d/a; echo $(date)'", "p=$HOME/app; sh -c 'cat $p/a'", "p=${PWD}/x; sh -c 'cat $p/a'", 'x=$(date) && cat ~/app/a', 'FOO=a*/b ls']);
+});

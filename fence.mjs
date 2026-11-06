@@ -444,7 +444,7 @@ export function privateReason(tool, input = {}, cwd = process.cwd(), home = os.h
   const t = String(tool || '').toLowerCase();
   if (tools.some((x) => t.includes(x))) return REASONS.private;
   const toHome = (p) => String(p).replace(homeArg(home), home);
-  const dirs = names.map((d) => real(path.resolve(home, toHome(d))).toLowerCase());
+  const spelled = names.map((d) => path.resolve(home, toHome(d)).toLowerCase()), dirs = names.map((d) => real(path.resolve(home, toHome(d))).toLowerCase());
   // Once per path for this one check: a repeated word mustn't cost a disk read each time.
   const hits = new Map(), hit = (p, from) => { const abs = path.resolve(from, toHome(p));
     if (!hits.has(abs)) hits.set(abs, [abs, real(abs)].some((a) => { a = a.toLowerCase(); return dirs.some((d) => a === d || a.startsWith(d + '/')); }));
@@ -453,7 +453,8 @@ export function privateReason(tool, input = {}, cwd = process.cwd(), home = os.h
   // which only matters to something that walks down (grep -r, find, a Glob tool).
   const reach = (p, from) => {
     const gs = path.resolve(from, toHome(p)).toLowerCase().split('/').filter(Boolean); let out = '';
-    for (const d of dirs) {
+    // A glob can't be resolved, so it's held against both spellings: a home reached through a symlink differs from its real path.
+    for (const d of new Set([...dirs, ...spelled])) {
       const ds = d.split('/').filter(Boolean); let i = 0, ok = true;
       for (; i < Math.min(gs.length, ds.length); i++) {
         if (gs[i] === '**') return 'in';
@@ -610,7 +611,9 @@ function privateCommand(cmd, cwd, home, o, depth, outer = '') {
     // inside a script `$DIR/lib.sh` is everyday, and refusing it would stop ordinary scripts.
     if (strict && (/^\$/.test(prog) || !depth && /^\$/.test(ws[0].replace(/^\$\{?HOME\}?(?=\/)/, '')))) return true;
     // `cat $p/a`: a variable nothing here set, leading a path, could be anywhere. Same limit as above: the command itself, not scripts.
-    if (open && !NO_READ.includes(prog) && rest.some((w) => { const m = w.match(/^[<>]*\$\{?(\w+)\}?\//); return m && open.includes(w) && (w.includes('/../') || !(SYSTEM_VARS.includes(m[1]) || cwdVars.includes(m[1]) || new RegExp(`(?:^|[\\s;&|(])${m[1]}=(?!\\$\\(|\`)`, 'm').test(outer))); })) return true;
+    // A value holding a substitution or a variable of unknown worth is no better than an unset variable: q=$(x); p=$q/a.
+    const unset = `(?:\\$(?!\\{?(?:${[...SYSTEM_VARS, ...cwdVars].join('|')})\\b)|\`)`;
+    if (open && !NO_READ.includes(prog) && rest.some((w) => { const m = w.match(/^[<>]*\$\{?(\w+)\}?\//); return m && open.includes(w) && (w.includes('/../') || !(SYSTEM_VARS.includes(m[1]) || cwdVars.includes(m[1]) || new RegExp(`(?:^|[\\s;&|(])${m[1]}=(?!"[^"]*${unset}|[^\\s;&|]*${unset})`, 'm').test(outer))); })) return true;
     if (o.remote) {
       if (REMOTE_SHELLS.includes(prog) && rest.join(' ') !== '-V') return true;
       if (prog === 'tailscale' && rest[0] === 'ssh') return true;
@@ -649,7 +652,7 @@ function privateCommand(cmd, cwd, home, o, depth, outer = '') {
   if (!o.dirs.length) return false;
   const words = text.split(/[\s;|&()<>`]+/).filter(Boolean).flatMap((w) => braces(w));
   // `cat ~/te$(echo am)/alpha/a`: a substitution inside a path counts as a glob.
-  const globs = strict ? masked(rest).replace(/["'\\]/g, '').replace(new RegExp(SUBST, 'g'), '*').split(/[\s;|&()<>]+/).filter((w) => w.includes('*') && w.includes('/')) : [];
+  const globs = strict ? masked(rest).replace(/["'\\]/g, '').replace(new RegExp(SUBST, 'g'), '*').split(/[\s;|&()<>=]+/).filter((w) => w.includes('*') && w.includes('/')) : [];
   if (here.some((dir) => globs.some((w) => o.reach(w, dir) === 'in'))) return true;
   return here.some((dir) => words.some((w) => w.split('=').some((part) => {
     const p = values.length ? part : starred(part);
