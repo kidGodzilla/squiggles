@@ -54,7 +54,9 @@ function paintPeers() {
   for (const t of el.querySelectorAll('textarea.code')) { t.style.height = 'auto'; t.style.height = `${t.scrollHeight + 2}px`; } // the whole code, no scrolling
 }
 const peerPost = (b) => fetch('/api/peers', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) }).then((r) => r.json()).catch((e) => ({ error: e.message }));
-$('#peersOn').onchange = async (e) => { const r = await peerPost({ op: e.target.checked ? 'on' : 'off' }); if (r.error) toast(r.error); loadPeers(); };
+// A locked browser gets the passcode prompt, then the write runs again. null means they cancelled it.
+const peerWrite = (b) => unlocked(() => peerPost(b), 'Unlock to change peers');
+$('#peersOn').onchange = async (e) => { const r = await peerWrite({ op: e.target.checked ? 'on' : 'off' }); if (r?.error) toast(r.error); loadPeers(); };
 $('#peerBody').oninput = (e) => {
   if (e.target.id !== 'peerPaste') return;
   PEER.paste = e.target.value; PEER.err = ''; e.target.style.height = 'auto'; e.target.style.height = `${e.target.scrollHeight + 2}px`; const c = peerCode(PEER.paste);
@@ -75,17 +77,19 @@ $('#peerBody').onclick = async (e) => {
     try { await navigator.clipboard.writeText(PEER.code); } catch { $('#peerCodeOut').select(); document.execCommand('copy'); }
     b.textContent = 'Copied'; setTimeout(() => { if (b.isConnected) b.textContent = 'Copy code'; }, 2000); return;
   }
-  if (a === 'remove') { const r = await peerPost({ op: 'remove', name: b.dataset.n }); PEER.confirm = ''; if (r.error) toast(r.error); else PEER.note = 'Removed. Their side stays until they remove you.'; return loadPeers(); }
-  if (a === 'cancel') { await peerPost({ op: 'cancel' }); PEER.panel = ''; PEER.code = ''; return loadPeers(); }
+  if (a === 'remove') { const r = await peerWrite({ op: 'remove', name: b.dataset.n }); PEER.confirm = ''; if (r === null) return loadPeers(); if (r.error) toast(r.error); else PEER.note = 'Removed. Their side stays until they remove you.'; return loadPeers(); }
+  if (a === 'cancel') { if (await peerWrite({ op: 'cancel' }) === null) return; PEER.panel = ''; PEER.code = ''; return loadPeers(); }
   if (a === 'make') {
     const name = $('#peerName').value.trim(); PEER.busy = true; paintPeers();
-    const r = await peerPost({ op: 'invite', name }); PEER.busy = false; document.activeElement?.blur();
+    const r = await peerWrite({ op: 'invite', name }); PEER.busy = false; document.activeElement?.blur();
+    if (r === null) return paintPeers();
     if (r.error) { PEER.err = r.error.replace(/^name: /, 'Name: '); paintPeers(); return; }
     PEER.panel = 'code'; PEER.code = r.code; PEER.exp = r.expires; PEER.err = ''; return loadPeers();
   }
   if (a === 'link') {
     PEER.busy = true; PEER.err = ''; document.activeElement?.blur(); paintPeers();
-    const r = await peerPost({ op: 'join', code: PEER.paste }); PEER.busy = false;
+    const r = await peerWrite({ op: 'join', code: PEER.paste }); PEER.busy = false;
+    if (r === null) return paintPeers();
     if (r.error) { PEER.err = r.error; paintPeers(); return; }
     PEER.panel = ''; PEER.paste = ''; return loadPeers();
   }

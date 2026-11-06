@@ -279,6 +279,13 @@ test('the owner keeps a way in from the terminal: the CLI asks for the code', ()
   }
 });
 
+test('every Peers write goes through the unlock prompt, so a locked browser is asked for the code', () => {
+  const ui = src('ui/peers.js'), sent = [...ui.matchAll(/peerPost\(/g)].length;
+  assert.match(ui, /const peerWrite = \(b\) => unlocked\(\(\) => peerPost\(b\),/);
+  assert.equal(sent, 1, 'peerPost is called only by peerWrite');
+  for (const op of ['on', 'remove', 'cancel', 'invite', 'join']) assert.match(ui, new RegExp(`peerWrite\\(\\{ op: [^}]*'${op}'`), op);
+});
+
 test('an --asked claim holds only for an ask the server saw', () => {
   const now = 1e12, day = 864e5, seen = { owner: now - 6 * day, boss: now - day, sam: now - 8 * day };
   const ok = (claim, turn = []) => askSeen({ claim, turn, seen, leadId: 'boss', now });

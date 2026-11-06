@@ -208,6 +208,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 
 ### Fixed
 - Research files open when the room lives under a dot folder, as the default ~/.squiggles does. Hidden folders inside the research folder stay hidden.
+- The Peers page asks a locked browser for the room passcode instead of showing an error, then finishes the change. Cancelling changes nothing.
 - Drawing icons no longer makes macOS ask for a keychain for Chrome, and a workspace under the temp folder no longer draws them at all. Squiggles are told to pass the same flag to any headless Chrome they start.
 - The Team tab's cards no longer overflow sideways on a phone.
 - With "This Mac's browser skips the passcode" on, a step that needs an unlocked page (Run on an ask, answering a pick) prompts for the passcode instead of reloading the page.
