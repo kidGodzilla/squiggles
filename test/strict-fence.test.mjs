@@ -49,6 +49,17 @@ test('a shell given one word: the program and its arguments are read', () => {
   assert.equal(commandReason('/bin/zsh -lc "rg -n "x" src"', cwd), '');
 });
 
+test('path prefixes are looked up once per command, not once per word', (t) => {
+  const real = fs.realpathSync, native = real.native;
+  let calls = 0;
+  const counted = (...a) => { calls++; return real(...a); };
+  counted.native = (...a) => { calls++; return native(...a); };
+  fs.realpathSync = counted;
+  t.after(() => { fs.realpathSync = real; });
+  commandReason(`for p in ${words(1000, 'src/w')}; do cat $p; done`, cwd);
+  assert.ok(calls < 3000, `${calls} lookups for 1000 words`);
+});
+
 test('a for over many words answers fast', () => {
   for (const c of [`for p in ${words(4000, 'w')}; do echo $p; done`, `for p in ${words(4000, 'src/w')}; do cat $p; done`]) {
     // Each check on its own, in CPU time as in fence-slow-word: the wall clock also counts the test files running beside this one.
