@@ -71,3 +71,37 @@ test('a for over many words answers fast', () => {
     }
   }
 });
+
+test('a shell given options before its -c text', () => {
+  refused(['bash -o pipefail -c "ssh box"', "bash -eo pipefail -c 'ssh box'", "bash +o history -c 'ssh box'", "bash --rcfile x -c 'ssh box'"]);
+  passes(["bash -o pipefail -c 'npm test'", "bash -lc 'npm test'", "zsh -c 'cat src/a | grep x'"]);
+});
+
+test('the -c text is read as a command, whole', () => {
+  refused(["/bin/zsh -lc '$(echo ssh) box'", `/bin/zsh -lc "echo 'ssh x' | sh"`, `sh -c "sh -c 'ssh box'"`, `cd /tmp; bash -c "echo 'ssh x' | sh"`, `echo "$(sh -c "echo 'ssh x' | sh")"`, `sh -c "echo 'ssh x' | sh" <<'E'\n'\nE`]);
+  passes([`echo "run sh -c 'ssh box'"`, `bash -c "echo 'ssh x' | grep s"`, `zsh -lc "cd /tmp; python3 - <<'E'\nprint('~/\`date\`/a.txt')\nE"`]);
+});
+
+test('a script run by a shell with an option', () => {
+  fs.writeFileSync(`${cwd}/opt.sh`, 'ssh box\n');
+  fs.writeFileSync(`${cwd}/fine.sh`, 'echo hi\n');
+  refused(['bash -o pipefail opt.sh']);
+  passes(['bash -o pipefail fine.sh']);
+});
+
+test('a pipe into a shell behind a group or an option', () => {
+  refused(['echo x | (cd /tmp; sh)', 'echo x | { cd /tmp; sh; }', 'echo x | bash -o pipefail']);
+  passes(['echo x | (cd /tmp; cat)', 'echo x | { grep x; }']);
+});
+
+test('a variable set outside the -c text', () => {
+  refused([`p=~/team/alpha; bash -c 'cat $p/a'`, `export p=~/team/alpha; bash -c 'cat $p/a'`, `p=$(echo ~/team/alpha); sh -c 'cat $p/a'`, `bash -c 'cat $p/a'`]);
+  passes(['d=/tmp; bash -c "cat $d/a"', `d=/tmp bash -c 'cat $d/a'`]);
+});
+
+test('many -c texts stay quick', () => {
+  const start = process.cpuUsage();
+  passes([Array.from({ length: 3000 }, (_, i) => `sh -c 'echo ${i}'`).join('; ')]);
+  const { user, system } = process.cpuUsage(start);
+  assert.ok(user + system < 4e6, `${(user + system) / 1e6} s`);
+});

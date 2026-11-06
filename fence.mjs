@@ -1,6 +1,7 @@
 // The fence shared by pi/guard.ts, cursor/guard.mjs and codex/guard.mjs (claude uses --disallowedTools): Downloads, Desktop and Documents,
 // ~/.ssh, and git push (squiggles commit; pushing is yours). Pi and Cursor have no approval step, so this is all that stops them.
 // A rough fence, not a sandbox: shell commands are read as text, so a determined command can still get past it.
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -344,7 +345,18 @@ const SHELL = `(?:\\S*/)?(?:${SHELLS.join('|')})`;
 const lead = (words) => `(?:(?:\\w+=(?:"[^"\\n]*"|[^\\s"])*|-\\S+|\\d+[smh]?|(?:\\S*/)?(?:${words.map((w) => w.replace(/[.{)!]/, '\\$&')).join('|')}))\\s+)*`;
 const LEAD = lead(WRAPS), RUNS_TEXT = [...SHELLS, 'source', '.'];
 // `echo 'ssh x' | nohup sh`, `| sh -s -- a`, `| sh 2>&1`, `| sh -`: the script is only on the pipe.
-const PIPED = new RegExp(`\\|&?[\\s(]*${LEAD}${SHELL}(?:(?:\\s+-\\S*|\\s*\\d*&?[<>]+[&|]?\\s*[^\\s;&|)'"]+)*(?:\\s+#.*)?\\s*(?:$|[;&|)])|(?:\\s+-\\S+)*\\s+-\\w*s\\b)`, 'm');
+// `bash -o pipefail`, `bash --rcfile f`: options whose value is the next word.
+const SHELL_OPT = '\\s+[-+]\\w*[oO]\\s+[\\w-]+|\\s+--(?:rc|init-)file\\s+\\S+';
+const PIPED = new RegExp(`\\|&?[\\s(]*(?:[({](?:[^(){}]*[;&]\\s*|\\s*))?${LEAD}${SHELL}(?:(?:${SHELL_OPT}|\\s+-\\S*|\\s*\\d*&?[<>]+[&|]?\\s*[^\\s;&|)'"]+)*(?:\\s+#.*)?\\s*(?:$|[;&|)])|(?:\\s+-\\S+)*\\s+-\\w*s\\b)`, 'm');
+// `/bin/zsh -lc '...'`: the quoted text is the command, not data. The -c text is one shell word: `"rg -n "a" b"` is `rg -n a b`, and `'it'\''s'` is `it's`.
+const C_BODY = `${SHELL}(?:${SHELL_OPT}|\\s+[-+]\\S+)*?\\s+-\\w*c\\w*\\s+((?:'[^']*'|"(?:[^"\\\\]|\\\\[\\s\\S])*"|\\\\[\\s\\S]|[^\\s;&|()<>'"\\\\])+)`;
+const SHELL_C = new RegExp(`(?:^|[\\s;&|(])${C_BODY}`, 'g'), WRAPPED = new RegExp(`^\\s*${C_BODY}\\s*$`);
+const shellBody = (m) => m[1].replace(/'([^']*)'|"((?:[^"\\]|\\[\s\S])*)"|\\([\s\S])/g, (_, one, two, esc) => one ?? esc ?? two.replace(/\\([\s\S])/g, '$1'));
+// plain() blanks what a double-quoted body runs, so bodies come from the raw text. Not those inside quotes, which are data, unless a substitution there runs them. A heredoc's stray ' makes quotes unreliable: then all of them.
+const spokenBodies = (raw) => {
+  const shown = /<</.test(raw) ? raw : raw.replace(/'[^']*'|"(?:[^"\\]|\\[\s\S])*"/g, (q) => (q[0] === '"' && /\$\(|`/.test(q) ? q : '\0'.repeat(q.length)));
+  return [...raw.matchAll(SHELL_C)].filter((m) => shown[m.index] !== '\0');
+};
 // `$(echo ssh) box`, `"a $(echo ssh)" box`, `sh <(echo x)`, `sh -c "$(cat x)"`: the program or script only exists once it runs. Not `x=$(date)`, nor `sh -c "echo $(date)"`.
 const BUILT = new RegExp(`(?:^|[;&|\\n(]|\\$\\()\\s*${LEAD}(?:<+\\s*)?[^\\s=)]*(?:\\$\\(|\`|<\\()|(?:^|[;&|\\n(]|\\$\\()\\s*${lead(WRAPS.filter((w) => !RUNS_TEXT.includes(w)))}"[^"\\n]*(?:\\$\\(|\`)`, 'm');
 const SUBST = '\\$\\((?:[^()]|\\((?:[^()]|\\([^()]*\\))*\\))*\\)|`[^`]*`';
@@ -553,21 +565,31 @@ function respelled(text) {
   return null;
 }
 const NO_READ = ['echo', 'printf', 'test', '[', ':', 'export'], SYSTEM_VARS = ['HOME', 'PWD', 'TMPDIR'];
-function privateCommand(cmd, cwd, home, o, depth) {
-  const raw = String(cmd), text = inlineHelpers(unquote(raw)), here = [...new Set(places(text, cwd, home))];
+function privateCommand(cmd, cwd, home, o, depth, outer = '') {
+  const raw = String(cmd), key = createHash('sha1').update([depth, cwd, depth ? '' : outer, raw].join('\0')).digest('base64');
+  // flat() and expanded() come back to the same text: read it, and any script it runs, once. Hashed: V8 gives long strings of one length a single bucket.
+  if ((o.seen ||= new Set()).has(key)) return false;
+  o.seen.add(key);
+  const text = inlineHelpers(unquote(raw)), here = [...new Set(places(text, cwd, home))];
   // Code the fence can't read is refused once there is a folder or machine to protect. Tools alone are matched by name.
   const strict = o.remote || o.dirs.length > 0;
   const again = strict ? respelled(raw) : raw;
-  if (again === null || again !== raw && privateCommand(again, cwd, home, o, depth)) return true;
+  if (again === null || again !== raw && privateCommand(again, cwd, home, o, depth, outer)) return true;
   const bare = strict ? plain(raw) : raw, code = masked(bare);
   if (strict && (PIPED.test(bare) || PIPED.test(code) || BUILT.test(code) || fedByXargs(bare) || xargsProgram(code))) return true;
-  const level = strict ? flat(bare) : bare;
-  if (level !== bare && privateCommand(level, cwd, home, o, depth)) return true;
+  // plain() blanks the | in a double-quoted body, so a command that is only a wrapper is read from raw.
+  const whole = strict ? raw.match(WRAPPED) : null;
+  const bodies = !strict ? [] : whole ? [whole] : spokenBodies(raw);
+  for (const m of bodies) if (privateCommand(shellBody(m), cwd, home, o, depth, `${outer}\n${bare}`)) return true;
+  // Shell bodies were just read, so what follows looks at the rest of the line only.
+  const rest = !strict ? bare : whole ? '' : bare.replace(SHELL_C, ' ');
+  const level = strict ? flat(rest) : rest;
+  if (level !== rest && privateCommand(level, cwd, home, o, depth, outer)) return true;
   const values = strict ? expanded(inlineHelpers(keeping(raw))) : [];
   // Words the shell will read as paths: not single-quoted text, nor double-quoted prose, but "$p/a b" still is.
   const cwdVars = [...raw.matchAll(/(?:^|[\s;&|(])(\w+)=\$\(pwd\)(?=[\s;&|)]|$)/gm)].map((m) => m[1]);
   const open = strict && !depth && o.dirs.length && !values.length ? unquote(bare.replace(/'[^']*'/g, 'Q').replace(/"(?!\$\{?\w+\}?\/)[^"]*"/g, 'Q')) : '';
-  if (values.some((t) => privateCommand(t, cwd, home, o, depth))) return true;
+  if (values.some((t) => privateCommand(t, cwd, home, o, depth, outer))) return true;
   if (o.remote) {
     if (DB_DRIVER.test(raw)) return true;
     for (const m of text.matchAll(DB_URL)) if (!LOCAL.test(m[1])) return true;
@@ -577,7 +599,7 @@ function privateCommand(cmd, cwd, home, o, depth) {
     const ws = seg.trim().split(/\s+/).filter(Boolean); let viaShell = false;
     while (ws.length && (/^\w+=/.test(ws[0]) || WRAPS.includes(sysBin(ws[0])) || /^-/.test(ws[0]) || /^\d+[smh]?$/.test(ws[0]))) {
       if ([...SHELLS, 'source', '.'].includes(sysBin(ws[0]))) viaShell = true;
-      ws.shift();
+      ws.splice(0, viaShell && /^[-+]\w*[oO]$/.test(ws[0]) ? 2 : 1);
       // `sh < x.sh`, `bash <<< 'ssh x'`: what follows is the script.
       if (viaShell && ws[0]?.startsWith('<')) { ws[0] = ws[0].replace(/^<+/, ''); if (!ws[0]) ws.shift(); }
     }
@@ -588,7 +610,7 @@ function privateCommand(cmd, cwd, home, o, depth) {
     // inside a script `$DIR/lib.sh` is everyday, and refusing it would stop ordinary scripts.
     if (strict && (/^\$/.test(prog) || !depth && /^\$/.test(ws[0].replace(/^\$\{?HOME\}?(?=\/)/, '')))) return true;
     // `cat $p/a`: a variable nothing here set, leading a path, could be anywhere. Same limit as above: the command itself, not scripts.
-    if (open && !NO_READ.includes(prog) && rest.some((w) => { const m = w.match(/^[<>]*\$\{?(\w+)\}?\//); return m && open.includes(w) && (w.includes('/../') || !(SYSTEM_VARS.includes(m[1]) || cwdVars.includes(m[1]))); })) return true;
+    if (open && !NO_READ.includes(prog) && rest.some((w) => { const m = w.match(/^[<>]*\$\{?(\w+)\}?\//); return m && open.includes(w) && (w.includes('/../') || !(SYSTEM_VARS.includes(m[1]) || cwdVars.includes(m[1]) || new RegExp(`(?:^|[\\s;&|(])${m[1]}=(?!\\$\\(|\`)`, 'm').test(outer))); })) return true;
     if (o.remote) {
       if (REMOTE_SHELLS.includes(prog) && rest.join(' ') !== '-V') return true;
       if (prog === 'tailscale' && rest[0] === 'ssh') return true;
@@ -627,7 +649,7 @@ function privateCommand(cmd, cwd, home, o, depth) {
   if (!o.dirs.length) return false;
   const words = text.split(/[\s;|&()<>`]+/).filter(Boolean).flatMap((w) => braces(w));
   // `cat ~/te$(echo am)/alpha/a`: a substitution inside a path counts as a glob.
-  const globs = strict ? text.replace(new RegExp(SUBST, 'g'), '*').split(/[\s;|&()<>]+/).filter((w) => w.includes('*') && w.includes('/')) : [];
+  const globs = strict ? masked(rest).replace(/["'\\]/g, '').replace(new RegExp(SUBST, 'g'), '*').split(/[\s;|&()<>]+/).filter((w) => w.includes('*') && w.includes('/')) : [];
   if (here.some((dir) => globs.some((w) => o.reach(w, dir) === 'in'))) return true;
   return here.some((dir) => words.some((w) => w.split('=').some((part) => {
     const p = values.length ? part : starred(part);

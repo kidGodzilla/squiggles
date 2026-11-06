@@ -5,6 +5,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 ## 0.1.2 (unreleased)
 
 ### Security
+- The private fence reads what a shell's `-c` text runs (`zsh -lc "echo 'ssh x' | sh"`), and sees through shell options (`bash -o pipefail -c 'ssh box'`) and a pipe into a group (`echo x | (cd /tmp; sh)`).
 - The fence catches git push behind a quoted, escaped or separate option value (`git -C "my repo" push`, `git --work-tree . push`).
 - The private-remote fence catches a bare ssh alias (`rsync prod:/x`, `git clone prod:x`) and ssh:// or rsync:// URLs. `git fetch prod:x` stays open: there it reads like a refspec.
 - Who sent a message comes from the process tree and the session, never the request. A request can't claim to be you: a terminal or detached process shows as From a terminal, and reaches the squiggle labelled as not a person. A squiggle can't open a message with a person's name either.
