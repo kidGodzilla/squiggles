@@ -3,10 +3,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { execFileSync, spawn } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
 import { sender, askerOf, askSeen, writesNote, noteRefusal, labelled, screenRefusal, humansRefusal, roomRefusal, peersRefusal, squiggleRefusal, peerRefusal } from '../gates.mjs';
-import { firstFile, isBrowserFile } from '../caller.mjs';
+import { firstFile, isBrowserFile, browserSignature, signedBy } from '../caller.mjs';
 import { makePasscode } from '../passcode.mjs';
 
 const H = os.homedir(), people = [{ id: 'owner' }, { id: 'sam' }];
@@ -160,6 +161,40 @@ test('browser allowlist: the file a real browser runs, nothing that only looks l
     '/Users/x/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/Applications/Archive Tool.app/Contents/MacOS/node']) assert.equal(isBrowserFile(f), false, f);
   assert.equal(firstFile('p123\nftxt\nn/bin/sleep\nftxt\nn/usr/lib/dyld\n'), '/bin/sleep');
   assert.equal(firstFile(''), '');
+});
+
+test('a program at a browser path needs its maker\'s signature', async () => {
+  const app = (name) => browserSignature(`/Applications/${name}.app/Contents/MacOS/${name}`);
+  const google = browserSignature('/Applications/Google Chrome.app/Contents/Frameworks/Google Chrome Framework.framework/Versions/1/Helpers/Google Chrome Helper.app/Contents/MacOS/Google Chrome Helper');
+  assert.match(google, /EQHXZ8M8AV/);
+  assert.match(app('Google Chrome Canary'), /EQHXZ8M8AV/);
+  assert.match(app('Firefox'), /43AQ936H96/);
+  assert.match(app('Microsoft Edge'), /UBF8T346G9/);
+  assert.match(app('Brave Browser'), /KL8N8XSYF4/);
+  assert.match(app('Arc'), /S6N382Y83G/);
+  assert.match(app('Dia'), /S6N382Y83G/);
+  assert.match(app('Opera'), /A2P9LX4JPN/);
+  assert.match(browserSignature('/System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.Networking.xpc/Contents/MacOS/com.apple.WebKit.Networking'), /anchor apple/);
+  assert.equal(app('Chromium'), undefined); // no maker to check: the passcode lets it in
+  assert.equal(browserSignature('/bin/sleep'), undefined);
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'signed-')), copy = path.join(dir, 'sleep');
+  fs.copyFileSync('/bin/sleep', copy);
+  execFileSync('/usr/bin/codesign', ['-f', '-s', '-', copy], { stdio: 'ignore' }); // what a swapped program can do: sign itself
+  const real = spawn('/bin/sleep', ['30']), swapped = spawn(copy, ['30']);
+  try {
+    await new Promise((r) => setTimeout(r, 200));
+    assert.equal(await signedBy(real.pid, 'anchor apple'), true);
+    assert.equal(await signedBy(real.pid, google), false);
+    assert.equal(await signedBy(swapped.pid, 'anchor apple'), false);
+    assert.equal(await signedBy(swapped.pid, google), false);
+    assert.equal(await signedBy(999999, 'anchor apple'), false); // no such process: unknown is no
+  } finally { real.kill(); swapped.kill(); fs.rmSync(dir, { recursive: true }); }
+});
+
+test('the browser check asks for the signature of the process it matched', () => {
+  const c = src('caller.mjs');
+  assert.match(c.slice(c.indexOf('export async function browserCaller')), /signedBy\(pid, /);
+  assert.match(c, /'--no-strict'/); // strict refuses Apple's WebKit: Safari would lose its way in
 });
 
 test('the browser check reads the running file from lsof, never ps, whose name a process picks', () => {
