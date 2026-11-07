@@ -2,11 +2,12 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { ROOM_PORT } from './fence.mjs';
 import { codeSchema } from './migrate.mjs';
 
 export const DEFAULTS = {
   schema: 1,        // data schema; a fresh room starts at the latest
-  port: 4327,
+  port: ROOM_PORT,
   userName: '',     // what squiggles call you; empty: "the user"
   tailnet: false,   // offer "Share on tailnet" (needs Tailscale)
   cloudflare: false, // offer sharing over a Cloudflare quick tunnel (needs cloudflared; public link, 8+ character passcode)

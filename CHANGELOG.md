@@ -5,6 +5,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 ## 0.1.2 (unreleased)
 
 ### Security
+- Claude in Chrome tools refuse the room's own address: its configured port in any loopback spelling, and the tailnet or Cloudflare host while that share is offered. In your Chrome a squiggle would act as you. Any page action that names the room is refused, batches and scripts included; the CLI still reaches it.
 - The private fence holds a glob or variable in a path against the home folder as spelled too, so a home reached through a symlink stays closed, and an assigned value holding a substitution or an unknown variable no longer counts as known.
 - The private fence reads what a shell's `-c` text runs (`zsh -lc "echo 'ssh x' | sh"`), and sees through shell options (`bash -o pipefail -c 'ssh box'`) and a pipe into a group (`echo x | (cd /tmp; sh)`).
 - The fence catches git push behind a quoted, escaped or separate option value (`git -C "my repo" push`, `git --work-tree . push`).

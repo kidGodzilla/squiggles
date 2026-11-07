@@ -16,6 +16,7 @@ export const REASONS = { dirs: 'Downloads, Desktop and Documents are off limits'
   peer: "that squiggle's transcript, journal and private notes are closed to other squiggles: ask the lead",
   secret: 'credentials stay off the screen',
   tree: 'a recursive read or copy from home or above reaches Downloads, Desktop, Documents and ~/.ssh: name a folder inside home',
+  room: "the room is your user's login: in their Chrome you would act as them. Use bin/agents.mjs",
   word: 'a word this long with braces in it is too big to check, so it is refused; put it in a file',
   crash: 'guard could not read the tool call, so it is refused' };
 export const REASON = REASONS.dirs;
@@ -661,6 +662,7 @@ function privateCommand(cmd, cwd, home, o, depth, outer = '') {
 }
 // What the codex, cursor and pi guards call: the rules from <data dir>/config.json, read on every call so a change applies
 // at once. No file: off. A file that can't be read: blocked, since the rules are unknown.
+export const ROOM_PORT = 4327;
 const dataDir = () => path.resolve(String(process.env.SQUIGGLES_HOME || '~/.squiggles').replace(/^~(?=\/|$)/, os.homedir()));
 export function savedRules(dir = dataDir()) {
   try { return privateRules(JSON.parse(fs.readFileSync(path.join(dir, 'config.json'), 'utf8'))); }
@@ -669,6 +671,19 @@ export function savedRules(dir = dataDir()) {
 export function privateCheck(tool, input, cwd = process.cwd(), home = os.homedir(), dir = dataDir()) {
   const rules = savedRules(dir);
   return rules ? privateReason(tool, input, cwd, home, rules) : 'config.json in the data folder could not be read, so the private-data rules are unknown: fix it to go on';
+}
+
+// Claude in Chrome carries the user's saved login, so the room reads a Chrome page action as them. Every Chrome tool's input is read whole: batches nest
+// URLs and scripts hold them. Any spelling of loopback shares the port, and a share host counts only while that share is offered. Read on every call, as above.
+// Not seen: a room tab already open, a URL built at run time.
+export const CHROME_TOOL = /^mcp__claude-in-chrome__/;
+export function roomReason(input = {}, dir = dataDir()) {
+  let cfg = {};
+  try { cfg = JSON.parse(fs.readFileSync(path.join(dir, 'config.json'), 'utf8')) ?? {}; }
+  catch (e) { if (e.code !== 'ENOENT') return 'config.json in the data folder could not be read, so the room address is unknown: fix it to go on'; }
+  const port = process.env.PORT || cfg.port || ROOM_PORT, hosts = [cfg.tailnet && 'ts\\.net', cfg.cloudflare && 'trycloudflare\\.com'].filter(Boolean);
+  const room = new RegExp(`:${esc(String(port))}(?!\\d)${hosts.map((h) => `|\\.${h}(?![\\w-])`).join('')}`, 'i');
+  return room.test(JSON.stringify(input) ?? '') ? REASONS.room : '';
 }
 
 // Peer-private logs. Every squiggle's private/ folder is closed to the others; a squiggle marked private closes its journal

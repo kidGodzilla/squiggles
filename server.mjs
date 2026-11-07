@@ -279,7 +279,7 @@ const modelFor = (s) => pickModel(s, CONFIG.model);
 // The squiggle's settings.json (allow rules) is in it too: an edit relaunches the idle process on its next message. So is the system prompt.
 // Every tool call re-reads the whole session, so the compaction point sets the cost per call.
 const compactAt = (s) => s.autocompact ?? (s.lead ? 300000 : 120000);
-const launchSig = (s) => JSON.stringify([!!s.chrome, modelFor(s), s.permissionMode, compactAt(s), s.maxTurns, s.effort, s.cwd, readText(path.join(sqDir(s.id), 'settings.json'), ''), 'fence:peer', systemPrompt(s)]);
+const launchSig = (s) => JSON.stringify([!!s.chrome, modelFor(s), s.permissionMode, compactAt(s), s.maxTurns, s.effort, s.cwd, readText(path.join(sqDir(s.id), 'settings.json'), ''), 'fence:chrome', systemPrompt(s)]);
 // Busy Mac: every squiggle but the lead runs at nice 10 and its builds and tests inherit it, so the lead and the page stay quick.
 const lowPriority = (s, proc) => { if (!s.lead && proc.pid) try { os.setPriority(proc.pid, 10); } catch {} };
 function launch(s) {
