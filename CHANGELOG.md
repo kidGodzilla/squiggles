@@ -213,6 +213,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Settings number inputs show an accent border on focus and are 44px tall on touch screens.
 
 ### Fixed
+- A failed read during a refresh no longer leaves the room blank: it says so once and keeps trying, a chat history that won't load is retried and then named, live updates start regardless, and a proxy's error page reads as an error.
 - Research files open when the room lives under a dot folder, as the default ~/.squiggles does. Hidden folders inside the research folder stay hidden.
 - The Peers page asks a locked browser for the room passcode instead of showing an error, then finishes the change. Cancelling changes nothing.
 - Drawing icons no longer makes macOS ask for a keychain for Chrome, and a workspace under the temp folder no longer draws them at all. Squiggles are told to pass the same flag to any headless Chrome they start.

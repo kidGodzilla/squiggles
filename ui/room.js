@@ -9,7 +9,7 @@ const URL0 = location.search;
 const fmtDur = (ms) => (ms < 1000 ? `${Math.round(ms)}ms` : ms < 60000 ? `${(ms / 1000).toFixed(1)}s` : `${Math.floor(ms / 60000)}m${Math.round((ms % 60000) / 1000)}s`);
 // Room passcode: PASS mirrors /api/passcode. A 401 after unlocking means the session ended elsewhere: reload to the lock screen.
 const PASS = { set: false, ok: true };
-const api = async (p, body) => (p === '/passcode' || await GATE, fetch('/api' + p, body === undefined ? {} : { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then(async (r) => { const j = await r.json(); if (r.status === 401 && PASS.set && PASS.ok && !j?.unlock) location.reload(); return j; })); // unlock: unlocked() prompts for the code
+const api = async (p, body) => (p === '/passcode' || await GATE, fetch('/api' + p, body === undefined ? {} : { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then(async (r) => { const j = await r.json().catch(() => ({ error: `The room answered ${r.status} without data. Try again.` })); if (r.status === 401 && PASS.set && PASS.ok && !j?.unlock) location.reload(); return j; })); // unlock: unlocked() prompts for the code
 // Every api() call waits here until the passcode gate opens (at once when there is none).
 const GATE = passGate();
 
@@ -863,14 +863,26 @@ async function load() {
   api('/limit').then((l) => showLimit(l.until || 0));
   const room = await api('/room').catch(() => ({})); rxPower(room.reactions !== 'off'); { const rx = await api('/react').catch(() => null); S.rx = rx?.items || {}; S.rxPack = rx?.pack || []; } roomGen(room.characters || 'cast'); S.roots = room.fileRoots || {}; S.realRoots = room.fileReal || {}; S.home = room.home || ''; S.piModels = room.piModels || []; S.cursorModels = room.cursorModels || [];
   const list = await api('/squiggles').catch(() => null);
-  // A failed read must not empty the room: keep what's on screen and try again.
-  if (!Array.isArray(list)) { setTimeout(load, 2000); return; }
+  // A failed read must not empty the room: keep what's on screen and try again. load() only resolves on a real list,
+  // so what waits on it (the office a refresh restores) never runs on an empty room.
+  if (!Array.isArray(list)) { if (!S.unreachable) toast('The room isn’t answering. Trying again.'); S.unreachable = true; await new Promise((r) => setTimeout(r, 2000)); return load(); }
+  S.unreachable = false;
   S.sq = {}; for (const s of list) S.sq[s.id] = s;
   S.hist = {}; S.term = {}; S.todos = {};
   document.querySelectorAll('.cw .msgs').forEach((m) => (m.innerHTML = ''));
   S.order = list.sort((a, b) => (b.lead ? 1 : 0) - (a.lead ? 1 : 0) || String(a.created || '').localeCompare(String(b.created || ''))).map((s) => s.id);
   renderStage(); if (B.view === 'settings' && typeof renderSettings === 'function') renderSettings();
-  await Promise.all(S.order.map(async (id) => { for (const ev of await api(`/squiggles/${id}/events?n=${S.sq[id].lead ? 300 : 150}`)) apply(id, ev, false); }));
+  // One squiggle's history failing costs that history, not the room: three tries, then say so.
+  const missed = [];
+  await Promise.all(S.order.map(async (id) => {
+    for (let i = 0; i < 3; i++) {
+      const evs = await api(`/squiggles/${id}/events?n=${S.sq[id].lead ? 300 : 150}`).catch(() => null);
+      if (Array.isArray(evs)) { for (const ev of evs) apply(id, ev, false); return; }
+      if (i < 2) await new Promise((r) => setTimeout(r, 1000));
+    }
+    missed.push(S.sq[id].name);
+  }));
+  if (missed.length) toast(`Couldn’t load the chat history of ${missed.join(', ')}. Refresh to try again.`);
   for (const id of S.order) paintTile(id);
   document.querySelectorAll('.cw').forEach((cw) => { window.paintAsks?.(cw); window.paintPicks?.(cw); });
   window.onBoard?.();
@@ -1341,6 +1353,6 @@ async function passGate() {
   };
   await new Promise(() => {});
 }
-GATE.then(() => load()).then(() => { listen(); loadMeeting(); loadShare(); fetch('/api/config').then((x) => x.json()).then((c) => { $('#callBar').hidden = !c.call; }).catch(() => {});
+GATE.then(() => load()).catch((e) => console.error('load', e)).then(() => { listen(); loadMeeting(); loadShare(); fetch('/api/config').then((x) => x.json()).then((c) => { $('#callBar').hidden = !c.call; }).catch(() => {});
   // A view restored before the room loaded (URL or last view) gets its office now.
   if (B.view === 'lead') setOffice(leadId()); else if (B.view === 'one') { if (S.sq[B.who]) setOffice(B.who); else setView('room', '', 'replace'); } else if (S.office) setOffice(S.officeIds); });
