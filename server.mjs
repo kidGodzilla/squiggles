@@ -1726,14 +1726,14 @@ const server = http.createServer(async (req, res) => {
         if (b.op === 'drop') { if (!who) { try { pass.session(req, "dropping a squiggle's watch"); } catch (e) { return json(res, { error: e.message, ...(e.unlock && { unlock: true }) }, e.code || 403); } } const boss = !who || !!loadSquiggle(who)?.lead; const w = watches.drop(String(b.id || ''), { by: who || 'owner', boss }); broadcast('*room', { k: 'room', action: 'watches' }); return json(res, w); }
         // Approving runs a command unattended: the owner only, from an unlocked browser (same gate as Run on an ask).
         if (b.op === 'approve') {
-          if (who) return json(res, { error: `only ${USER} approves a watch, on the Team tab` }, 403);
+          if (who) return json(res, { error: `only ${USER} approves a watch, on the Review tab` }, 403);
           try { pass.owner(req); } catch (e) { return json(res, { error: e.message, ...(e.unlock && { unlock: true }) }, e.code || 401); }
           const w = watches.approve(String(b.id || ''), String(b.hash || '')); broadcast('*room', { k: 'room', action: 'watches' }); return json(res, w);
         }
         return json(res, { error: 'op must be add, approve or drop' }, 400);
       } catch (e) { return json(res, { error: e.message }, e.code || 400); }
     }
-    if (url.pathname === '/api/needs' && req.method === 'GET') return json(res, needsList({ asks: asks.list({}), picks: picks.list({}), merges: await board.merges().catch(() => []), squiggles: listSquiggles().map(view), tasks: board.tasks() }));
+    if (url.pathname === '/api/needs' && req.method === 'GET') return json(res, needsList({ asks: asks.list({}), picks: picks.list({}), merges: await board.merges().catch(() => []), squiggles: listSquiggles().map(view), tasks: board.tasks(), watches: watches.list({}) }));
     if (url.pathname === '/api/picks' && req.method === 'GET') return json(res, picks.list({ all: url.searchParams.get('all') === '1' }));
     if (url.pathname === '/api/picks' && req.method === 'POST') {
       const b = await body(req, res), who = await callerSquiggle(req), lead = !!(who && loadSquiggle(who)?.lead);

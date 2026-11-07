@@ -158,7 +158,9 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Merge merges every goal repo carrying the task's branch (Repo shows "api + web"; detail lists "Also merges"). `repo:branch` accepts a goal repo's bare name.
 - Picks: `pick ask "<question>" "<option>" "<option>" [--images a,b] [--task <id>]` files a choice for the user; open picks collect on one card above the lead chat composer, options as buttons (images shown when they live in files/ or research/). A tap answers and the asker is told; the lead relays a spoken answer with `pick <id> <option>`. `picks [all]`, `pick drop <id>`. Answering needs the room passcode.
 - Settings > Defaults > Turns at once, and `slots`, set how many turns each provider runs at once.
+- Review lists watches waiting for approval, with the command, folder, schedule and reason, plus Approve and Drop. They count on the Review tab, in a chat's waiting line and in `needs`.
 ### Changed
+- Away from the room's computer, Review folds commands and watches into one closed line, and the Team card drops Approve.
 - A squiggle's default context cap is now 120k tokens (the lead keeps 300k): every tool call re-reads the session, so a smaller cap costs less per call.
 - Team reports wait while you're talking with the lead, and go as one batch once you've been quiet 15 minutes, including over a restart.
 - Lead chat: a team report the lead answers in words joins the handled-reports fold; the answer stays below it.
@@ -274,6 +276,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Merge tab shows a listing error without waiting on the worktree list.
 - Inbox button tooltip no longer names a fixed folder; the Inbox panel shows the real path.
 - Merge detail centers the GitHub links; the After merging card heading stays on one line.
+- Review scrolls as one page, so a tall card can't hide the branches. A long path no longer clips cards on a phone.
 
 ### Migrations
 - Codex squiggles: run `node ~/squiggles/bin/codex-trust-guard.mjs` once, so Codex trusts the room's hook. Until then their turns are refused.

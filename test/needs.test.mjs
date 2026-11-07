@@ -41,3 +41,14 @@ test('alertWake tells the owner what, from whom, and when the user sees it', () 
   assert.match(m, /2 hours after filing, it joins Sam's Review list/);
   assert.match(alertWake({ id: 't1', title: 'x' }), /joins the user's Review list/);
 });
+
+test('needs: a pending watch waits on you, with what the card needs to approve it', () => {
+  const l = needsList({ watches: [
+    { id: 'wt1', owner: 'logs', cmd: 'ls', cwd: '/tmp', every: 6e5, hash: 'h1', state: 'pending', why: 'count files', runsFor: 'codex' },
+    { id: 'wt2', owner: 'logs', cmd: 'pwd', cwd: '/tmp', every: 6e5, hash: 'h2', state: 'on' },
+    { id: 'wt3', owner: 'logs', cmd: 'date', cwd: '/tmp', every: 6e5, hash: 'h3', state: 'failing' },
+  ] });
+  assert.deepEqual(l.map((n) => `${n.kind}:${n.id}`), ['watch:wt1']);
+  assert.equal(l[0].by, 'logs'); assert.equal(l[0].cmd, 'ls'); assert.equal(l[0].hash, 'h1'); assert.equal(l[0].every, 6e5); assert.equal(l[0].runsFor, 'codex');
+  assert.match(describeNeeds(l), /^Watch {2}wt1 {2}logs {2}count files/);
+});

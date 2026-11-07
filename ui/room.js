@@ -849,7 +849,7 @@ async function roomCommand(ev) {
     case 'asks': loadAsks(); return;
     case 'picks': loadPicks(); return;
     case 'waits': return;
-    case 'watches': loadWatches(); return;
+    case 'watches': loadWatches(); loadBlocked(); return;
     case 'characters': roomGen(v); S.order.forEach(reskin); if (B.view === 'settings') renderSettings(); break;
   }
   savePrefs(); AUD.apply();

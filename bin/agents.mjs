@@ -150,7 +150,7 @@ const cmds = {
       return `${w.id} filed, pending: nothing runs until the user approves this exact text.`;
     }
     if (op === 'drop') { const w = await call('/watches', { op: 'drop', id: rest[0] }); return `${w.id} dropped`; }
-    if (op === 'approve') throw new Error('approve on the Team tab: it needs an unlocked browser');
+    if (op === 'approve') throw new Error('approve on the Review tab: it needs an unlocked browser');
     throw new Error('watch add "<read-only command>" [--every 30m] [--timeout 10m] [--added] [--ignore <regex>] [--cwd <dir>] [--task <id>] | watch drop <id>');
   },
   // Picks: picks [all] | pick ask "<question>" "<option>" "<option>"... [--why "<context>"] [--images <path>,<path>] [--task <id>]
