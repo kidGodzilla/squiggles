@@ -353,9 +353,9 @@ const PIPED = new RegExp(`\\|&?[\\s(]*(?:[({](?:[^(){}]*[;&]\\s*|\\s*))?${LEAD}$
 const C_BODY = `${SHELL}(?:${SHELL_OPT}|\\s+[-+]\\S+)*?\\s+-\\w*c\\w*\\s+((?:'[^']*'|"(?:[^"\\\\]|\\\\[\\s\\S])*"|\\\\[\\s\\S]|[^\\s;&|()<>'"\\\\])+)`;
 const SHELL_C = new RegExp(`(?:^|[\\s;&|(])${C_BODY}`, 'g'), WRAPPED = new RegExp(`^\\s*${C_BODY}\\s*$`);
 const shellBody = (m) => m[1].replace(/'([^']*)'|"((?:[^"\\]|\\[\s\S])*)"|\\([\s\S])/g, (_, one, two, esc) => one ?? esc ?? two.replace(/\\([\s\S])/g, '$1'));
-// plain() blanks what a double-quoted body runs, so bodies come from the raw text. Not those inside quotes, which are data, unless a substitution there runs them. A heredoc's stray ' makes quotes unreliable: then all of them.
+// plain() blanks what a double-quoted body runs, so bodies come from the raw text. Not those inside quotes, which are data, unless a substitution there runs them. A heredoc, escaped quote, $'' or # comment makes quotes unreliable: then all of them.
 const spokenBodies = (raw) => {
-  const shown = /<</.test(raw) ? raw : raw.replace(/'[^']*'|"(?:[^"\\]|\\[\s\S])*"/g, (q) => (q[0] === '"' && /\$\(|`/.test(q) ? q : '\0'.repeat(q.length)));
+  const shown = /<<|\\['"]|\$'|(?:^|\s)#/.test(raw) ? raw : raw.replace(/'[^']*'|"(?:[^"\\]|\\[\s\S])*"/g, (q) => (q[0] === '"' && /\$\(|`/.test(q) ? q : '\0'.repeat(q.length)));
   return [...raw.matchAll(SHELL_C)].filter((m) => shown[m.index] !== '\0');
 };
 // `$(echo ssh) box`, `"a $(echo ssh)" box`, `sh <(echo x)`, `sh -c "$(cat x)"`: the program or script only exists once it runs. Not `x=$(date)`, nor `sh -c "echo $(date)"`.

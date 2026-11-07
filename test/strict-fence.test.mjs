@@ -121,3 +121,14 @@ test('an assigned value holding a substitution or an unknown variable leaves the
   refused(["p=~/te$(echo am)/alpha; sh -c 'cat $p/a'", "p=/tmp$(echo x); sh -c 'cat $p/a'", `p="/a b$(echo x)"; sh -c 'cat $p/a'`, "q=$(echo ~/team); p=$q/alpha; sh -c 'cat $p/a'", "p=$unk/x; sh -c 'cat $p/a'"]);
   passes(["p=/tmp; bash -c 'cat $p/a'", "d=/tmp bash -c 'cat $d/a'", "d=/tmp bash -c 'cat $d/a; echo $(date)'", "p=$HOME/app; sh -c 'cat $p/a'", "p=${PWD}/x; sh -c 'cat $p/a'", 'x=$(date) && cat ~/app/a', 'FOO=a*/b ls']);
 });
+
+test('a -c body inside a double-quoted body is still read', () => {
+  refused([`cd /tmp; bash -c "echo 'ssh x' | sh"`, `cd /tmp; sh -c "echo 'ssh x' | bash"`, `sh -c "sh -c 'ssh box'"`, `echo "$(sh -c "echo 'ssh x' | sh")"`, `sh -c "echo 'ssh x' | sh" <<'E'\n'\nE`]);
+  passes([`echo "run sh -c 'ssh box'"`, `echo 'run sh -c "ssh box"'`, `cd /tmp; bash -c "echo 'ssh x' | grep s"`, `git commit -m "bash -c 'ssh box' is refused"`, "zsh -lc \"cd /tmp; python3 - <<'E'\nprint('~/`date`/a.txt')\nE\""]);
+});
+
+test('a stray quote the mask misreads does not hide a -c body', () => {
+  const body = `bash -c "echo 'ssh x' | sh"`;
+  refused([String.raw`echo it\'s; `, String.raw`echo \"; `, String.raw`echo $'a\'b'; `, `# it's\n`].map((lead) => lead + body));
+  passes([String.raw`echo it\'s; bash -c "echo hi | grep h"`, `# it's\nbash -c 'git status'`, `git commit -m "fix #12: bash -c 'git status' works"`]);
+});
