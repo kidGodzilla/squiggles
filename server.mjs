@@ -1243,7 +1243,7 @@ setInterval(() => {
 // SQUIGGLES_TAILSCALE: another binary, so a test's stub stands in for the real tailnet.
 const TS = process.env.SQUIGGLES_TAILSCALE || (fs.existsSync('/Applications/Tailscale.app/Contents/MacOS/Tailscale') ? '/Applications/Tailscale.app/Contents/MacOS/Tailscale' : 'tailscale');
 // Without a terminal the app binary tries to start its GUI ('The Tailscale GUI failed to start'); TAILSCALE_BE_CLI keeps it a CLI.
-const tsRun = (args) => new Promise((ok, no) => execFile(TS, args, { timeout: 15000, env: { ...process.env, TAILSCALE_BE_CLI: '1' } }, (e, out, err) => e ? no(new Error(String(err || e.message).trim().split('\n').pop())) : ok(out)));
+const tsRun = (args) => new Promise((ok, no) => execFile(TS, args, { timeout: 15000, env: { ...process.env, TAILSCALE_BE_CLI: '1' } }, (e, out, err) => e ? no(Object.assign(new Error(String(err || e.message).trim().split('\n').pop()), { code: e.code })) : ok(out)));
 // The serve entry pointing at this port, if any: {on, url}.
 function shareFrom(status, port = PORT) {
   for (const [host, w] of Object.entries(status?.Web || {}))
@@ -1265,6 +1265,11 @@ async function share(on) {
   if (on && !shareReady()) throw new Error(`Set a room passcode of ${MIN_CODE}+ characters first (Settings > Security): anyone on the tailnet reaches the lock screen`);
   if (on) await tsRun(['serve', '--bg', String(PORT)]); else if ((await tailnetStatus()).on) await tsRun(['serve', '--https=443', 'off']);
   const st = await shareStatus(); broadcast('*room', { k: 'room', action: 'share', value: st }); return st;
+}
+// Off if it was on; true when it was. No Tailscale on this computer means nothing to turn off.
+async function shareOff() {
+  try { if (!(await tailnetStatus()).on) return false; await share(false); return true; }
+  catch (e) { if (e.code === 'ENOENT') return false; throw e; }
 }
 // Cloudflare quick tunnel: public, so a passcode of MIN_CODE+ characters first (its length is kept when set). Remembered in room.json so a restart reopens it, at a new URL.
 const CF_PID = path.join(RUNS, 'cloudflared.pid');
@@ -1516,7 +1521,12 @@ const server = http.createServer(async (req, res) => {
       if (b.op === 'unlock' && (await callerSquiggle(req))) return json(res, { error: `Squiggles can't unlock: the passcode is ${USER}'s` }, 403);
       // While the room is on the public internet, the passcode can't go: stop sharing on Cloudflare first.
       if (tunnel && roomCfg().cloudflare && b.op === 'clear') return json(res, { error: 'The room is shared on Cloudflare: stop that first (Settings > Sharing)' }, 409);
-      try { const r = pass.op(req, b); if (r.cookie) res.setHeader('set-cookie', r.cookie); return json(res, r.body); } catch (e) { return json(res, { error: e.message }, e.code || 400); }
+      try {
+        // Sharing goes first: if it can't be turned off, the passcode stays.
+        let off = false;
+        if (b.op === 'clear') { pass.allowed(req, b); try { off = await shareOff(); } catch (e) { throw Object.assign(new Error(`Sharing couldn't be turned off, so the passcode stays: ${e.message}`), { code: 409 }); } }
+        const r = pass.op(req, b); if (r.cookie) res.setHeader('set-cookie', r.cookie); return json(res, off ? { ...r.body, sharingOff: true } : r.body);
+      } catch (e) { return json(res, { error: e.message }, e.code || 400); }
     }
     if (!(url.pathname === '/' || p[0] === 'ui') && !pass.ok(req)) return json(res, { error: 'locked' }, 401);
     if (url.pathname === '/') return serveFile(res, path.join(ROOT, 'ui', 'index.html'), UI_CSP);
@@ -1872,5 +1882,8 @@ server.listen(PORT, '127.0.0.1', () => {
   console.log(`Squiggles ${VERSION} on http://127.0.0.1:${PORT}`);
   // Shared on Cloudflare before the restart: open it again (a new URL), only while the passcode still qualifies.
   if (tunnel && roomCfg().cloudflare && shareReady()) tunnel.start().then((st) => console.log(st.url ? `Shared on ${st.url}` : `Cloudflare: ${st.error}`));
+  // tailscale serve outlives this server: a room with no passcode doesn't stay shared. After listen, so it's only ever this port's own room.
+  // A shorter old code stays shared behind its lock: this asks for any passcode, not a long one.
+  if (CONFIG.tailnet && !pass.status({ headers: {}, socket: {} }).set) shareOff().catch((e) => console.error(`share off: ${e.message}`));
 });
 for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(sig, () => shutdown(0, false, `${sig}, parent ${process.ppid}`));

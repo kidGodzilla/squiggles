@@ -48,7 +48,7 @@ async function renderPass() {
 // Changing, clearing or loosening a set passcode asks for the current one.
 const passOp = async (b, done, title) => {
   if (PASS.set) { b.old = await askCode(title, '', 'Save', 'Current passcode'); if (b.old == null) return renderPass(); }
-  const r = await api('/passcode', b); if (!r || r.error) { toast(r?.error || 'Not saved'); return renderPass(); } toast(done); renderPass();
+  const r = await api('/passcode', b); if (!r || r.error) { toast(r?.error || 'Not saved'); return renderPass(); } toast(r.sharingOff ? `${done}. Sharing is off too.` : done); renderPass();
 };
 $('#passSet').onclick = () => { const code = $('#passNew').value; $('#passNew').value = ''; passOp({ op: 'set', code }, 'Passcode set', 'Change the passcode'); };
 $('#passNew').onkeydown = (e) => { if (e.key === 'Enter') $('#passSet').click(); };

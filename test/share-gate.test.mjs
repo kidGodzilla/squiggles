@@ -12,7 +12,7 @@ async function room(roomJson) {
   fs.writeFileSync(path.join(d, 'config.json'), JSON.stringify({ schema: 1, port: PORT, tailnet: true }));
   fs.mkdirSync(path.join(d, 'runs'));
   if (roomJson) fs.writeFileSync(path.join(d, 'room.json'), JSON.stringify(roomJson));
-  const p = spawn(process.execPath, [new URL('../server.mjs', import.meta.url).pathname], { env: { ...process.env, SQUIGGLES_HOME: d }, stdio: ['ignore', 'pipe', 'pipe'] });
+  const p = spawn(process.execPath, [new URL('../server.mjs', import.meta.url).pathname], { env: { ...process.env, SQUIGGLES_HOME: d, SQUIGGLES_TAILSCALE: path.join(d, 'no-tailscale') }, stdio: ['ignore', 'pipe', 'pipe'] });
   let out = '';
   const up = await new Promise((res) => {
     const t = setTimeout(() => res(false), 15000);

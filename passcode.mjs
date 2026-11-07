@@ -98,6 +98,12 @@ export function makePasscode({ read, write, now = () => Date.now(), localBrowser
   }
 
   // Returns { body, cookie? }. Throws Error with .code for HTTP status.
+  // Changing, clearing or loosening a set passcode needs the current one, from anyone, CLI included.
+  function allowed(req, b = {}, p = cfg() || {}) {
+    if (!ok(req)) throw err('locked', 401);
+    if (p.hash && ['set', 'clear', 'local'].includes(b.op)) check(req, p, b.old, 403);
+  }
+
   function op(req, b = {}) {
     const p = cfg() || {};
     if (b.op === 'unlock') {
@@ -110,9 +116,7 @@ export function makePasscode({ read, write, now = () => Date.now(), localBrowser
       if (t && p.sessions) { const sessions = live(p); delete sessions[sha(t)]; save({ ...p, sessions }); }
       return { body: { ...status(req), ok: false }, cookie: cookie(req, '', 0) };
     }
-    if (!ok(req)) throw err('locked', 401);
-    // Changing, clearing or loosening a set passcode needs the current one, from anyone, CLI included.
-    if (p.hash && ['set', 'clear', 'local'].includes(b.op)) check(req, p, b.old, 403);
+    allowed(req, b, p);
     if (b.op === 'set') {
       const code = String(b.code ?? '');
       if (code.length < MIN_CODE || code.length > 64) throw err(`passcode: ${MIN_CODE} to 64 characters`);
@@ -128,5 +132,5 @@ export function makePasscode({ read, write, now = () => Date.now(), localBrowser
     throw err('op: unlock, lock, set, clear, local or status');
   }
 
-  return { ok, status, op, session, owner, page, codeLen: () => mem?.codeLen || 0 };
+  return { ok, status, op, allowed, session, owner, page, codeLen: () => mem?.codeLen || 0 };
 }

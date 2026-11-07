@@ -355,7 +355,7 @@ const cmds = {
       if (op === 'local' && !['on', 'off'].includes(a[2])) throw new Error('room passcode local on|off');
       if (['set', 'clear', 'local'].includes(op)) b.old = await codeIfSet('the current passcode');
       const r = op === 'status' ? await call('/passcode') : await call('/passcode', b);
-      return r.set ? `passcode on${r.localSkips ? ', this Mac skips it' : ''}` : 'passcode off';
+      return r.set ? `passcode on${r.localSkips ? ', this Mac skips it' : ''}` : `passcode off${r.sharingOff ? ', sharing off too' : ''}`;
     }
     // room keys: the shortcut list, from the same table as the page's ? overlay. room view keys opens that overlay, room view jump the ⌘K jump.
     if (a[0] === 'keys') {
