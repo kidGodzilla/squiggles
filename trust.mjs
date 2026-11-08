@@ -1,6 +1,7 @@
 // Trust: how far a squiggle may act on its own ideas. Low, Medium (the default, as before), High, Very high.
 // Set by the user (Settings, the squiggle sheet) or the lead (`set <id> trust <level>`), never by the squiggle itself.
 // The level's rules replace {{trust}} in prompts/squiggle.md; Low is also enforced (the server refuses its own `task add`).
+import { parseWakes } from './schedule.mjs';
 export const TRUST = ['low', 'medium', 'high', 'veryhigh'];
 export const TRUST_NAME = { low: 'Low', medium: 'Medium', high: 'High', veryhigh: 'Very high' };
 export const trustOf = (s) => (TRUST.includes(s?.trust) ? s.trust : 'medium');
@@ -24,7 +25,7 @@ export const trustRules = (s) => RULES[trustOf(s)];
 // squiggle's double-forked child) needs `owner()`, the page's unlocked session, for those fields and for a charter.
 // With no room passcode (`passcode` false) no session can exist: lead and lead-only fields are refused until one is set;
 // a charter stays open. A non-lead squiggle changes only itself.
-export const UPDATE_FIELDS = ['name', 'role', 'cwd', 'every', 'permissionMode', 'paused', 'look', 'lookSeed', 'maxTurns', 'chrome', 'effort', 'model', 'awake', 'autocompact', 'voice', 'trust', 'lead', 'alwaysWake', 'private'];
+export const UPDATE_FIELDS = ['name', 'role', 'cwd', 'every', 'permissionMode', 'paused', 'look', 'lookSeed', 'maxTurns', 'chrome', 'effort', 'model', 'awake', 'autocompact', 'voice', 'trust', 'lead', 'alwaysWake', 'private', 'wakes'];
 const LEAD_ONLY = ['permissionMode', 'cwd', 'trust', 'model', 'alwaysWake', 'private']; // alwaysWake: wakes that cost usage with nothing new. private: closes logs to peers
 export const PERMISSION_MODES = ['auto', 'acceptEdits', 'plan', 'bypassPermissions'];
 const badMode = (b) => 'permissionMode' in b && !PERMISSION_MODES.includes(b.permissionMode) && { status: 400, error: `permissionMode: ${PERMISSION_MODES.join(', ')}` };
@@ -60,6 +61,7 @@ export function updateRefusal(meta, s, { caller = '', callerLead = false, charte
   const bad = Object.keys(meta).filter((k) => !UPDATE_FIELDS.includes(k));
   if (bad.length) return { status: 400, error: `can't update ${bad.join(', ')}` };
   if (badMode(meta)) return badMode(meta);
+  if ('wakes' in meta) { try { parseWakes(meta.wakes); } catch (e) { return { status: 400, error: `${e.message}. Example: 9:00, 13:00, 17:00 or weekdays 9:00-11:00` }; } }
   if ('private' in meta && typeof meta.private !== 'boolean') return { status: 400, error: 'private: true or false' };
   if (caller && caller !== s.id && !callerLead) return { status: 403, error: `${caller} can't change ${s.id}: ${user} or the lead does` };
   const changed = (k) => k in meta && (k === 'trust' ? trustOf(meta) !== trustOf(s) : k === 'lead' || k === 'private' ? !!meta[k] !== !!s[k] : meta[k] !== s[k]);

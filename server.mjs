@@ -37,7 +37,7 @@ import { createInbox } from './inbox.mjs';
 import { createHumans } from './humans.mjs';
 import { dataDir, loadConfig, providerFor, tempWorkspace, CODEX_MODELS } from './config.mjs';
 import { migrate } from './migrate.mjs';
-import { createSchedule, wakeToken, stampWake } from './schedule.mjs';
+import { createSchedule, wakeToken, stampWake, parseWakes, wakeDue } from './schedule.mjs';
 import { makeGuard, tailnetName } from './guard.mjs';
 import { makePasscode } from './passcode.mjs';
 import { createTunnel, killStale, MIN_CODE, TUNNEL_HOST } from './tunnel.mjs';
@@ -1020,12 +1020,13 @@ setInterval(() => {
   drainSlots(); // a raised cap, or a turn that ended without turnEnded (its process died)
   const started = new Set();
   for (const s of all) {
-    if (s.lead || s.paused || !(s.every > 0) || slotWaiting(s.id)) continue;
+    if (s.lead || s.paused || !(s.every > 0 || s.wakes) || slotWaiting(s.id)) continue;
     const p = providerOf(s);
     if (started.has(p) || Date.now() - (newest[p] || 0) < 2 * 60000) continue;
     const r = R(s.id);
     const last = Math.max(Date.parse(r.lastWake || 0) || 0, Date.parse(r.skipAt || 0) || 0);
-    const due = dueAt(s.id, s.every, last);
+    let due; try { const w = s.wakes && parseWakes(s.wakes); due = w ? wakeDue(w, { last, lastEnd: Date.parse(r.lastEnd || 0) || 0, endStatus: r.endStatus }) : null; } catch { due = null; }
+    if (due == null) { if (!(s.every > 0)) continue; due = dueAt(s.id, s.every, last); }
     // Nothing new since an IDLE or WAITING end, so this wake would only re-read its context. Skip it (quiet.mjs).
     // Claude only; alwaysWake squiggles watch outside state (logs, servers, an inbox) and always run.
     if (r.status !== 'working' && Date.now() >= due && !providerOf(s) && !alwaysWakes(s) && skipWake(r, quietSigOf(s))) { r.skipAt = new Date().toISOString(); emit(s.id, { k: 'log', text: `scheduled wake skipped: nothing new since ${r.endStatus.toUpperCase()}` }); saveState(); continue; }

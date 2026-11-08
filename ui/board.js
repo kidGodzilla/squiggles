@@ -550,7 +550,7 @@ function renderTeam() {
       ${s.note ? `<div class="tmnote" title="${esc(s.note)}">${esc(s.note)}</div>` : ''}
       <dl>${care ? dd('care', 'Cares about', care) : ''}${guard ? dd('guard', 'Guards', guard) : ''}
         ${dd('goals', 'Goals', owns.length ? owns.join(', ') : 'None')}
-        ${dd('runs', 'Runs', `${cadence(s.every)}, ${modelName(s.model)}${s.permissionMode && s.permissionMode !== 'auto' ? `, ${s.permissionMode}` : ''}`)}
+        ${dd('runs', 'Runs', `${s.wakes ? `Wakes ${s.wakes}` : cadence(s.every)}, ${modelName(s.model)}${s.permissionMode && s.permissionMode !== 'auto' ? `, ${s.permissionMode}` : ''}`)}
         ${B.cost[s.id] ? dd('spend', 'Spend', spend(B.cost[s.id])) : ''}
         <dt data-k="cwd">Works in</dt><dd data-k="cwd" title="${esc(s.cwd || '~')}"><code>${esc(s.cwd || '~')}</code></dd></dl>
       ${watchRows(s.id)}
