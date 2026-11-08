@@ -18,6 +18,7 @@ import { createPicks } from './picks.mjs';
 import { needsList, alertWake } from './needs.mjs';
 import { reportHoldMs, reportsText, reportLines } from './focus.mjs';
 import { quietSig, skipWake, alwaysWakes, ownEnd } from './quiet.mjs';
+import { compactAtEnd, ctxOf, COMPACT_PROMPT } from './compact.mjs';
 import { HOME_FENCE } from './fence.mjs';
 import { sender, askerOf, askSeen, writesNote, noteRefusal, labelled, screenRefusal, humansRefusal, roomRefusal, peersRefusal, squiggleRefusal, peerRefusal } from './gates.mjs';
 import { wantsPrecheck, precheckPrompt, runPrecheck, PRECHECK_MODEL } from './precheck.mjs';
@@ -328,6 +329,7 @@ function launch(s) {
       else if (ev.type === 'system' && (ev.subtype === 'task_notification' || (ev.subtype === 'task_updated' && /^(completed|failed|killed|stopped)$/.test(ev.patch?.status || '')))) subEnd(s.id, ev.task_id, ev.status || ev.patch?.status);
       else if (ev.type === 'assistant') {
         // Turn budget: count assistant messages this wake; four before the cap, tell the squiggle to wrap up.
+        if (ev.message.usage) r.ctx = ctxOf(ev.message.usage);
         if (ev.message.id !== r.msgId) {
           r.msgId = ev.message.id; r.turns = (r.turns || 0) + 1;
           const cap = s.maxTurns ?? 40;
@@ -344,6 +346,14 @@ function launch(s) {
       } else if (ev.type === 'user' && Array.isArray(ev.message?.content)) {
         for (const c of ev.message.content) if (c.type === 'tool_result') emit(s.id, resultEvent(c));
       } else if (ev.type === 'rate_limit_event') { emit(s.id, { k: 'rate', info: ev.rate_limit_info }); if (ev.rate_limit_info?.status === 'rejected' && ev.rate_limit_info.resetsAt) limitHit(ev.rate_limit_info.resetsAt * 1000); }
+      else if (ev.type === 'result' && r.compacting) { // the compaction after a wake (compactNow), not a turn
+        r.compacting = false; r.ctx = 0;
+        const c = ev.total_cost_usd || 0, sid = ev.session_id, cost = r.costSession === sid && c >= (r.costSeen || 0) ? +(c - (r.costSeen || 0)).toFixed(6) : 0;
+        r.costSession = sid; r.costSeen = c;
+        if (cost) try { ledger.add({ id: s.id, wake: r.lastWake, provider: 'claude', model: modelFor(s), cost }); } catch {}
+        emit(s.id, { k: 'log', text: ev.is_error ? `compaction failed: ${String(ev.result || '').slice(0, 200)}` : 'compacted while the cache was warm' });
+        setTimeout(maybeRestart, 1000);
+      }
       else if (ev.type === 'result') {
         // total_cost_usd counts the whole session, across --resume: the turn's share is the rise since the last result.
         const u = ev.usage || {}, c = ev.total_cost_usd || 0, sid = ev.session_id;
@@ -356,7 +366,7 @@ function launch(s) {
   proc.stderr.on('data', (d) => emit(s.id, { k: 'log', text: String(d).slice(0, 2000) }));
   proc.on('exit', (code) => {
     if (r.proc !== proc) return; // replaced by a relaunch
-    r.proc = null;
+    r.proc = null; r.compacting = false;
     if (ownRuns(r) && r.status === 'waiting') setStatus(s.id, 'blocked', `background run ended with the process: ${r.note || ''}`);
     for (const t of Object.keys(r.subs || {})) subEnd(s.id, t, 'stopped');
     delete r.bg; delete r.bgUse;
@@ -842,8 +852,20 @@ function turnEnded(s, text, isError, subtype) {
     flushInbox();
   }
   if (s.lead) flushInbox();
+  compactNow(s, st.status, ownEnd(isError, subtype, limited));
   drainSlots();
   setTimeout(maybeRestart, 1000);
+}
+// Compact the conversation while its cache is warm, when the next wake will find it expired (compact.mjs).
+function compactNow(s, endStatus, own) {
+  const r = R(s.id);
+  let nextDue = null;
+  try { const w = s.wakes && parseWakes(s.wakes), last = Date.parse(r.lastWake || 0) || 0;
+    nextDue = w ? wakeDue(w, { last, lastEnd: Date.parse(r.lastEnd || 0) || 0, endStatus }) : s.every > 0 ? dueAt(s.id, s.every, last) : null; } catch {}
+  if (!compactAtEnd({ claude: !providerOf(s), lead: s.lead, alive: !!r.proc?.stdin?.writable, own, endStatus, ctx: r.ctx, nextDue })) return;
+  r.compacting = true;
+  emit(s.id, { k: 'log', text: `compacting ${Math.round(r.ctx / 1000)}k tokens while the cache is warm` });
+  try { r.proc.stdin.write(JSON.stringify({ type: 'user', message: { role: 'user', content: COMPACT_PROMPT } }) + '\n'); } catch { r.compacting = false; }
 }
 function flushInbox() {
   const lead = listSquiggles().find((x) => x.lead);
@@ -925,7 +947,7 @@ function restartOp(op, by) {
 // Self-reported, so one short line: no control chars to forge log lines.
 const whoAsked = (by) => String(by || '').replace(/[\x00-\x1f\x7f]+/g, ' ').trim().slice(0, 40);
 const supervised = process.env.XPC_SERVICE_NAME === 'local.squiggles.server';
-const working = () => [...rt.values()].filter((r) => r.status === 'working' && (r.proc || r.cx)).length;
+const working = () => [...rt.values()].filter((r) => (r.status === 'working' || r.compacting) && (r.proc || r.cx)).length;
 function maybeRestart() {
   if (!restartPending || working()) return;
   if (quitting) return quitNow();

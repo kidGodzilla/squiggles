@@ -164,6 +164,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Settings > Defaults > Turns at once, and `slots`, set how many turns each provider runs at once.
 - Review lists watches waiting for approval, with the command, folder, schedule and reason, plus Approve and Drop. They count on the Review tab, in a chat's waiting line and in `needs`.
 ### Changed
+- A Claude squiggle compacts its conversation right after a wake while the prompt cache is still warm, when its next wake comes after the cache expires and the conversation is over 40k tokens. The next wake writes a short summary instead of the whole conversation. The lead never compacts.
 - Away from the room's computer, Review folds commands and watches into one closed line, and the Team card drops Approve.
 - A squiggle's default context cap is now 120k tokens (the lead keeps 300k): every tool call re-reads the session, so a smaller cap costs less per call.
 - Team reports wait while you're talking with the lead, and go as one batch once you've been quiet 15 minutes, including over a restart.
