@@ -361,10 +361,16 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
         list[i].who = w;
         if (op === 'needs' ? task.status === 'review' : task.status === 'done') { task[op] = list; tellSteps(task, op, [i]); }
       }
+      // The full steps behind a one-line step: the Review tab shows them under More.
+      else if (act === 'more') {
+        if (!list[i]) throw new Error(`no ${what} ${n} on ${task.id}`);
+        const m = String(text || '').trim(); if (m.length > 20000) throw new Error('more is 20000 characters at most');
+        if (m) list[i].more = m; else delete list[i].more;
+      }
       else if (act === 'done' || act === 'undo') { if (!list[i]) throw new Error(`no ${what} ${n} on ${task.id}`); list[i].done = act === 'done'; }
       else if (act === 'drop') { if (!list[i]) throw new Error(`no ${what} ${n} on ${task.id}`); list.splice(i, 1); }
       else if (act === 'clear') list.length = 0;
-      else throw new Error(`${op} add|done|undo|drop|tag|clear`);
+      else throw new Error(`${op} add|done|undo|drop|tag|more|clear`);
       if (list.length) task[op] = list; else delete task[op];
     }
     else if (op === 'edit') {

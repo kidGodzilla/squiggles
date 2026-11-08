@@ -333,7 +333,7 @@ async function loadMerges() {
   const w = await wp; B.mloaded = true; B.merges = m; B.worktrees = Array.isArray(w) ? w : []; renderMerges();
 }
 const repoName = (p) => String(p || '').replace(/\/+$/, '').split('/').pop();
-B.mopen = new Set(); B.aopen = new Set();
+B.mopen = new Set(); B.aopen = new Set(); B.smore = new Map();
 function renderMerges() {
   const list = B.merges, g = (id) => goalById(id)?.title || id || '', stale = list.filter((m) => m.stale).length;
   $('#mcount').textContent = list.length ? `${list.length} branch${list.length > 1 ? 'es' : ''} waiting${stale ? `, ${stale} stale` : ''}` : 'Nothing waiting';
@@ -353,7 +353,7 @@ function renderMerges() {
     </tr>${open ? `<tr class="mdet"><td colspan="7"><div class="mdbox">
       ${askLine(m)}
       <p class="mdt">${esc(m.title)}</p>
-      ${stepsHtml(m.needs, 'need', 'Before merging')}${stepsHtml(m.after, 'after', 'After merging')}
+      ${stepsHtml(m.needs, 'need', 'Before merging', m.id)}${stepsHtml(m.after, 'after', 'After merging', m.id)}
       <dl><dt>Goal</dt><dd>${esc(g(m.goal))}</dd><dt>Branch</dt><dd><code>${esc(m.repo)}:${esc(m.branch)}</code></dd>
       ${m.others?.length ? `<dt>Also merges</dt><dd>${m.others.map((o) => `<code>${esc(o.repo)}:${esc(o.branch)}</code>${o.error ? ` ${esc(o.error)}` : `, ${o.ahead} ahead of ${esc(o.base)}`}`).join('<br>')}</dd>` : ''}
       ${nc ? `<dt>Conflicts</dt><dd>${m.conflicts.map((f) => `<code>${esc(f)}</code>`).join(', ')}</dd>` : ''}
@@ -384,12 +384,27 @@ addEventListener('resize', fitDetail);
 // Each step says whose it is: a squiggle's waits on them, only the user's (and untagged) read as theirs.
 const stepWho = (x) => x.who === 'owner' ? 'You' : x.who ? (S.sq?.[x.who]?.name || x.who) : 'Untagged';
 const stepHis = (x) => !x.who || x.who === 'owner';
-const stepsHtml = (l, a, h) => l?.length ? `<div class="mneeds"><h5>${h}${l.some((x) => !x.done) ? '' : ': all done'}</h5>${l.map((x, i) => `<div class="mstep ${x.done ? 'done' : ''} ${stepHis(x) ? '' : 'theirs'}"><label class="mtick"><input type="checkbox" data-a="${a}" data-n="${i + 1}" ${x.done ? 'checked' : ''} aria-label="${x.done ? 'Not done' : 'Done'}: ${esc(x.t)}" title="${x.done ? 'Not done' : 'Mark done'}"></label><span><b class="mwho">${esc(stepWho(x))}${x.done ? ', done' : stepHis(x) ? '' : ', waiting'}:</b> ${esc(x.t)}</span></div>`).join('')}</div>` : '';
+// Backticked commands read as code. A step with full steps gets More: a modal with them as markdown.
+const stepText = (t) => esc(t).replace(/`([^`\n]+)`/g, '<code>$1</code>');
+const stepMore = (x, k) => x.more ? (B.smore.set(k, x), `<button class="mmore" type="button" data-more="${esc(k)}" aria-haspopup="dialog">More</button>`) : '';
+const stepGuide = (k) => { const [id, a, n] = k.split(':'), o = B.tasks.find((t) => t.id === id)?.owner; return S.sq[o] ? { id, a, n, o, name: S.sq[o].name } : null; };
+const stepsHtml = (l, a, h, id) => l?.length ? `<div class="mneeds"><h5>${h}${l.some((x) => !x.done) ? '' : ': all done'}</h5>${l.map((x, i) => `<div class="mstep ${x.done ? 'done' : ''} ${stepHis(x) ? '' : 'theirs'}"><label class="mtick"><input type="checkbox" data-a="${a}" data-n="${i + 1}" ${x.done ? 'checked' : ''} aria-label="${x.done ? 'Not done' : 'Done'}: ${esc(x.t)}" title="${x.done ? 'Not done' : 'Mark done'}"></label><span><b class="mwho">${esc(stepWho(x))}${x.done ? ', done' : stepHis(x) ? '' : ', waiting'}:</b> ${stepText(x.t)}${stepMore(x, `${id}:${a}:${i + 1}`)}</span></div>`).join('')}</div>` : '';
+// The modal's button wakes the task's owner to walk the user through the full steps in its 1:1.
+function openStep(el, k) {
+  const x = B.smore.get(k), g = stepGuide(k); if (!x) return;
+  showPop(el, `<div class="mdfull">${md(x.more)}</div>${g ? `<div class="mft"><button type="button" class="btn go" data-guide>Walk through it with ${esc(g.name)}</button></div>` : ''}`, (pop) => {
+    const b = pop.querySelector('[data-guide]'); if (!b) return;
+    b.onclick = async () => {
+      const why = `${me().name} opened More on ${g.id} ${g.a} step ${g.n} ("${x.t}") and wants you to walk them through it in your 1:1, one step at a time. The full steps print under more: in tasks ${g.id}.`;
+      const r = await api(`/squiggles/${g.o}/wake`, { why }); closePop(); if (r?.error) return toast(r.error); oneOnOne(g.o);
+    };
+  }, { title: x.t });
+}
 // Merged tasks with after-merge steps left. CLI: merges lists them too.
 function afterHtml() {
   const t = B.tasks.filter((x) => x.status === 'done' && x.after?.some((n) => !n.done)); if (!t.length) return '';
   const his = t.reduce((n, x) => n + x.after.filter((y) => !y.done && stepHis(y)).length, 0);
-  return `<h3 class="wth">After merging <span>${his ? `${his} yours` : 'none yours'}</span></h3><div class="mafter">${t.map((x) => `<div class="mabox ${B.aopen.has(x.id) ? 'open' : ''}" data-merge="${esc(x.id)}">${stepsHtml(x.after, 'after', `${esc(x.id)} ${esc(x.title)}`)}</div>`).join('')}</div>`;
+  return `<h3 class="wth">After merging <span>${his ? `${his} yours` : 'none yours'}</span></h3><div class="mafter">${t.map((x) => `<div class="mabox ${B.aopen.has(x.id) ? 'open' : ''}" data-merge="${esc(x.id)}">${stepsHtml(x.after, 'after', `${esc(x.id)} ${esc(x.title)}`, x.id)}</div>`).join('')}</div>`;
 }
 // Worktrees: every extra worktree in the goals' repos and the task that owns it. CLI: worktrees.
 function worktreesHtml() {
@@ -445,7 +460,9 @@ $('#mrefresh').onclick = async () => {
 };
 $('#mergeView').onclick = async (e) => {
   // Buttons in the expanded row (the only ones on phone) belong to the row above it.
-  const a = e.target.closest('[data-a]')?.dataset.a, det = e.target.closest('.mdet'), row = e.target.closest('[data-merge]') || (a && det?.previousElementSibling); if (!row) return;
+  const a = e.target.closest('[data-a]')?.dataset.a, det = e.target.closest('.mdet'), row = e.target.closest('[data-merge]') || (a && det?.previousElementSibling);
+  const more = e.target.closest('[data-more]'); if (more) return openStep(more, more.dataset.more);
+  if (!row) return;
   // An After merging box opens to its full title; selecting text to read it doesn't toggle.
   if (!a && e.target.closest('.mabox')) { if (e.target.closest('label') || getSelection().toString()) return; const id = row.dataset.merge; B.aopen.has(id) ? B.aopen.delete(id) : B.aopen.add(id); return renderMerges(); }
   if (!a) { if (e.target.closest('button,a,label')) return; const id = row.dataset.merge; B.mopen.has(id) ? B.mopen.delete(id) : B.mopen.add(id); return renderMerges(); }

@@ -76,6 +76,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - The private-data fence refuses a script fed in by xargs (`xargs sh`, `xargs -I{} sh -c '{} box'`), reads xargs flags clustered ahead of the mark (`-0I{}`), and stays fast on a long run of `function` words, so a slow check can't fail open.
 
 ### Added
+- A merge step stays one line in Review; its full steps go behind More (`task needs|after <id> more <n> --file <path>`), which opens them as formatted text with a button that wakes the task's owner to walk you through them in its 1:1. Backticked commands in a step read as code.
 - Private column in Settings and `private <id> on|off` (you and the lead only).
 - Cuddly emoji in reactions: 320 from olivvybee's pack, with search in the picker and an `emojis [query]` command. The pack in `ui/emoji` is CC-BY-NC-SA (non-commercial, share-alike), not Apache-2.0; its licence and credits sit beside it.
 - Usage: `usage [days]` and a line on the Team tab show the weekly Claude limit, each squiggle's share of Claude use, what each limit week finished, and turns that produced nothing.
