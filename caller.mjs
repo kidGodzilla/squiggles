@@ -30,7 +30,7 @@ export async function callerChain(req) {
 // Each with its maker's Apple team: a browser with no maker's signature (Chromium builds) can't be told from a swapped program.
 const GOOGLE = 'EQHXZ8M8AV', MOZILLA = '43AQ936H96', BROWSER_CO = 'S6N382Y83G';
 const TEAMS = { 'Google Chrome': GOOGLE, 'Google Chrome Beta': GOOGLE, 'Google Chrome Canary': GOOGLE, 'Microsoft Edge': 'UBF8T346G9', 'Brave Browser': 'KL8N8XSYF4',
-  Arc: BROWSER_CO, Dia: BROWSER_CO, Opera: 'A2P9LX4JPN', Firefox: MOZILLA, 'Firefox Developer Edition': MOZILLA, 'Firefox Nightly': MOZILLA };
+  Arc: BROWSER_CO, Dia: BROWSER_CO, Opera: 'A2P9LX4JPN', Vivaldi: '4XF3XNRN6Y', Firefox: MOZILLA, 'Firefox Developer Edition': MOZILLA, 'Firefox Nightly': MOZILLA };
 const HELPER = '[^/]+ Helper( \\([A-Za-z]+\\))?';
 const INSTALLED = new RegExp(`^/Applications/(${Object.keys(TEAMS).join('|')})\\.app/Contents/(Frameworks/.+/Helpers/${HELPER}\\.app/Contents/MacOS/${HELPER}|MacOS/[^/]+|MacOS/plugin-container\\.app/Contents/MacOS/plugin-container)$`);
 const WEBKIT = /^(\/System\/Volumes\/Preboot\/Cryptexes\/OS)?\/System\/Library\/Frameworks\/WebKit\.framework\/Versions\/A\/XPCServices\/com\.apple\.WebKit\.Networking\.xpc\/Contents\/MacOS\/com\.apple\.WebKit\.Networking$/;

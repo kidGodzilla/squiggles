@@ -174,6 +174,10 @@ test('a program at a browser path needs its maker\'s signature', async () => {
   assert.match(app('Arc'), /S6N382Y83G/);
   assert.match(app('Dia'), /S6N382Y83G/);
   assert.match(app('Opera'), /A2P9LX4JPN/);
+  assert.match(app('Vivaldi'), /4XF3XNRN6Y/); // read from Vivaldi 8.3's own installer
+  const viv = '/Applications/Vivaldi.app/Contents/Frameworks/Vivaldi Framework.framework/Helpers/';
+  assert.match(browserSignature(`${viv}Vivaldi Helper.app/Contents/MacOS/Vivaldi Helper`), /4XF3XNRN6Y/);
+  assert.match(browserSignature(`${viv}Vivaldi Helper (Renderer).app/Contents/MacOS/Vivaldi Helper (Renderer)`), /4XF3XNRN6Y/);
   assert.match(browserSignature('/System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.Networking.xpc/Contents/MacOS/com.apple.WebKit.Networking'), /anchor apple/);
   assert.equal(app('Chromium'), undefined); // no maker to check: the passcode lets it in
   assert.equal(browserSignature('/bin/sleep'), undefined);
