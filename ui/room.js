@@ -996,7 +996,7 @@ async function openSheet(id) {
     if (a === 'meet') return meetNowPop(e.target, id);
     if (a === 'wake') await api(`/squiggles/${id}/wake`, { why: 'Asked from the room' });
     if (a === 'stop') { const r = await unlocked(() => api(`/squiggles/${id}/stop`, {}), 'Unlock this browser'); if (r?.error) toast(r.error); }
-    if (a === 'pause') Object.assign(S.sq[id], await api(`/squiggles/${id}/update`, { paused: !s.paused }));
+    if (a === 'pause') { const r = await unlocked(() => api(`/squiggles/${id}/update`, { paused: !s.paused }), 'Unlock this browser'); if (r?.error) toast(r.error); else if (r) Object.assign(S.sq[id], r); }
     if (a === 'remove') {
       const b = e.target; if (!b.classList.contains('arm')) { b.classList.add('arm'); b.textContent = `Remove ${s.name}? Click again`; setTimeout(() => { b.classList.remove('arm'); b.textContent = 'Remove from the room'; }, 3000); return; }
       const res = await unlocked(() => api(`/squiggles/${id}/remove`, {}), 'Unlock this browser'); if (res == null) return; toast(typeof res === 'string' ? res : res.error); $('#sheet').classList.remove('on'); return;

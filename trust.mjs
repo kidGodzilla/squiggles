@@ -27,6 +27,9 @@ export const trustRules = (s) => RULES[trustOf(s)];
 // a charter stays open. A non-lead squiggle changes only itself.
 export const UPDATE_FIELDS = ['name', 'role', 'cwd', 'every', 'permissionMode', 'paused', 'look', 'lookSeed', 'maxTurns', 'chrome', 'effort', 'model', 'awake', 'autocompact', 'voice', 'trust', 'lead', 'alwaysWake', 'private', 'wakes'];
 const LEAD_ONLY = ['permissionMode', 'cwd', 'trust', 'model', 'alwaysWake', 'private']; // alwaysWake: wakes that cost usage with nothing new. private: closes logs to peers
+// Fields that silence a squiggle (pause it, stretch or stop its wakes, cap its turns): from an unidentified caller (a terminal,
+// a squiggle's detached child) they need the unlocked page, like stopping another squiggle does. Squiggles set their own as before.
+const QUIET = ['paused', 'every', 'maxTurns', 'wakes'];
 export const PERMISSION_MODES = ['auto', 'acceptEdits', 'plan', 'bypassPermissions'];
 const badMode = (b) => 'permissionMode' in b && !PERMISSION_MODES.includes(b.permissionMode) && { status: 400, error: `permissionMode: ${PERMISSION_MODES.join(', ')}` };
 // Hiring: a new squiggle is all lead-only fields, so only the lead or the user's unlocked page creates one.
@@ -66,8 +69,9 @@ export function updateRefusal(meta, s, { caller = '', callerLead = false, charte
   if (caller && caller !== s.id && !callerLead) return { status: 403, error: `${caller} can't change ${s.id}: ${user} or the lead does` };
   const changed = (k) => k in meta && (k === 'trust' ? trustOf(meta) !== trustOf(s) : k === 'lead' || k === 'private' ? !!meta[k] !== !!s[k] : meta[k] !== s[k]);
   if (!caller) {
-    const what = changed('lead') ? 'lead' : LEAD_ONLY.find(changed) || (charter && 'charter');
+    const what = changed('lead') ? 'lead' : LEAD_ONLY.find(changed) || QUIET.find(changed) || (charter && 'charter');
     if (!what) return null;
+    if (QUIET.includes(what)) return !passcode || owner() ? null : { status: 403, error: `Unlock with the room passcode first: ${what} on another squiggle is set by ${user} or the lead`, unlock: true };
     const by = what === 'lead' ? user : `${user} or the lead`;
     if (!passcode) return what === 'charter' ? null : { status: 403, error: `Set a room passcode first (Settings > Security): ${what} is set by ${by}` };
     return !owner() ? { status: 403, error: `Unlock with the room passcode first: ${what} is set by ${by}`, unlock: true } : null;

@@ -5,6 +5,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 ## 0.1.2 (unreleased)
 
 ### Security
+- Pausing a squiggle, changing its wake schedule or capping its turns from a terminal or an unidentified caller now needs the unlocked page once a room passcode is set. Squiggles still set their own; the lead still sets anyone's.
 - Clearing the room passcode turns tailnet sharing off first, and if that fails the passcode stays. A room with no passcode unshares at boot, since `tailscale serve` outlives the server.
 - Claude in Chrome tools refuse the room's own address: its configured port in any loopback spelling, and the tailnet or Cloudflare host while that share is offered. In your Chrome a squiggle would act as you. Any page action that names the room is refused, batches and scripts included; the CLI still reaches it.
 - The private fence holds a glob or variable in a path against the home folder as spelled too, so a home reached through a symlink stays closed, and an assigned value holding a substitution or an unknown variable no longer counts as known.

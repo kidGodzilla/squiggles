@@ -32,7 +32,7 @@ test('the update route goes through the guard, not a raw spread', () => {
 test('no caller (a double-forked child) needs the unlocked page for lead-only fields and charters', () => {
   for (const m of [{ lead: true }, { trust: 'veryhigh' }, { cwd: '/' }]) assert.equal(updateRefusal(m, s, {})?.unlock, true, JSON.stringify(m));
   assert.equal(updateRefusal({}, s, { charter: true })?.status, 403);
-  assert.equal(updateRefusal({ paused: true }, s, {}), null, 'plain fields stay open to the CLI');
+  assert.equal(updateRefusal({ name: 'V' }, s, {}), null, 'plain fields stay open to the CLI');
   assert.equal(updateRefusal({ lead: true }, s, { charter: true, owner: () => true }), null);
 });
 
@@ -56,4 +56,15 @@ test('no caller and no passcode: lead and lead-only fields need one set; a chart
     assert.match(updateRefusal({ [k]: v }, s, none)?.error || '', /Set a room passcode first/, k);
   assert.equal(updateRefusal({}, s, { ...none, charter: true }), null);
   assert.equal(updateRefusal({ paused: true, cwd: '~/project' }, s, none), null, 'unchanged lead-only values pass');
+});
+
+test('no caller needs the unlocked page to pause, slow or cap a squiggle', () => {
+  for (const m of [{ paused: true }, { every: 0 }, { maxTurns: 1 }, { wakes: '3:00' }]) {
+    assert.equal(updateRefusal(m, s, { passcode: true })?.unlock, true, JSON.stringify(m));
+    assert.equal(updateRefusal(m, s, { passcode: true, owner: () => true }), null, 'unlocked page');
+    assert.equal(updateRefusal(m, s, { passcode: false }), null, 'no passcode set: open, like stop');
+    assert.equal(updateRefusal(m, s, { caller: 'security', passcode: true }), null, 'itself');
+    assert.equal(updateRefusal(m, { ...s, id: 'seo' }, { caller: 'lead', callerLead: true, passcode: true }), null, 'the lead');
+  }
+  assert.equal(updateRefusal({ paused: s.paused, name: 'V' }, s, { passcode: true }), null, 'unchanged and plain fields stay open');
 });
