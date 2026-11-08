@@ -65,3 +65,12 @@ test('More opens the modal from the Review click handler and is a thumb-sized ta
   const css = fs.readFileSync(new URL('../ui/room.css', import.meta.url), 'utf8');
   assert.match(css, /@media \(pointer: coarse\) \{ \.mmore \{ min-height: 44px; min-width: 44px \} \}/);
 });
+
+test('the modal title drops the backticks a step uses for code', () => {
+  const body = /^function openStep[\s\S]*?^}$/m.exec(src)[0], guide = /^const stepGuide = .*$/m.exec(src)[0];
+  let title;
+  const B = { smore: new Map([['t9:needs:1', { t: 'Run `npm test` then `npm run build`, 2 minutes', more: 'x' }]]), tasks: [] };
+  const openStep = new Function('B', 'S', 'showPop', 'md', 'esc', `${guide}\n${body}; return openStep;`)(B, { sq: {} }, (el, h, w, o) => { title = o.title; }, (t) => t, (s) => s);
+  openStep({}, 't9:needs:1');
+  assert.equal(title, 'Run npm test then npm run build, 2 minutes');
+});

@@ -398,7 +398,7 @@ function openStep(el, k) {
       const why = `${me().name} opened More on ${g.id} ${g.a} step ${g.n} ("${x.t}") and wants you to walk them through it in your 1:1, one step at a time. The full steps print under more: in tasks ${g.id}.`;
       const r = await api(`/squiggles/${g.o}/wake`, { why }); closePop(); if (r?.error) return toast(r.error); oneOnOne(g.o);
     };
-  }, { title: x.t });
+  }, { title: x.t.replace(/`([^`\n]+)`/g, '$1') });
 }
 // Merged tasks with after-merge steps left. CLI: merges lists them too.
 function afterHtml() {
