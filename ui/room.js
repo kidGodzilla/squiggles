@@ -872,6 +872,7 @@ async function load() {
   document.querySelectorAll('.cw .msgs').forEach((m) => (m.innerHTML = ''));
   S.order = list.sort((a, b) => (b.lead ? 1 : 0) - (a.lead ? 1 : 0) || String(a.created || '').localeCompare(String(b.created || ''))).map((s) => s.id);
   renderStage(); if (B.view === 'settings' && typeof renderSettings === 'function') renderSettings();
+  window.paintApprovals?.(); // Review rows painted before the list arrived showed ids; names now
   // One squiggle's history failing costs that history, not the room: three tries, then say so.
   const missed = [];
   await Promise.all(S.order.map(async (id) => {
