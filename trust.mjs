@@ -26,7 +26,7 @@ export const trustRules = (s) => RULES[trustOf(s)];
 // squiggle's double-forked child) needs `owner()`, the page's unlocked session, for those fields and for a charter.
 // With no room passcode (`passcode` false) no session can exist: lead and lead-only fields are refused until one is set;
 // a charter stays open. A non-lead squiggle changes only itself.
-export const UPDATE_FIELDS = ['name', 'role', 'cwd', 'every', 'permissionMode', 'paused', 'look', 'lookSeed', 'maxTurns', 'chrome', 'effort', 'model', 'awake', 'autocompact', 'voice', 'trust', 'lead', 'alwaysWake', 'private', 'wakes', 'mcp'];
+export const UPDATE_FIELDS = ['name', 'role', 'cwd', 'every', 'permissionMode', 'paused', 'look', 'lookSeed', 'maxTurns', 'chrome', 'effort', 'model', 'awake', 'autocompact', 'voice', 'trust', 'lead', 'alwaysWake', 'private', 'wakes', 'mcp', 'skills'];
 const LEAD_ONLY = ['permissionMode', 'cwd', 'trust', 'model', 'alwaysWake', 'private', 'mcp']; // alwaysWake: wakes that cost usage with nothing new. private: closes logs to peers. mcp: which MCP servers it launches with
 // Fields that silence a squiggle (pause it, stretch or stop its wakes, cap its turns): from an unidentified caller (a terminal,
 // a squiggle's detached child) they need the unlocked page, like stopping another squiggle does. Squiggles set their own as before.

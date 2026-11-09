@@ -47,6 +47,7 @@ import { callerChain, browserCaller } from './caller.mjs';
 import * as codexHook from './codex/guard.mjs';
 import { withHook as claudeFence } from './claude/guard.mjs';
 import { parseMcp, knownServers, mcpLaunch } from './mcp.mjs';
+import { toolsFor } from './tools.mjs';
 import { codeStamp, codeChanged } from './codestamp.mjs';
 
 const home = (p) => String(p || '').replace(/^~(?=\/|$)/, os.homedir());
@@ -281,7 +282,7 @@ const modelFor = (s) => pickModel(s, CONFIG.model);
 // The squiggle's settings.json (allow rules) is in it too: an edit relaunches the idle process on its next message. So is the system prompt.
 // Every tool call re-reads the whole session, so the compaction point sets the cost per call.
 const compactAt = (s) => s.autocompact ?? (s.lead ? 300000 : 120000);
-const launchSig = (s) => JSON.stringify([!!s.chrome, modelFor(s), s.permissionMode, compactAt(s), s.maxTurns, s.effort, s.cwd, readText(path.join(sqDir(s.id), 'settings.json'), ''), 'fence:chrome', 'mcp', s.mcp || '', systemPrompt(s)]);
+const launchSig = (s) => JSON.stringify([!!s.chrome, modelFor(s), s.permissionMode, compactAt(s), s.maxTurns, s.effort, s.cwd, readText(path.join(sqDir(s.id), 'settings.json'), ''), 'fence:chrome', 'mcp', s.mcp || '', toolsFor(s), systemPrompt(s)]);
 // Busy Mac: every squiggle but the lead runs at nice 10 and its builds and tests inherit it, so the lead and the page stay quick.
 const lowPriority = (s, proc) => { if (!s.lead && proc.pid) try { os.setPriority(proc.pid, 10); } catch {} };
 function launch(s) {
@@ -294,6 +295,7 @@ function launch(s) {
     '--add-dir', sqDir(s.id), '--add-dir', DATA, '--add-dir', os.homedir(),
     // Squiggles roam the home folder freely, except these. Bash, Grep and Glob go through claude/guard.mjs.
     '--disallowedTools', ...HOME_FENCE, ...mcp.disallow];
+  args.push('--tools', toolsFor(s)); // only the built-ins squiggles use
   if (s.chrome) args.push('--chrome');
   if (modelFor(s)) args.push('--model', modelFor(s));
   // Usage controls (per squiggle, see handoff): context window cap, effort, and a turn cap per wake.
