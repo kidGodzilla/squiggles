@@ -46,6 +46,7 @@ import { createPeers, fence, checkName } from './peers.mjs';
 import { callerChain, browserCaller } from './caller.mjs';
 import * as codexHook from './codex/guard.mjs';
 import { withHook as claudeFence } from './claude/guard.mjs';
+import { parseMcp, knownServers, mcpLaunch } from './mcp.mjs';
 import { codeStamp, codeChanged } from './codestamp.mjs';
 
 const home = (p) => String(p || '').replace(/^~(?=\/|$)/, os.homedir());
@@ -280,16 +281,19 @@ const modelFor = (s) => pickModel(s, CONFIG.model);
 // The squiggle's settings.json (allow rules) is in it too: an edit relaunches the idle process on its next message. So is the system prompt.
 // Every tool call re-reads the whole session, so the compaction point sets the cost per call.
 const compactAt = (s) => s.autocompact ?? (s.lead ? 300000 : 120000);
-const launchSig = (s) => JSON.stringify([!!s.chrome, modelFor(s), s.permissionMode, compactAt(s), s.maxTurns, s.effort, s.cwd, readText(path.join(sqDir(s.id), 'settings.json'), ''), 'fence:chrome', systemPrompt(s)]);
+const launchSig = (s) => JSON.stringify([!!s.chrome, modelFor(s), s.permissionMode, compactAt(s), s.maxTurns, s.effort, s.cwd, readText(path.join(sqDir(s.id), 'settings.json'), ''), 'fence:chrome', 'mcp', s.mcp || '', systemPrompt(s)]);
 // Busy Mac: every squiggle but the lead runs at nice 10 and its builds and tests inherit it, so the lead and the page stay quick.
 const lowPriority = (s, proc) => { if (!s.lead && proc.pid) try { os.setPriority(proc.pid, 10); } catch {} };
 function launch(s) {
   const r = R(s.id); r.sig = launchSig(s);
+  // MCP servers: only the ones in its mcp field; a bad saved value means none.
+  let want = []; try { want = parseMcp(s.mcp); } catch {}
+  const mcp = mcpLaunch(want, knownServers(home(s.cwd)));
   const args = ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose',
     '--append-system-prompt', systemPrompt(s), '--permission-mode', s.permissionMode || 'auto', '--permission-prompts', 'none',
     '--add-dir', sqDir(s.id), '--add-dir', DATA, '--add-dir', os.homedir(),
     // Squiggles roam the home folder freely, except these. Bash, Grep and Glob go through claude/guard.mjs.
-    '--disallowedTools', ...HOME_FENCE];
+    '--disallowedTools', ...HOME_FENCE, ...mcp.disallow];
   if (s.chrome) args.push('--chrome');
   if (modelFor(s)) args.push('--model', modelFor(s));
   // Usage controls (per squiggle, see handoff): context window cap, effort, and a turn cap per wake.
@@ -303,12 +307,12 @@ function launch(s) {
   const settings = path.join(sqDir(s.id), 'settings.json');
   // The squiggle's own settings plus the fence hook, as one JSON. Unreadable settings still get the hook.
   let own = {}; if (fs.existsSync(settings)) try { own = JSON.parse(readText(settings, '{}')); } catch {}
-  args.push('--settings', JSON.stringify(claudeFence(own)));
+  args.push(...mcp.args, '--settings', JSON.stringify(claudeFence({ ...own, ...mcp.settings })));
   if (r.sessionId) args.push('--resume', r.sessionId);
   r.resumedFrom = r.sessionId || null;
 
   // CLAUDE_ENV_FILE runs before each Bash command: nvm's Node, not Homebrew's.
-  const proc = spawn('claude', args, { cwd: home(s.cwd), stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, AGENTS_ID: s.id, AGENTS_NODE: process.execPath, CLAUDE_ENV_FILE: path.join(ROOT, 'bin', 'squiggle-env.sh') } });
+  const proc = spawn('claude', args, { cwd: home(s.cwd), stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, AGENTS_ID: s.id, AGENTS_NODE: process.execPath, CLAUDE_ENV_FILE: path.join(ROOT, 'bin', 'squiggle-env.sh'), ...mcp.env } });
   lowPriority(s, proc);
   r.proc = proc;
   let buf = '', lastText = '';
