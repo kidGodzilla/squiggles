@@ -234,9 +234,21 @@ const PATTERN_FLAG = /^-[a-zA-Z]*[ef]$|^--(regexp|file)\b/;
 const WRAP_VAL = { sudo: /^-[a-zA-Z]*[ugCDhpRrT]$|^--(user|group|other-user|chdir|close-from|host|prompt|role|type|command-timeout)$/,
   xargs: /^-[a-zA-Z0-9]*[IndELPs]$|^--(max-args|max-procs|max-chars|max-lines|delimiter|eof|replace|arg-file)$/,
   nice: /^-n$|^--adjustment$/, timeout: /^-[sk]$|^--(signal|kill-after)$/, exec: /^-a$/, time: /^-[a-zA-Z]*[fo]$|^--(format|output)$/ };
-// Words that run the command after them: sudo, env [-C dir], nice [-n N], timeout [-s SIG] N, bash/sh/zsh -c, and so on.
-const WRAP = /^(sudo|command|builtin|exec|nice|time|nohup|xargs|env|timeout|bash|sh|zsh|dash|\w+=\S*)$/;
+// Words that run the command after them: sudo, env [-C dir], nice [-n N], timeout [-s SIG] N, bash/sh/zsh -c, shell keywords (do, then, !, {), and so on.
+const WRAP = /^(sudo|command|builtin|exec|nice|time|nohup|xargs|env|timeout|bash|sh|zsh|dash|\w+=\S*|do|then|else|elif|if|while|until|!|\{)$/;
 const aboveHome = (abs, home) => { const a = abs.toLowerCase(), h = home.toLowerCase(); return a === h || a === '/' || h.startsWith(a.replace(/\/$/, '') + '/'); };
+// $NAME or ${NAME}, then nothing or /more, takes every value the command assigns it, plus $HOME and $TMPDIR's own; a mktemp
+// result is a new folder. A name set any other way (read, for, printf -v, a nameref, eval) or never set stays unknown and refuses.
+const literal = (v) => /^\/[^$`~*?[{]*$/.test(v);
+function varPaths(op, cmd, home) {
+  const m = op.match(/^\$(?:(\w+)|\{(\w+)\})(\/.*)?$/); if (!m) return null;
+  const n = m[1] || m[2], more = m[3] || '';
+  if (new RegExp(`\\b(read|mapfile|readarray|getopts|select)\\b[^;&|\\n]*\\b${n}\\b|\\bfor\\s+${n}\\b|\\bprintf\\s+-v\\s*${n}\\b|\\b(declare|typeset|local)\\b[^;&|\\n]*\\s-n\\b|\\beval\\b`).test(cmd)) return null;
+  const vals = [...cmd.matchAll(new RegExp(`(?:^|[\\s;&|(])${n}=(\\$\\(mktemp\\b[^()$\`]*\\)|[^\\s;&|()<>]*)`, 'g'))].map((a) => a[1]).filter((v) => !/^\$\(mktemp\b/.test(v));
+  if (n === 'HOME') vals.push(home); else if (n === 'TMPDIR') vals.push(process.env.TMPDIR || '/tmp');
+  else if (!cmd.match(new RegExp(`(?:^|[\\s;&|(])${n}=`))) return null;
+  return vals.every(literal) ? vals.map((v) => v + more) : null;
+}
 function treeReason(cmd, cwd, home) {
   let cur = path.resolve(cwd);
   for (const seg of cmd.split(/[;&|\n()`]|\$\(/)) {
@@ -260,7 +272,10 @@ function treeReason(cmd, cwd, home) {
     if (PATTERN_FIRST.has(name) && !((name === 'grep' || name === 'rg') && args.some((a) => PATTERN_FLAG.test(a)))) ops = ops.slice(1);
     if (/^7z/.test(name) && /^[au]$/.test(ops[0] || '') && ops.length === 2) ops.push('.'); // 7z a out.7z: no file list adds the whole folder
     if (!ops.length && !NEEDS_PATH.has(name)) ops = ['.'];
-    for (const o of ops) { const t = o.replace(homeArg(home), home); if (/^\$|^~/.test(t) || aboveHome(path.resolve(cur, t), home)) return REASONS.tree; }
+    for (const o of ops) {
+      const t = o.replace(homeArg(home), home), vs = /^\$/.test(t) ? varPaths(t, cmd, home) : [t];
+      if (!vs || vs.some((v) => /^\$|^~/.test(v) || aboveHome(path.resolve(cur, v), home))) return REASONS.tree;
+    }
   }
   return '';
 }

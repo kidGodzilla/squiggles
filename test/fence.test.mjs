@@ -90,6 +90,18 @@ test('fence: recursive reads and copies rooted at home or above', () => {
     assert.equal(commandReason(c, d), '', c);
 });
 
+test('fence: tree check reads shell keywords and resolves known variables', () => {
+  const P = path.join(H, 'proj');
+  for (const c of ['for d in a; do du -sh ~; done', 'if true; then du -sh ~; fi', 'if x; then :; else find ~ -name y; fi', '{ du -sh ~; }', '! du -sh ~',
+    'while x; do find / -name y; done', 'find $HOME -name x', 'D=$HOME; du -sh $D', 'D=/tmp/g; D=~; find $D', 'for D in ~; do du -sh $D; done',
+    'D=/tmp/g; read D; du $D', 'TMPDIR=~; du -sh $TMPDIR', 'find $D -name x', 'du -sh ${D:-~}', 'D=/tmp/a; printf -v D ~; du $D', 'D=$(echo ~); du $D',
+    'D=/; find $D', 'D=/tmp/a; declare -n D=HOME; du $D'])
+    assert.equal(commandReason(c, P), REASONS.tree, c);
+  for (const c of ['D=$(mktemp -d); git clone x $D && du -sh $D', 'D=/tmp/g; find $D -name x', 'du -sh $TMPDIR/g', 'du -sh ${TMPDIR}', 'find $HOME/proj -name x',
+    'export D=/tmp/g && find ${D}/src -name x'])
+    assert.equal(commandReason(c, P), '', c);
+});
+
 test('fence: push through xargs', () => {
   assert.equal(commandReason('echo push | xargs git', path.join(H, 'proj')), REASONS.push);
   assert.equal(commandReason('printf "push origin" | xargs -n2 git', path.join(H, 'proj')), REASONS.push);
