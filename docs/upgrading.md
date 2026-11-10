@@ -56,6 +56,10 @@ On server start:
 
 `runs/` is not backed up; it is a cache.
 
+## `upgrade check`
+
+`node bin/agents.mjs upgrade check` (page: Settings, Room, Check for updates; both read `/api/update`): fetch, then say how many commits behind, the newest version, its CHANGELOG sections, local changes that would block `upgrade`, local commits that would block the fast-forward, and the paste block. Pulls and restarts nothing.
+
 ## `upgrade`
 
 `node bin/agents.mjs upgrade`:
@@ -63,7 +67,7 @@ On server start:
 1. Refuse if the clone has local changes; list them and point at the seams.
 2. `git fetch --tags`, print the CHANGELOG sections between the current and newest version.
 3. `git pull --ff-only`.
-4. Restart the login item (`launchctl kickstart -k`); the server migrates on boot.
+4. Restart the login item (`launchctl kickstart -k`) if it runs this clone; the server migrates on boot. Another clone (a test, a fork) only says to restart its own server.
 5. Wait for `/api/squiggles`, print the new version and schema.
 
 README paste block for Claude Code:

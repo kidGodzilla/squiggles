@@ -51,6 +51,10 @@ The lead and you share one CLI: `node ~/squiggles/bin/agents.mjs` (run it with n
 
 **Security:** versions before 0.1.1 accept commands from any web page open in your browser. Upgrade now (below).
 
+To see if you're behind: Settings, Room, **Check for updates**, or `node ~/squiggles/bin/agents.mjs upgrade check`. It pulls nothing. Versions without it: run the upgrade below; it says when you're already up to date.
+
+Your room (charters, journals, board) lives in `~/.squiggles`, outside the code, so upgrading never touches it. Older installs that kept it inside `~/squiggles` are safe too: git ignores those files.
+
 Paste this into Claude Code:
 
 > Upgrade Squiggles: run `node ~/squiggles/bin/agents.mjs upgrade`. If it refuses because of local changes, move each change into a seam from ~/squiggles/docs/upgrading.md, then run it again. Summarise the changes it printed for me.

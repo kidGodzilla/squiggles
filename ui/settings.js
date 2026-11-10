@@ -123,3 +123,19 @@ $('#setGrid').onclick = async (e) => {
   await restyle(id, { look }); renderSettings(); toast(`${s.name} now uses ${GENS[SET.gen].name}`);
 };
 if (B.view === 'settings' && S.order.length) renderSettings(); // the squiggle list may load before this script
+// Updates card: Squiggles version, and a read-only check against GitHub. CLI: upgrade check (same /api/update data).
+fetch('/api/config').then((x) => x.json()).then((c) => { $('#updNow').textContent = `Squiggles ${c.version}.`; }).catch(() => {});
+$('#updCheck').onclick = async () => {
+  const b = $('#updCheck'), out = $('#updOut'); b.disabled = true; b.textContent = 'Checking…';
+  const c = await api('/update').catch(() => null); b.disabled = false; b.textContent = 'Check again';
+  const s = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+  if (!c || c.error) { out.hidden = false; out.innerHTML = `<p>${esc(c?.error || 'The room did not answer.')}</p>`; return; }
+  const mine = c.ahead ? `<p>Your copy has ${s(c.ahead, 'change')} GitHub doesn't: rebase them first, or the upgrade stops.</p>` : '';
+  if (!c.behind) { out.hidden = false; out.innerHTML = `<p>Up to date.</p>${mine}`; return; }
+  out.hidden = false;
+  out.innerHTML = `<p><b>Update available</b>: ${s(c.behind, 'change')} behind${c.latest !== c.current ? `, newest ${esc(c.latest)}` : ''}.</p>
+    ${c.changes ? `<details><summary>What changed</summary><div class="updlog">${esc(c.changes)}</div></details>` : ''}
+    ${c.dirty.length ? `<p>The upgrade stops until these local edits move into seams (docs/upgrading.md): ${c.dirty.map((d) => `<code>${esc(d)}</code>`).join(', ')}</p>` : ''}${mine}
+    <p>To update, paste this into Claude Code:</p><blockquote id="updPrompt">${esc(c.prompt)}</blockquote><p><button class="chip" id="updCopy">Copy</button></p>`;
+  $('#updCopy').onclick = () => navigator.clipboard.writeText(c.prompt).then(() => toast('Copied'));
+};

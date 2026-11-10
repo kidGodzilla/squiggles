@@ -1189,3 +1189,6 @@ details.usage summary { list-style: none } .usage summary::-webkit-details-marke
 .ugq b { font-weight: 400; text-align: right } .ugq small { font-size: 12px; color: var(--dim); text-align: right }
 .ugst { display: flex; gap: 2px; height: 10px } .ugst i, .ugst em { display: block; min-width: 2px; background: var(--accent); border-radius: 4px 0 0 4px } .ugst em { background: var(--gold); border-radius: 0 4px 4px 0 } .ugst i:last-child { border-radius: 4px }
 @media (max-width: 640px) { .ugw .ugh, .ugw td small { display: none } .ugw .ugl { width: auto } .ugw .ugl .ugbar { display: none } .ugw th, .ugw td { padding-left: 10px } .ugq { grid-template-columns: 64px 1fr 72px } .ugq small { display: none } .usage .ugs { margin-left: 0; flex: 1 } }
+
+#updOut .updlog { white-space: pre-wrap; max-height: 40vh; overflow: auto; }
+#updOut blockquote { margin: 6px 0; padding: 8px 12px; border-left: 3px solid currentColor; opacity: .9; }

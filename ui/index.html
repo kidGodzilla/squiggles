@@ -106,6 +106,12 @@
           <label for="theme">Theme</label><select id="theme" data-snd="theme"><option value="flat">Flat</option><option value="clean">Clean</option></select>
         </div>
       </section>
+      <section class="setcard" id="setUpdate" role="tabpanel" data-stab="room">
+        <h2>Updates</h2>
+        <p class="sethint">Checks GitHub; pulls nothing. CLI: <code>upgrade check</code>.</p>
+        <p><span id="updNow"></span> <button class="chip" id="updCheck">Check for updates</button></p>
+        <div id="updOut" hidden></div>
+      </section>
       <section class="setcard" role="tabpanel" data-stab="sharing">
         <h2>Sharing</h2>
         <p class="sethint" id="shareTsHint">Anyone on the tailnet reaches the lock screen. Needs a passcode of 8+ characters: clearing it turns sharing off. CLI: <code>share on|off|status</code>.</p>

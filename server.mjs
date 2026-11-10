@@ -1606,6 +1606,8 @@ const server = http.createServer(async (req, res) => {
       if (no) return json(res, { error: no.error, ...(no.unlock && { unlock: true }) }, no.status);
       return json(res, humans.op(b));
     }
+    // Read-only update check: fetch, compare, pull nothing. CLI: upgrade check.
+    if (url.pathname === '/api/update') return json(res, await (await import('./bin/upgrade.mjs')).checkUpdate());
     if (url.pathname === '/api/config') { const { userName, model, codex, tailnet } = CONFIG; return json(res, { userName, model, codex, tailnet, call: fs.existsSync(CALL_DIR), version: VERSION, schema: CONFIG.schema }); }
     if (url.pathname === '/api/share' && req.method === 'POST') {
       const b = await body(req, res), cf = b.via === 'cloudflare';
