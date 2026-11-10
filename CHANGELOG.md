@@ -221,6 +221,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Settings number inputs show an accent border on focus and are 44px tall on touch screens.
 
 ### Fixed
+- Wake times no longer replay missed slots late: a fixed time missed by 3 hours or more waits for its next slot, and a work window that has ended skips to its next day (a 9:00 wake no longer runs at 21:00 after a day off).
 - Review, picks and asks name each squiggle from the first paint, not its id until the next refresh.
 - A failed read during a refresh no longer leaves the room blank: it says so once and keeps trying, a chat history that won't load is retried and then named, live updates start regardless, and a proxy's error page reads as an error.
 - Research files open when the room lives under a dot folder, as the default ~/.squiggles does. Hidden folders inside the research folder stay hidden.

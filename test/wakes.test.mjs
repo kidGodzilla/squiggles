@@ -30,3 +30,19 @@ test('IDLE, a skip or a DEFER closes the window until tomorrow; so does running 
 test('weekdays skips Saturday and Sunday', () => {
   assert.equal(w('weekdays 9:00', { last: t(13, 9, 5) }), t(16, 9)); // Friday → Monday
 });
+
+// A missed slot isn't replayed late.
+test('a fixed time missed by hours waits for the next slot; one missed by under 3 hours fires once', () => {
+  const spec = '9:00, 13:00, 17:00', last = t(9, 17, 5); // last wake: Monday 17:05, then a day off
+  assert.equal(w(spec, { last, now: t(10, 21) }), t(11, 9)); // back Tuesday 21:00: Wednesday 9:00, not Tuesday's 9:00 now
+  assert.equal(w(spec, { last, now: t(10, 10, 30) }), t(10, 9)); // 90 minutes late: still fires
+  assert.equal(w(spec, { last, now: t(10, 14) }), t(10, 13)); // 9:00 is stale, 13:00 an hour late fires
+  assert.equal(w(spec, { last: t(10, 14), now: t(10, 14) }), t(10, 17)); // and only once
+});
+
+test('an ended work window skips to its next day', () => {
+  const spec = '9:00-13:00';
+  assert.equal(w(spec, { last: t(9, 9, 30), lastEnd: t(9, 9, 40), endStatus: 'idle', now: t(10, 21) }), t(11, 9));
+  assert.equal(w(spec, { last: t(10, 9, 41), lastEnd: t(10, 9, 50), endStatus: 'done', now: t(10, 21) }), t(11, 9)); // a DONE carry-on doesn't run at 21:00
+  assert.equal(w(spec, { last: t(9, 9, 30), lastEnd: t(9, 9, 40), endStatus: 'idle', now: t(10, 11) }), t(10, 9)); // back mid-window: starts now
+});

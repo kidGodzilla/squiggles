@@ -46,7 +46,10 @@ export function parseWakes(spec) {
 }
 const at = (day, min) => { const d = new Date(day); d.setHours(0, min, 0, 0); return d.getTime(); };
 // The next wake for parsed items. last: the last wake or skip; lastEnd: when the last turn ended; endStatus: its status.
-export function wakeDue(items, { last = 0, lastEnd = 0, endStatus = '' } = {}) {
+// now: with it, a missed slot isn't replayed late. A window that has ended skips to its next day;
+// a fixed time missed by STALE_AFTER or more waits for the next slot (a 9:00 wake doesn't run at 21:00 after a day off).
+export const STALE_AFTER = 3 * 3600e3;
+export function wakeDue(items, { last = 0, lastEnd = 0, endStatus = '', now = 0 } = {}) {
   let best = Infinity;
   const day0 = new Date(last || Date.now()); day0.setHours(0, 0, 0, 0);
   for (const it of items) {
@@ -54,9 +57,9 @@ export function wakeDue(items, { last = 0, lastEnd = 0, endStatus = '' } = {}) {
       const day = new Date(day0); day.setDate(day.getDate() + i);
       if (it.weekdays && [0, 6].includes(day.getDay())) continue;
       const start = at(day, it.from);
-      if (it.to == null) { if (start > last) { best = Math.min(best, start); break; } continue; }
+      if (it.to == null) { if (start > last && !(now && now - start >= STALE_AFTER)) { best = Math.min(best, start); break; } continue; }
       const end = at(day, it.to);
-      if (end <= last) continue;
+      if (end <= last || (now && end <= now)) continue;
       if (start > last) { best = Math.min(best, start); break; }
       // The last wake was in this window: carry on only after a DONE.
       const next = Math.max(last, lastEnd) + 60000;

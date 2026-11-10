@@ -867,7 +867,7 @@ function compactNow(s, endStatus, own) {
   const r = R(s.id);
   let nextDue = null;
   try { const w = s.wakes && parseWakes(s.wakes), last = Date.parse(r.lastWake || 0) || 0;
-    nextDue = w ? wakeDue(w, { last, lastEnd: Date.parse(r.lastEnd || 0) || 0, endStatus }) : s.every > 0 ? dueAt(s.id, s.every, last) : null; } catch {}
+    nextDue = w ? wakeDue(w, { last, lastEnd: Date.parse(r.lastEnd || 0) || 0, endStatus, now: Date.now() }) : s.every > 0 ? dueAt(s.id, s.every, last) : null; } catch {}
   if (!compactAtEnd({ claude: !providerOf(s), lead: s.lead, alive: !!r.proc?.stdin?.writable, own, endStatus, ctx: r.ctx, nextDue })) return;
   r.compacting = true;
   emit(s.id, { k: 'log', text: `compacting ${Math.round(r.ctx / 1000)}k tokens while the cache is warm` });
@@ -1053,7 +1053,7 @@ setInterval(() => {
     if (started.has(p) || Date.now() - (newest[p] || 0) < 2 * 60000) continue;
     const r = R(s.id);
     const last = Math.max(Date.parse(r.lastWake || 0) || 0, Date.parse(r.skipAt || 0) || 0);
-    let due; try { const w = s.wakes && parseWakes(s.wakes); due = w ? wakeDue(w, { last, lastEnd: Date.parse(r.lastEnd || 0) || 0, endStatus: r.endStatus }) : null; } catch { due = null; }
+    let due; try { const w = s.wakes && parseWakes(s.wakes); due = w ? wakeDue(w, { last, lastEnd: Date.parse(r.lastEnd || 0) || 0, endStatus: r.endStatus, now: Date.now() }) : null; } catch { due = null; }
     if (due == null) { if (!(s.every > 0)) continue; due = dueAt(s.id, s.every, last); }
     // Nothing new since an IDLE or WAITING end, so this wake would only re-read its context. Skip it (quiet.mjs).
     // Claude only; alwaysWake squiggles watch outside state (logs, servers, an inbox) and always run.
