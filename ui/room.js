@@ -458,11 +458,12 @@ function foldHandled(id, ts) {
   const h = S.hist[id] = S.hist[id] || [], last = h[h.length - 1];
   let items = [];
   if (last?.rep) { h.pop(); last.el?.remove(); items = last.rep.map((r) => ({ r, ts: last.ts })); }
-  const prev = h[h.length - 1];
-  if (prev?.fold) { prev.fold.push(...items); prev.ts = ts; foldPaint(prev); return; }
-  const f = { cls: 'm sys fold', fold: items, ts }; foldPaint(f); h.push(f);
-  const cw = document.getElementById('cw-' + id);
-  if (cw && !cw.classList.contains('min')) appendLine(cw, f, true);
+  // One fold per chat: a later "Handled." moves it to the bottom instead of adding a line.
+  const at = h.findLastIndex((x) => x.fold), cw = document.getElementById('cw-' + id);
+  if (at >= 0 && at === h.length - 1) { h[at].fold.push(...items); h[at].ts = ts; foldPaint(h[at]); return; }
+  const f = at < 0 ? { cls: 'm sys fold', fold: [], ts } : h.splice(at, 1)[0];
+  f.fold.push(...items); f.ts = ts; foldPaint(f); h.push(f);
+  f.el?.remove(); if (cw && !cw.classList.contains('min')) appendLine(cw, f, true);
 }
 function foldPaint(f) {
   const n = f.fold.length, item = ({ r, ts }) => { const m = /^\[(.+?) · \w+\]\s*(.*)$/.exec(r); return `<li>${m ? `<b>${esc(m[1])}</b> ${esc(m[2])}` : esc(r)}<span class="when">${when(ts)}</span></li>`; };

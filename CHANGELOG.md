@@ -174,6 +174,8 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - A squiggle's default context cap is now 120k tokens (the lead keeps 300k): every tool call re-reads the session, so a smaller cap costs less per call.
 - Team reports wait while you're talking with the lead, and go as one batch once you've been quiet 15 minutes, including over a restart.
 - Lead chat: a team report the lead answers in words joins the handled-reports fold; the answer stays below it.
+- Away: once you haven't messaged the lead for 30 minutes, team reports reach it at most once an hour as one batch, and it replies a bare "Handled." unless something needs you.
+- Lead chat keeps one handled-reports fold: a later "Handled." moves it to the bottom instead of adding another line.
 - Call bar: neutral copy ("Meeting link"), and `call` takes Google Meet links as well as Teams. Leftover "Merge tab" wording now says Review tab.
 - Note sheet: the note box grows with its text, and on a phone the status buttons sit in even thirds.
 - Meeting sheet on a phone: the Who list grows with the sheet instead of scrolling in a small box; the presenters hint is shorter.

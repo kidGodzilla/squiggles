@@ -16,7 +16,7 @@ import { holdGate } from './hold.mjs';
 import { createAsks, runAsk } from './asks.mjs';
 import { createPicks } from './picks.mjs';
 import { needsList, alertWake } from './needs.mjs';
-import { reportHoldMs, reportsText, reportLines } from './focus.mjs';
+import { reportHoldMs, reportsText, reportLines, away } from './focus.mjs';
 import { quietSig, skipWake, alwaysWakes, ownEnd } from './quiet.mjs';
 import { compactAtEnd, ctxOf, COMPACT_PROMPT } from './compact.mjs';
 import { HOME_FENCE } from './fence.mjs';
@@ -877,10 +877,11 @@ function flushInbox() {
   const lead = listSquiggles().find((x) => x.lead);
   saveState();
   if (!lead || !inbox.length || R(lead.id).status === 'working') return;
-  // The user is talking with the lead; the batch goes once they've been quiet 15 minutes.
-  const wait = reportHoldMs(R(lead.id).userAt);
+  // The user is talking with the lead; the batch goes once they've been quiet 15 minutes. Away 30 minutes: once an hour.
+  const userAt = R(lead.id).userAt, wait = reportHoldMs(userAt, Date.now(), persisted['*reportsAt']);
   if (wait) { clearTimeout(flushInbox.t); flushInbox.t = setTimeout(flushInbox, wait + 1000); return; }
-  send(lead.id, reportsText(inbox.splice(0), USER), 'harness');
+  persisted['*reportsAt'] = Date.now();
+  send(lead.id, reportsText(inbox.splice(0), USER, away(userAt)), 'harness');
 }
 
 // Session limit: display info only (the stated reset is guidance the user can change; never schedule around it).
