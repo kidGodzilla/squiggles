@@ -166,6 +166,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Settings > Defaults > Turns at once, and `slots`, set how many turns each provider runs at once.
 - Review lists watches waiting for approval, with the command, folder, schedule and reason, plus Approve and Drop. They count on the Review tab, in a chat's waiting line and in `needs`.
 ### Changed
+- Shared prompt: the code in a squiggle's area is theirs to shape; in code a task touches they merge repeats and fix small related problems, named in the review note, keeping existing behavior.
 - Squiggles that wake every hour or more often now only drift earlier than their schedule, never later, so each wake lands inside the 1-hour prompt cache. Longer cadences still drift both ways.
 - Squiggles launch with only the built-in tools they use (Task, Bash, Edit, Read, Write, WebFetch, WebSearch, ToolSearch, TaskStop), about 12k fewer tokens a cold wake. Skills are off unless turned on in the sheet or with `set <id> skills true`.
 - Squiggles start with no MCP servers unless their settings list them (the MCP servers field, or `set <id> mcp "Gmail, notes-db"`; you or the lead sets it). Fewer servers means a much smaller prompt on every wake. If your squiggles used MCP servers, list them again after upgrading.
