@@ -226,6 +226,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 
 ### Fixed
 - `upgrade` restarts the login item only when it runs this clone, so upgrading a second copy can't restart your room.
+- Merge: a branch named after its task (`t12-x`, `me/t12`) is found in every goal's repos, so a repo only another goal lists merges with the rest; generic branch names stay in their goal.
 - Wake times no longer replay missed slots late: a fixed time missed by 3 hours or more waits for its next slot, and a work window that has ended skips to its next day (a 9:00 wake no longer runs at 21:00 after a day off).
 - Review, picks and asks name each squiggle from the first paint, not its id until the next refresh.
 - A failed read during a refresh no longer leaves the room blank: it says so once and keeps trying, a chat history that won't load is retried and then named, live updates start regardless, and a proxy's error page reads as an error.

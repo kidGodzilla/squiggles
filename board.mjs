@@ -17,8 +17,10 @@ const expand = (p) => String(p || '').replace(/^~(?=$|\/)/, os.homedir());
 // The commit a branch pointed at when it went to review: merge takes that, never a later tip.
 const realRepo = (p) => { try { return fs.realpathSync(expand(p)); } catch { return expand(p); } };
 const tipOf = (repo, branch) => { try { return execFileSync('git', ['-C', expand(repo), 'rev-parse', '--verify', '--quiet', `refs/heads/${branch}`], { stdio: 'pipe' }).toString().trim(); } catch { return ''; } };
-function pinTips(task, goal) {
-  task.tips = {}; for (const r of new Set([task.repo, ...(goal?.repos || [])].filter(Boolean).map(realRepo))) { const sha = tipOf(r, task.branch); if (sha) task.tips[r] = sha; }
+// A branch named after its task (t12-x, me/t12) is that task's alone, so every goal's repos are searched for it.
+const ownBranch = (task) => !!task.branch && new RegExp(`(^|/)${task.id}(-|$)`).test(task.branch);
+function pinTips(task, repos) {
+  task.tips = {}; for (const r of new Set([task.repo, ...repos].filter(Boolean).map(realRepo))) { const sha = tipOf(r, task.branch); if (sha) task.tips[r] = sha; }
   if (!Object.keys(task.tips).length) delete task.tips;
 }
 const hasBranch = (repo, branch) => { try { execFileSync('git', ['-C', expand(repo), 'rev-parse', '--verify', '--quiet', `refs/heads/${branch}`], { stdio: 'pipe' }); return true; } catch { return false; } };
@@ -310,7 +312,7 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
         const spec = branch || (task.repo ? `${task.repo}:${task.branch}` : task.branch);
         const goal = task.goal ? TIERS.flatMap((x) => goals()[x]).find((g) => g.id === task.goal) : null;
         Object.assign(task, resolveBranch(spec, goal)); task.reviewed = today();
-        const was = JSON.stringify(task.tips || {}); pinTips(task, goal);
+        const was = JSON.stringify(task.tips || {}); pinTips(task, reposFor(task, goal));
         if (task.shipped && JSON.stringify(task.tips || {}) !== was) delete task.shipped; // a sign-off covers the commit it saw
         try { const b = detectBase(task.repo, task.branch); if (b !== baseOf(task.repo)) task.base = b; else delete task.base; } catch {}
       } else if (branch) Object.assign(task, resolveBranch(branch, task.goal ? TIERS.flatMap((x) => goals()[x]).find((g) => g.id === task.goal) : null));
@@ -326,7 +328,7 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
     else if (op === 'ship') {
       if (task.status !== 'review' || !task.branch) throw new Error(`${task.id} is not in review on a branch`);
       const goal = goalOf(task.goal);
-      if (!task.tips) pinTips(task, goal);
+      if (!task.tips) pinTips(task, reposFor(task, goal));
       for (const [r, want] of Object.entries(task.tips || {})) { const now = tipOf(r, task.branch); if (now !== want) throw new Error(`${task.branch} moved since review (${want.slice(0, 7)} → ${now ? now.slice(0, 7) : 'gone'}) in ${r}: ${task.owner || 'the owner'} moves it to review again, then you review that`); }
       const sha = task.tips?.[realRepo(task.repo)] || '';
       if (!sha) throw new Error(`branch ${task.branch} is gone from ${task.repo}`);
@@ -438,6 +440,8 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
 
   // ---------- merge queue: review tasks of gated goals ----------
   const goalOf = (id) => (id ? TIERS.flatMap((x) => goals()[x]).find((g) => g.id === id) : null);
+  // Repos a review branch may sit in: its goal's, and for a task-named branch every goal's.
+  const reposFor = (task, goal) => [...(goal?.repos || []), ...(ownBranch(task) ? TIERS.flatMap((x) => goals()[x]).flatMap((g) => g.repos || []) : [])];
   // One repo's side of a review branch: base, ahead/behind, conflicts, log, links.
   async function repoInfo(repo, branch, q, into) {
     const r = { repo, branch };
@@ -464,10 +468,10 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
   }
   // The goal's other repos carrying the same branch with commits to merge: one task, several repos.
   async function otherRepos(task, q) {
-    const real = (p) => { try { return fs.realpathSync(expand(p)); } catch { return expand(p); } };
-    const mine = real(task.repo), out = [];
-    for (const repo of goalOf(task.goal)?.repos || []) {
-      if (real(repo) === mine || !(await okA(gitA(repo, ['rev-parse', '--verify', '--quiet', `refs/heads/${task.branch}`])))) continue;
+    const seen = new Set([realRepo(task.repo)]), out = [];
+    for (const repo of reposFor(task, goalOf(task.goal))) {
+      if (seen.has(realRepo(repo))) continue; seen.add(realRepo(repo));
+      if (!(await okA(gitA(repo, ['rev-parse', '--verify', '--quiet', `refs/heads/${task.branch}`])))) continue;
       const o = await repoInfo(repo, task.branch, q);
       if (o.error || o.ahead > 0) out.push(o);
     }
