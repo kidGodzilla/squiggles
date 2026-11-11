@@ -53,10 +53,10 @@ test('repo:branch accepts the bare repo name', async () => {
 // a branch named after its task merges in every repo that carries it, even one only another goal lists.
 test('a task-named branch in another goal\'s repo merges too; a generic one stays in its goal', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'multi-'));
-  const A = repo(dir, 'api', 't1-cap', 'x'), B = repo(dir, 'visitors', 't1-cap', 'y');
+  const A = repo(dir, 'api', 't1-cap', 'x'), B = repo(dir, 'web', 't1-cap', 'y');
   B.g('checkout', '-q', '-b', 'feat'); B.commit('z', 'other'); B.g('checkout', '-q', 'main');
   A.g('checkout', '-q', '-b', 'feat', 'main'); A.commit('w', 'mine'); A.g('checkout', '-q', 'main');
-  fs.writeFileSync(path.join(dir, 'goals.json'), JSON.stringify({ active: [{ id: 'sec', title: 'S', merge: 'gated', repos: [A.r] }, { id: 'vis', title: 'V', merge: 'gated', repos: [B.r, A.r] }] }));
+  fs.writeFileSync(path.join(dir, 'goals.json'), JSON.stringify({ active: [{ id: 'sec', title: 'S', merge: 'gated', repos: [A.r] }, { id: 'web', title: 'W', merge: 'gated', repos: [B.r, A.r] }] }));
   fs.writeFileSync(path.join(dir, 'tasks.json'), JSON.stringify({ tasks: [{ id: 't1', title: 'caps', goal: 'sec', status: 'doing', owner: 'x' }, { id: 't2', title: 'generic', goal: 'sec', status: 'doing', owner: 'x' }], next: 3 }));
   const b = createBoard(dir, () => {});
   b.taskOp({ op: 'move', id: 't1', status: 'review', branch: 't1-cap', note: 'ok' });
@@ -65,7 +65,7 @@ test('a task-named branch in another goal\'s repo merges too; a generic one stay
   const rows = await b.merges(), one = rows.find((r) => r.id === 't1'), two = rows.find((r) => r.id === 't2');
   assert.deepEqual(one.others.map((o) => o.repo), [B.r]);
   assert.equal(two.others, undefined);
-  const m = await b.merge('t1', 'james');
+  const m = await b.merge('t1', 'owner');
   assert.equal(m.merged.length, 2);
   assert.equal(fs.readFileSync(path.join(B.r, 'y'), 'utf8'), 'work');
   fs.rmSync(dir, { recursive: true, force: true });
