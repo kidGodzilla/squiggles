@@ -90,3 +90,9 @@ test('ordinary brace words stay allowed, however many', () => {
 test('a long run of > or -e that names no owned file takes under 1 s', () => {
   for (const c of ['>'.repeat(200000), `node -e x ${' -e'.repeat(13000)}`]) fast(c.slice(0, 11), () => commandReason(c, cwd));
 });
+
+test('many short brace or glob words from home each stay cheap: 1,000 words of 1,018 characters under 1 s, one 65 KB word too', () => {
+  const short = ('*{a,b}').repeat(169) + 'xxxx', at = (c) => check({ tool_name: 'Bash', tool_input: { command: c }, cwd: home });
+  for (const n of [200, 1000]) fast(`${n} words`, () => at('ls ' + Array(n).fill(short).join(' ')));
+  for (const w of ['~/' + '*{a,b}'.repeat(10900), '{a,b}/'.repeat(10900)]) fast(`${w.length} chars`, () => at('ls ' + w));
+});
