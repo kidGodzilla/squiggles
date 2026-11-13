@@ -30,6 +30,7 @@ async function loadBoard() {
   if (B.view === 'team') { renderTeam(); loadHumans(); loadCost(); loadUsage(); loadWatches(); }
   if (B.view === 'calendar') loadCal();
   if (B.view === 'merge') loadMerges();
+  if (B.view === 'tasks') loadStuck();
 }
 window.onBoard = () => loadBoard();
 
@@ -95,6 +96,7 @@ async function loadLoad() {
 // Suggestions live in their own filter until the lead accepts one; then it's a normal note.
 const isSug = (t) => t.kind === 'suggestion' && t.decision !== 'accepted';
 function taskVisible(t) {
+  if (B.tshow === 'stuck') return false; // its own list: opening a note from it moves to All
   if (B.tshow === 'suggest') return t.kind === 'suggestion' && hit(B.tq.toLowerCase(), t.title, t.evidence, t.why, ownerName(t.by));
   if (isSug(t)) return false;
   if (B.tgoal && t.goal !== B.tgoal) return false;
@@ -104,12 +106,30 @@ function taskVisible(t) {
   if (B.tshow === 'open') return t.status !== 'done' || daysSince(t.finished || t.confirmed) <= 7;
   return true;
 }
+// Stuck: rows from /api/stuck, the same list `stuck` prints and the lead reads. Fetched at most every 30 s.
+B.stuck = []; B.stuckAt = 0;
+async function loadStuck(force) {
+  if (!force && Date.now() - B.stuckAt < 30e3) return;
+  B.stuckAt = Date.now(); const l = await api('/stuck').catch(() => null); if (!l) return;
+  B.stuck = l; if (B.view === 'tasks') renderTasks();
+}
+const STUCK_WORD = { blocked: 'Blocked', waiting: 'Waiting', doing: 'Doing', review: 'In review', asked: 'Asked for', after: 'After merge', needs: 'Before merge', parts: 'Parts done', cleared: 'Reason gone', owner: 'Owner paused' };
+const stuckRow = (x) => `<button class="srow" data-stuck="${esc(x.id)}"><b>${x.age === 1 ? '1 day' : `${x.age} days`}</b><span>${esc(STUCK_WORD[x.kind] || x.kind)}</span><span>${esc(x.id)}${x.n ? ` step ${x.n}` : ''}</span><span>${esc(ownerName(x.owner) || '')}</span><em>${esc(x.text)}</em></button>`;
+function renderStuck(cols) {
+  const q = B.tq.toLowerCase(), l = B.stuck.filter((x) => (!B.tgoal || x.goal === B.tgoal) && (!B.towner || x.owner === (B.towner === '-' ? '' : B.towner)) && hit(q, x.id, x.text, ownerName(x.owner)));
+  cols.classList.remove('none'); cols.classList.add('stuckv');
+  cols.innerHTML = l.length ? l.map(stuckRow).join('') : '<div class="empty">Nothing is stuck.</div>';
+  $('#tcount').textContent = `${l.length} stuck`;
+}
 function renderTasks() {
   const goalSel = $('#tgoal'), ownSel = $('#towner');
   goalSel.innerHTML = `<option value="">All goals</option>` + ['active', 'hold', 'todo', 'done'].flatMap((t) => B.goals[t]).map((g) => `<option value="${esc(g.id)}">${esc(g.title)}</option>`).join('');
   ownSel.innerHTML = `<option value="">Everyone</option><option value="-">Nobody</option>` + S.order.map((id) => `<option value="${esc(id)}">${esc(S.sq[id].name)}</option>`).join('');
   goalSel.value = B.tgoal; ownSel.value = B.towner;
   document.querySelectorAll('#tshow button').forEach((b) => b.classList.toggle('on', b.dataset.v === B.tshow));
+  const stb = $('#tshow [data-v=stuck]'); if (stb) stb.textContent = B.stuck.length ? `Stuck ${B.stuck.length}` : 'Stuck';
+  if (B.tshow === 'stuck') return renderStuck($('#corkcols'));
+  $('#corkcols').classList.remove('stuckv');
   const vis = B.tasks.filter(taskVisible), cols = $('#corkcols');
   // Filters that match nothing get one line, not five empty columns.
   const none = !vis.length && (B.tq || B.tgoal || B.towner);
@@ -158,6 +178,7 @@ document.addEventListener('click', (e) => { const f = e.target.closest('[data-fo
 $('#gq').oninput = (e) => { B.gq = e.target.value; renderGoals(); syncUrl(); };
 $('#tq').oninput = (e) => { B.tq = e.target.value; renderTasks(); syncUrl(); };
 $('#corkcols').addEventListener('click', (e) => {
+  const row = e.target.closest('[data-stuck]'); if (row) return openTaskNote(row.dataset.stuck);
   const c = e.target.closest('[data-tclear]'); if (!c) return;
   if (c.dataset.tclear === 'q') { B.tq = ''; $('#tq').value = ''; } else { B.tgoal = ''; B.towner = ''; }
   renderTasks(); syncUrl();
@@ -165,7 +186,7 @@ $('#corkcols').addEventListener('click', (e) => {
 $('#tgoal').onchange = (e) => { B.tgoal = e.target.value; renderTasks(); syncUrl(); };
 $('#towner').onchange = (e) => { B.towner = e.target.value; renderTasks(); syncUrl(); };
 $('#ttidy').onclick = () => { B.tidy = !B.tidy; try { localStorage.agentsTidy = B.tidy ? '1' : '0'; } catch {} renderTasks(); };
-$('#tshow').onclick = (e) => { const v = e.target.dataset.v; if (v) { B.tshow = v; renderTasks(); syncUrl(); } };
+$('#tshow').onclick = (e) => { const v = e.target.dataset.v; if (v) { B.tshow = v; renderTasks(); syncUrl(); if (v === 'stuck') loadStuck(true); } };
 
 // ---------- drag and drop ----------
 let drag = null;
@@ -864,7 +885,7 @@ function viewFromUrl(search, nav) {
   const q = new URLSearchParams(search), v = q.get('view');
   if (!VIEWS.includes(v)) return false;
   if (v === 'goals') $('#gq').value = B.gq = q.get('q') || '';
-  if (v === 'tasks') { $('#tq').value = B.tq = q.get('q') || ''; B.tgoal = q.get('goal') || ''; B.towner = q.get('owner') || ''; B.tshow = ['open', 'all', 'stale', 'suggest'].includes(q.get('show')) ? q.get('show') : 'open'; }
+  if (v === 'tasks') { $('#tq').value = B.tq = q.get('q') || ''; B.tgoal = q.get('goal') || ''; B.towner = q.get('owner') || ''; B.tshow = ['open', 'all', 'stale', 'stuck', 'suggest'].includes(q.get('show')) ? q.get('show') : 'open'; }
   if (v === 'settings') B.stab = setTab(q.get('tab'));
   if (v === 'calendar') {
     const w = /^(\d{4})-(\d\d)-(\d\d)$/.exec(q.get('week') || ''), mo = /^(\d{4})-(\d\d)$/.exec(q.get('month') || '');

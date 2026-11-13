@@ -84,6 +84,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - The private-data fence refuses a script fed in by xargs (`xargs sh`, `xargs -I{} sh -c '{} box'`), reads xargs flags clustered ahead of the mark (`-0I{}`), and stays fast on a long run of `function` words, so a slow check can't fail open.
 
 ### Added
+- Stuck work: `stuck`, the Tasks tab's Stuck filter and the lead's wakes list what stopped moving, oldest first: blocked, waiting, doing or review notes with no status change, week-old todos a person asked for, steps around a review that sit, parents whose parts all finished, and notes whose owner is paused.
 - Burn mode (Settings, Room, or `burn on|off`): Claude squiggles that wake hourly or more often start again as soon as a turn ends, skipping the stagger, the quiet skip and the pre-check. Turns at once still applies. The page or the lead turns it on.
 - `upgrade check` and Settings, Room, Check for updates: see if you're behind, what changed, and what would block the upgrade, without pulling anything.
 - Wake times: a squiggle can wake at set times ("9:00, 13:00, 17:00") or work in daily windows ("weekdays 9:00-11:00") instead of every N minutes. A window keeps starting wakes while they end DONE; any other end closes it until tomorrow. Set it in the squiggle sheet or with `set <id> wakes`.

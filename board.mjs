@@ -341,6 +341,7 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
       if (ask !== undefined) { if (String(ask).trim()) task.ask = String(ask).trim(); else delete task.ask; }
       if (status === 'review' && needAsk && !plainAsk(task.ask)) throw new Error(ASK_RULE);
       if (status === 'review' && task.status !== 'review') tellSteps(task, 'needs');
+      if (status !== task.status) task.since = Date.now(); // stuck.mjs ages a note from here: a re-note isn't movement
       task.status = status; task.confirmed = today(); if (status === 'done') Object.assign(task, { finished: today(), finishedAt: Date.now() }); else { delete task.finished; delete task.finishedAt; }
       if (note !== undefined) task.note = note;
       if (status === 'done') retire(task);

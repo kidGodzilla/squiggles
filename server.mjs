@@ -16,6 +16,7 @@ import { holdGate } from './hold.mjs';
 import { createAsks, runAsk } from './asks.mjs';
 import { createPicks } from './picks.mjs';
 import { needsList, alertWake } from './needs.mjs';
+import { stuckList, stuckBrief } from './stuck.mjs';
 import { reportHoldMs, reportsText, reportLines, away } from './focus.mjs';
 import { quietSig, skipWake, alwaysWakes, ownEnd } from './quiet.mjs';
 import { compactAtEnd, ctxOf, COMPACT_PROMPT } from './compact.mjs';
@@ -786,9 +787,13 @@ function wake(id, why = 'scheduled', asker = '', due = 0, pre = '') {
   const s = loadSquiggle(id);
   if (!s || R(id).status === 'working') return false;
   let news = []; try { news = board.suggestionNews(id); } catch {}
-  send(id, `Wake (${why}), ${wakeToken(due)}. Read your charter and the end of your journal, decide the single most valuable thing to do now, do it, verify it, append a dated journal entry, then end with a status line. You have ${s.maxTurns ?? 40} turns this wake; journal findings as you confirm them.${limitOf(roomCfg(), slotKey(providerOf(s))) ? ' Your provider runs a few turns at a time, so your next turn may start much later: leave work resumable, and file a wait rather than checking back.' : ''}${news.length ? `\n\nYour suggestions, decided by the lead:\n${news.map((x) => `- ${x}`).join('\n')}` : ''}${pre ? `\n\nA quick pre-check found: ${pre}` : ''}${why === 'burn' ? `\n\n${BURN_TEXT}` : ''}`, 'harness', { asker });
+  send(id, `Wake (${why}), ${wakeToken(due)}. Read your charter and the end of your journal, decide the single most valuable thing to do now, do it, verify it, append a dated journal entry, then end with a status line. You have ${s.maxTurns ?? 40} turns this wake; journal findings as you confirm them.${limitOf(roomCfg(), slotKey(providerOf(s))) ? ' Your provider runs a few turns at a time, so your next turn may start much later: leave work resumable, and file a wait rather than checking back.' : ''}${news.length ? `\n\nYour suggestions, decided by the lead:\n${news.map((x) => `- ${x}`).join('\n')}` : ''}${pre ? `\n\nA quick pre-check found: ${pre}` : ''}${why === 'burn' ? `\n\n${BURN_TEXT}` : ''}${s.lead ? leadStuck() : ''}`, 'harness', { asker });
   return true;
 }
+
+// A person asked for a note when its asker isn't a squiggle: the owner, or someone they added.
+const stuckNow = () => { const sq = listSquiggles(); return stuckList({ tasks: board.tasks(), holds: (board.goals().hold || []).map((g) => g.id), paused: sq.filter((x) => x.paused).map((x) => x.id), byPerson: (a) => !sq.some((x) => x.id === a) }); };
+const leadStuck = () => { try { const b = stuckBrief(stuckNow()); return b ? `\n\n${b}` : ''; } catch { return ''; } };
 
 const quietSigOf = (s) => { try { return quietSig(s.id, board.tasks(), readText(path.join(sqDir(s.id), 'charter.md'))); } catch { return ''; } };
 const ownNotes = (id) => { try { return Object.fromEntries(board.tasks().filter((t) => t.owner === id).map((t) => [t.id, `${t.status}\n${t.note || ''}`])); } catch { return {}; } };
@@ -1787,6 +1792,7 @@ const server = http.createServer(async (req, res) => {
         return json(res, { error: 'op must be add, approve or drop' }, 400);
       } catch (e) { return json(res, { error: e.message }, e.code || 400); }
     }
+    if (url.pathname === '/api/stuck' && req.method === 'GET') return json(res, stuckNow());
     if (url.pathname === '/api/needs' && req.method === 'GET') return json(res, needsList({ asks: asks.list({}), picks: picks.list({}), merges: await board.merges().catch(() => []), squiggles: listSquiggles().map(view), tasks: board.tasks(), watches: watches.list({}) }));
     if (url.pathname === '/api/picks' && req.method === 'GET') return json(res, picks.list({ all: url.searchParams.get('all') === '1' }));
     if (url.pathname === '/api/picks' && req.method === 'POST') {
