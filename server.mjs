@@ -772,11 +772,11 @@ function serveMedia(req, res, f) {
   let st; try { st = f && fs.statSync(f); } catch {}
   if (!st?.isFile()) { res.writeHead(404); return res.end(); }
   const type = VIDEO[path.extname(f).toLowerCase()], m = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '');
-  if (!m || (!m[1] && !m[2])) { res.writeHead(200, { 'content-type': type, 'content-length': st.size, 'accept-ranges': 'bytes', 'cache-control': 'no-store' }); return fs.createReadStream(f).pipe(res); }
+  if (!m || (!m[1] && !m[2])) { res.writeHead(200, { 'content-type': type, 'content-length': st.size, 'accept-ranges': 'bytes', 'cache-control': 'no-store' }); return fs.createReadStream(f).on('error', () => res.destroy()).pipe(res); }
   let a = m[1] ? Number(m[1]) : Math.max(0, st.size - Number(m[2])), z = m[1] && m[2] ? Math.min(Number(m[2]), st.size - 1) : st.size - 1;
   if (a >= st.size || a > z) { res.writeHead(416, { 'content-range': `bytes */${st.size}` }); return res.end(); }
   res.writeHead(206, { 'content-type': type, 'content-length': z - a + 1, 'content-range': `bytes ${a}-${z}/${st.size}`, 'accept-ranges': 'bytes', 'cache-control': 'no-store' });
-  fs.createReadStream(f, { start: a, end: z }).pipe(res);
+  fs.createReadStream(f, { start: a, end: z }).on('error', () => res.destroy()).pipe(res);
 }
 
 function wake(id, why = 'scheduled', asker = '', due = 0, pre = '') {

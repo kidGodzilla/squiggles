@@ -37,7 +37,7 @@ export async function usage({ root, days = 7, weeks = 4, now = Date.now() }) {
 
   // One pass over the run logs: rate events for limits, and tool, end and the user's messages inside the window for turns.
   const limits = {}, peak = {}, events = {};
-  let files = []; try { files = fs.readdirSync(runs).filter((f) => f.endsWith('.jsonl') && f !== 'cost.jsonl' && fs.statSync(path.join(runs, f)).mtimeMs >= now - weeks * WEEK); } catch {}
+  let files = []; try { files = fs.readdirSync(runs).filter((f) => f.endsWith('.jsonl') && f !== 'cost.jsonl' && ((st) => st.isFile() && st.mtimeMs >= now - weeks * WEEK)(fs.statSync(path.join(runs, f)))); } catch {}
   for (const f of files) {
     const id = f.slice(0, -6), mine = (events[id] = []);
     await scan(path.join(runs, f), (e) => {

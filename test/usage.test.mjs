@@ -90,3 +90,10 @@ test('other providers count turns, never Claude use', async () => {
   assert.equal(u.weeks[0].claude, 4); assert.equal(u.weeks[0].cost, 9);
   fs.rmSync(root, { recursive: true });
 });
+
+test('a folder named like a run log is skipped, not a failed report', async () => {
+  const root = room({ 'a.jsonl': lines([{ type: 'result', ts: new Date(now - H).toISOString() }]) });
+  fs.mkdirSync(path.join(root, 'runs', 'b.jsonl'));
+  const u = await usage({ root, now });
+  assert.ok(u && typeof u === 'object');
+});

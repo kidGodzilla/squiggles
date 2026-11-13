@@ -5,6 +5,8 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 ## 0.1.2 (unreleased)
 
 ### Security
+- The fence refuses shell and edit-tool writes to `room.json`: it holds the passcode hash, and a swapped hash would unlock the page after a restart.
+- The owned-file write check (`watches.json`, `squiggle.json`, `room.json`) is linear: a 200 KB command naming the file checks in under a second instead of over a minute, so a hook can't time out into allow.
 - A branch named like an option (`-D`, `--orphan`) is refused at review, base, worktree and merge, so git never reads it as a flag.
 - Retiring a task keeps a worktree that holds ignored secrets (`.env`, keys). `git worktree remove` would have deleted them. Ignored build output still goes.
 - Ask and watch output masks the word after a secret-named flag (`--password hunter2`, `--token x`, `--api-key "x y"`).
@@ -230,6 +232,8 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Settings number inputs show an accent border on focus and are 44px tall on touch screens.
 
 ### Fixed
+- Usage skips a folder named like a run log instead of failing the report.
+- A video whose read fails mid-stream closes the response instead of hanging it.
 - Watches: while any squiggle is Low, an approved watch can still file a plain alert note (serious or normal). Any other note write from a watch still needs the passcode.
 - The command fence resolves each path once for both its folder and `.ssh` checks, and gallops before halving a long path: a long brace-expanded word checks about a quarter faster.
 - Hiring: a create with no usable name is refused instead of making an "undefined" squiggle; the CLI prints `create` usage when arguments are missing.

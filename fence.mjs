@@ -13,6 +13,7 @@ export const HOME_FENCE = ['Downloads', 'Desktop', 'Documents', '.ssh'].flatMap(
 export const REASONS = { dirs: 'Downloads, Desktop and Documents are off limits', ssh: '~/.ssh is off limits', push: 'git push is off limits: squiggles commit, you push',
   watches: 'watches.json is written only by the watch commands: reading it is fine',
   squiggle: 'squiggle.json is written only by the server: use bin/agents.mjs, or ask the lead. Reading it is fine',
+  roomFile: 'room.json is written only by the server: set the passcode from the page. Reading it is fine',
   peer: "that squiggle's transcript, journal and private notes are closed to other squiggles: ask the lead",
   secret: 'credentials stay off the screen',
   tree: 'a recursive read or copy from home or above reaches Downloads, Desktop, Documents and ~/.ssh: name a folder inside home',
@@ -288,22 +289,68 @@ function treeReason(cmd, cwd, home) {
   return '';
 }
 // A watch runs what its entry says and the hash has no key, so writing watches.json would approve a command with no one looking.
-// Rough like the rest of the fence: reads stay open, and a script file, a glob or code piped into an interpreter still get through.
-const writesTo = (f) => [
-  new RegExp(String.raw`>\|?\s*\S*${f}`, 'i'),
-  new RegExp(String.raw`\b(?:cp|mv|ln|install|rsync|ditto|tee|truncate|dd|patch|touch|rm|ed|ex|vim?|nano)\b[^\n;|&]*${f}`, 'i'),
-  new RegExp(String.raw`\b(?:g?sed|perl|ruby)\b[^\n;|&]*\s-\w*i\S*\s[^\n;|&]*${f}`, 'i'),
-  new RegExp(String.raw`\b(?:node|bun|deno|python[\d.]*|ruby|perl|php|osascript)\b[^\n;|&]*(?:\s-\w*[ecp]\b|\s--eval\b|\s--print\b|\s-(?:\s|$)|<<)[\s\S]*${f}`, 'im'),
-];
-const WATCH_WRITES = writesTo(String.raw`watches\.json`);
-// Lead-only fields are checked by the API and read from this file, so writing it grants what the API refuses. As rough as above.
-const SQUIGGLE_WRITES = writesTo(String.raw`squiggle\.json`);
-// The name first: the patterns are quadratic on a long run of > or -e, and a command that never names the file needs none of them.
-const watchWrite = (cmd) => /watches\.json/i.test(cmd) && WATCH_WRITES.some((re) => re.test(cmd));
-const squiggleWrite = (cmd) => /squiggle\.json/i.test(cmd) && SQUIGGLE_WRITES.some((re) => re.test(cmd));
+// Lead-only fields are checked by the API and read from squiggle.json, so writing it grants what the API refuses.
+// room.json holds the passcode hash, and a swapped hash counts after the next restart: writing it unlocks the page.
+// Rough: reads stay open, and a script file, a glob or code piped into an interpreter still get through. A write is a redirect into
+// a word naming the file, or in one segment (between ; | & or newline) a file tool, an in-place sed/perl/ruby or an interpreter
+// running code, before the name. Linear: the regexes this replaces rescanned from every > or command word (82 s on 200 KB),
+// and a hook that slow times out, which Codex reads as allow.
+const OWNED_FILES = [['watches.json', 'watches'], ['squiggle.json', 'squiggle'], ['room.json', 'roomFile']];
+const FILE_TOOL = /\b(?:cp|mv|ln|install|rsync|ditto|tee|truncate|dd|patch|touch|rm|ed|ex|vim?|nano)\b/g;
+const IN_PLACE = /\b(?:g?sed|perl|ruby)\b/g, IN_PLACE_FLAG = /\s-\w*i\S*\s/g;
+const INTERP = /\b(?:node|bun|deno|python[\d.]*|ruby|perl|php|osascript)\b/g, CODE_FLAG = /\s-\w*[ecp]\b|\s--eval\b|\s--print\b|\s-(?:\s|$)|<</gm;
+const SEP = /[\n;|&]/g;
+const find = (re, s, from) => { re.lastIndex = from; const m = re.exec(s); return m && { i: m.index, end: m.index + m[0].length }; };
+const sepAfter = (s, from) => { const m = find(SEP, s, from); return m ? m.i : s.length; };
+const firstFrom = (a, x) => { let lo = 0, hi = a.length; while (lo < hi) { const mid = (lo + hi) >> 1; if (a[mid] < x) lo = mid + 1; else hi = mid; } return lo < a.length ? a[lo] : Infinity; };
+// > or >|, optional space, then a word holding the name: a > earlier in that word, or the word before ending in > or >|.
+function redirectsInto(s, at) {
+  let i = 0, word = -1, gt = -1, prev = false;
+  for (const c of at) {
+    for (; i < c; i++) {
+      if (/\s/.test(s[i])) { if (word !== -1) { prev = s[i - 1] === '>' || (s[i - 1] === '|' && s[i - 2] === '>'); word = -1; } }
+      else { if (word === -1) word = i; if (s[i] === '>') gt = i; }
+    }
+    if (prev || (word !== -1 && gt >= word)) return true;
+  }
+  return false;
+}
+// The first command word in a segment decides it: a later one finds its flag and the name in a suffix of the same range.
+// An interpreter's code runs to the end of the command, so for it the name may come in any later segment.
+// A flag starts inside the segment but may run on to the next space, so it is read up to there (the space found once, kept),
+// at most 256 characters past the segment so a long run of segments stays linear.
+function toolBefore(s, at, word, flag) {
+  let ws = -1;
+  for (let from = 0; from < s.length;) {
+    const m = find(word, s, from);
+    if (!m) return false;
+    const end = sepAfter(s, m.end);
+    let after = m.end, until = end;
+    if (flag) {
+      if (ws !== s.length && ws <= end) { const w = find(/\s/g, s, end + 1); ws = w ? w.i : s.length; }
+      const f = find(flag, s.slice(m.end, Math.min(ws + 1, end + 257)), 0);
+      if (!f || m.end + f.i > end) { from = end + 1; continue; }
+      after = m.end + f.end;
+      until = flag === CODE_FLAG ? s.length : sepAfter(s, after);
+    }
+    if (firstFrom(at, after) < until) return true;
+    from = end + 1;
+  }
+  return false;
+}
+function ownedWrite(cmd) {
+  const s = String(cmd).toLowerCase();
+  for (const [name, reason] of OWNED_FILES) {
+    const at = [];
+    for (let i = s.indexOf(name); i !== -1; i = s.indexOf(name, i + 1)) at.push(i);
+    if (at.length && (redirectsInto(s, at) || toolBefore(s, at, FILE_TOOL) || toolBefore(s, at, IN_PLACE, IN_PLACE_FLAG) || toolBefore(s, at, INTERP, CODE_FLAG))) return REASONS[reason];
+  }
+  return '';
+}
 export const watchesPath = (p) => /(?:^|[\\/])watches\.json$/i.test(String(p).trim());
 const squigglePath = (p) => /(?:^|[\\/])squiggle\.json$/i.test(String(p).trim());
-export const ownedFileReason = (p) => (watchesPath(p) && REASONS.watches) || (squigglePath(p) && REASONS.squiggle) || '';
+const roomPath = (p) => /(?:^|[\\/])room\.json$/i.test(String(p).trim());
+export const ownedFileReason = (p) => (watchesPath(p) && REASONS.watches) || (squigglePath(p) && REASONS.squiggle) || (roomPath(p) && REASONS.roomFile) || '';
 // Edit and write tools: a path argument that is the file. Contents that name it pass.
 export const editReason = (tool, input = {}) => (/edit|write|patch|replace|create/i.test(tool || '') && Object.entries(input || {}).map(([k, v]) => /path|file|target/i.test(k) && typeof v === 'string' && ownedFileReason(v)).find(Boolean)) || '';
 // The reason a path or shell command is refused, or ''.
@@ -337,7 +384,7 @@ export function commandReason(cmd, cwd = process.cwd(), home = os.homedir()) {
   if (fencedCommand(cmd, cwd, home)) return REASONS.dirs;
   const raw = cmd; cmd = unquote(cmd);
   if (mentionsSsh(cmd, home) || (startsHome(cmd, cwd, home) && /(^|[\s=;&|(`])\.ssh\b/i.test(cmd)) || relReason(cmd, cwd, home) === REASONS.ssh) return REASONS.ssh;
-  return treeReason(cmd, cwd, home) || (pushes(cmd) || pushesInside(raw) ? REASONS.push : '') || (watchWrite(cmd) ? REASONS.watches : squiggleWrite(cmd) ? REASONS.squiggle : '');
+  return treeReason(cmd, cwd, home) || (pushes(cmd) || pushesInside(raw) ? REASONS.push : '') || ownedWrite(cmd);
 }
 
 // Private data (config privateDirs, privateTools, privateRemote): folders, tools and remote machines only Claude squiggles may
