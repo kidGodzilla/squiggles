@@ -2,6 +2,7 @@
 // ~/.ssh, and git push (squiggles commit; pushing is yours). Pi and Cursor have no approval step, so this is all that stops them.
 // A rough fence, not a sandbox: shell commands are read as text, so a determined command can still get past it.
 import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -255,8 +256,13 @@ const GIT_OPTS = String.raw`(\s+(-[Cc]\s+\S+|--(git-dir|work-tree|namespace|exec
 // A subcommand computed at run time ($(...), a backtick, $var, $'\x70...') can't be read: refused as one. "$@" in a wrapper is fine.
 const ARG_OPTS = 'git-dir|work-tree|namespace|exec-path|config-env|super-prefix|attr-source|shallow-file';
 // Here a flag that takes a value (-C dir) must take it, so the value isn't read as the subcommand.
-const computedSub = new RegExp(String.raw`\bgit\b(\s+(-[Cc]\s+\S+|--(${ARG_OPTS})\s+\S+|--?(?!(?:[Cc]|${ARG_OPTS})(?![\w=-]))[\w-]+(=\S+)?))*\s+(?:\$(?![@*])|\x60)`);
-export const pushes = (cmd) => computedSub.test(cmd) || new RegExp(String.raw`\bgit\b` + GIT_OPTS + String.raw`\s+push\b`).test(cmd) || /\bgit\b.*\bsend-pack\b/.test(cmd) || /\bgit\b[^;&|\n]*\b(subtree|lfs)\b[^;&|\n]*\bpush\b/.test(cmd)
+const computedSub = new RegExp(String.raw`\bgit\b(\s+(-[Cc]\s+\S+|--(${ARG_OPTS})\s+\S+|--?(?!(?:[Cc]|${ARG_OPTS})(?![\w=-]))[\w-]+(=\S+)?))*\s+[\w-]*(?:\$(?![@*])|\x60)`);
+// A shell function that runs git (f() { git "$@"; }; f push), git named by a substitution ($(which git) push), or an alias
+// written straight into a git config file: refused when push is a word anywhere in the command.
+const FUNC_DEF = /(?:\bfunction\s+[\w.:-]+|(?<![\w.:-])[\w.:-]+\s*\(\s*\))\s*[{(]/, GIT_SUB = /(?:^|[;&|({\n]|\b(?:then|do|else|env|command|exec|sudo|nohup|time))\s*(?:\w+=[^\s;&|]*\s+)*["']?(?:\$\(|\x60)[^)\x60]{0,200}\bgit\b/;
+const CONFIG_FILE = /(?:\.git\/config|\.gitconfig|\bgit\/config)\b/;
+const wrapsGit = (cmd) => /\bpush\b/.test(cmd) && (GIT_SUB.test(cmd) || CONFIG_FILE.test(cmd) || (FUNC_DEF.test(cmd) && /\bgit\b/.test(cmd)));
+export const pushes = (cmd) => computedSub.test(cmd) || wrapsGit(cmd) || new RegExp(String.raw`\bgit\b` + GIT_OPTS + String.raw`\s+push\b`).test(cmd) || /\bgit\b.*\bsend-pack\b/.test(cmd) || /\bgit\b[^;&|\n]*\b(subtree|lfs)\b[^;&|\n]*\bpush\b/.test(cmd)
   || /\balias\.[\w-]+[\s=]+!?(git\s+)?push\b/.test(cmd) || (/\balias\s+[\w-]+=[^;&|\n]*\bgit\b/.test(cmd) && /\bpush\b/.test(cmd)) || (/\bpush\b/.test(cmd) && (/\$\{?\w|\beval\b/.test(cmd) || /\bxargs\b[^;&|\n]*\bgit\b/.test(cmd)) && /\bgit\b/.test(cmd));
 // Recursive reads and copies (grep -r, rg, find, cp -r, tar, du, ls -R, rsync -a, zip -r, tree) rooted at home or above reach
 // every fenced folder at once. Each simple command is checked from the folder it runs in, following cd and env -C; no path means that folder.
@@ -458,13 +464,39 @@ export function hookSkipReason(raw, dirs) {
   for (const s of seg) for (const m of s.matchAll(/\bgit\b[^;&|\n]*?\s-C\s+(\S+)/g)) for (const d of dirs) for (const x of new Set([m[1], m[1].replace(/_/g, ' ')])) at.add(path.resolve(d, x)); // oneWord turned spaces into _
   return [...at].some(hooked) ? REASONS.hooks : '';
 }
+// An alias already in git config (git p, with alias.p = push) reads as an unknown subcommand: each one is looked up in the
+// folders the command runs in, following alias chains. Built-in subcommands can't be aliased, so they cost nothing.
+const BUILTIN = new Set(('add am apply archive bisect blame branch bundle cat-file checkout cherry cherry-pick clean clone commit config count-objects '
+  + 'describe diff diff-files diff-index diff-tree fetch for-each-ref format-patch fsck gc grep hash-object help init log ls-files ls-remote ls-tree '
+  + 'merge merge-base mv name-rev notes pull range-diff rebase reflog remote repack replace reset restore rev-list rev-parse revert rm shortlog show '
+  + 'show-ref sparse-checkout stash status submodule switch symbolic-ref tag update-index update-ref var version whatchanged worktree').split(' '));
+const GIT_SUBCMD = new RegExp(String.raw`(?:^|[\s;&|(\x60])git((?:\s+(?:-[Cc]\s+\S+|--(?:${ARG_OPTS})\s+\S+|--?[\w-]+(?:=\S+)?))*)\s+([\w.-]+)`, 'g');
+function aliases(dir) {
+  let out = '';
+  try { out = execFileSync('git', ['config', '--get-regexp', '^alias\\.'], { cwd: dir, encoding: 'utf8', timeout: 3000, stdio: ['ignore', 'pipe', 'ignore'] }); } catch { return new Map(); }
+  return new Map(out.split('\n').filter(Boolean).map((l) => { const i = l.indexOf(' '); return [l.slice(6, i < 0 ? undefined : i).toLowerCase(), i < 0 ? '' : l.slice(i + 1)]; }));
+}
+function aliasPushes(cmd, dirs) {
+  const subs = [...cmd.matchAll(GIT_SUBCMD)].map((m) => [m[2].toLowerCase(), /-C\s+(\S+)/.exec(m[1])?.[1]]).filter(([w]) => !BUILTIN.has(w) && w !== 'push');
+  if (!subs.length) return false;
+  const seen = new Map(), lookup = (d) => { if (!seen.has(d)) seen.set(d, aliases(d)); return seen.get(d); };
+  for (const [w, c] of subs) for (const d of new Set(dirs.map((d) => (c ? path.resolve(d, c) : d)))) {
+    const map = lookup(d);
+    for (let name = w, n = 0; map.has(name) && n < 10; n++) {
+      const v = map.get(name).trim();
+      if (v.startsWith('!') ? pushes(unquote(v.slice(1))) : /^(?:push|send-pack)\b/.test(v) || /\b(?:subtree|lfs)\b.*\bpush\b/.test(v)) return true;
+      name = v.split(/\s+/)[0].toLowerCase();
+    }
+  }
+  return false;
+}
 export function commandReason(cmd, cwd = process.cwd(), home = os.homedir()) {
   if (String(cmd).length > MAX_COMMAND) return REASONS.long;
   if (bigBrace(cmd)) return REASONS.word;
   if (fencedCommand(cmd, cwd, home)) return REASONS.dirs;
   const raw = cmd; cmd = unquote(cmd);
   if (mentionsSsh(cmd, home) || (startsHome(cmd, cwd, home) && /(^|[\s=;&|(`])\.ssh\b/i.test(cmd)) || relReason(cmd, cwd, home) === REASONS.ssh) return REASONS.ssh;
-  return treeReason(cmd, cwd, home) || (pushes(cmd) || pushesInside(raw) ? REASONS.push : '') || ownedWrite(cmd) || hookSkipReason(raw, cdDirs(cmd, cwd, home));
+  return treeReason(cmd, cwd, home) || (pushes(cmd) || pushesInside(raw) || wrapsGit(raw) || aliasPushes(cmd, cdDirs(cmd, cwd, home)) ? REASONS.push : '') || ownedWrite(cmd) || hookSkipReason(raw, cdDirs(cmd, cwd, home));
 }
 
 // Private data (config privateDirs, privateTools, privateRemote): folders, tools and remote machines only Claude squiggles may
