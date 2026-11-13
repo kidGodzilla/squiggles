@@ -246,7 +246,7 @@ test('xargs flags clustered ahead of the mark; a script fed in by xargs', () => 
 
 test('a long run of function words takes under 1 s', () => {
   for (const c of ['function '.repeat(30000), 'function a '.repeat(24000)]) {
-    const t = performance.now(); bash(c); const ms = performance.now() - t;
+    const t = process.cpuUsage(); bash(c); const { user, system } = process.cpuUsage(t), ms = (user + system) / 1000;
     assert.ok(ms < 1000, `${c.slice(0, 11)}: ${Math.round(ms)} ms`);
   }
 });
