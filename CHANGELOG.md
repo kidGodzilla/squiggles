@@ -232,6 +232,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Settings number inputs show an accent border on focus and are 44px tall on touch screens.
 
 ### Fixed
+- A request that asks who is calling more than once looks it up once: each look ran `lsof` and `ps -A`.
 - Usage skips a folder named like a run log instead of failing the report.
 - A video whose read fails mid-stream closes the response instead of hanging it.
 - Watches: while any squiggle is Low, an approved watch can still file a plain alert note (serious or normal). Any other note write from a watch still needs the passcode.

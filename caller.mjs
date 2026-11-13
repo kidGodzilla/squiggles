@@ -12,18 +12,20 @@ export function chain(pid, pp) { const out = []; while (pid > 1 && !out.includes
 export const sockPids = (lsof, self = process.pid) => [...new Set(lsof.split('\n').filter((l) => /^p\d+$/.test(l)).map((l) => +l.slice(1)))].filter((p) => p !== self);
 
 // The one process on the far end of a local socket, null when unknown. A header can't change it: a proxy is its own process.
-async function peerPid(req) {
+// Kept per request: routes ask who is calling more than once, and each ask costs an lsof and a ps -A. A new request looks again.
+const once = (fn) => { const seen = new WeakMap(); return (req) => { if (!seen.has(req)) seen.set(req, fn(req)); return seen.get(req); }; };
+const peerPid = once(async (req) => {
   const port = req.socket?.remotePort;
   if (!port || !/^(::1|127\.|::ffff:127\.)/.test(req.socket?.remoteAddress || '')) return null;
   const pids = sockPids(await run('lsof', ['-nP', `-iTCP:${port}`, '-sTCP:ESTABLISHED', '-Fp']));
   return pids.length === 1 ? pids[0] : null;
-}
+});
 
 // The calling process's chain, [] when unknown (not local, or the lookup failed): callers decide what unknown means.
-export async function callerChain(req) {
+export const callerChain = once(async (req) => {
   const pid = await peerPid(req); if (!pid) return [];
   return chain(pid, parents(await run('ps', ['-A', '-o', 'pid=,ppid='])));
-}
+});
 
 // Installed browsers, by the file the process runs: lsof's txt entry, because `ps comm` is argv[0], which any process sets.
 // Whole paths, so a copy elsewhere fails. Unlisted browsers fall back to "terminal"; a room passcode lets them in by session.

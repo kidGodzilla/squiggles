@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { parents, chain, sockPids, callerChain } from '../caller.mjs';
 
@@ -23,4 +26,20 @@ test('callerChain finds the process on the other end, and its parent', async () 
   await new Promise((r) => child.on('exit', r)); srv.close();
   assert.equal(got[0], child.pid); assert.equal(got[1], process.pid);
   assert.deepEqual(await callerChain({ socket: { remoteAddress: '10.0.0.2', remotePort: 1 }, headers: {} }), []);
+});
+
+// Routes ask who is calling more than once per request; each ask cost an lsof and a ps -A.
+test('one request looks its caller up once, however many times it asks', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'caller-')), log = path.join(dir, 'log'), was = process.env.PATH;
+  for (const [n, out] of [['lsof', 'p4242'], ['ps', '4242 1']]) fs.writeFileSync(path.join(dir, n), `#!/bin/sh\necho ${n} >> ${log}\necho ${out}\n`, { mode: 0o755 });
+  process.env.PATH = `${dir}:${was}`;
+  try {
+    const req = { socket: { remotePort: 50001, remoteAddress: '127.0.0.1' } };
+    const [a, b] = await Promise.all([callerChain(req), callerChain(req)]);
+    const c = await callerChain(req);
+    assert.deepEqual([a, b, c], [[4242], [4242], [4242]]);
+    assert.deepEqual(fs.readFileSync(log, 'utf8').trim().split('\n').sort(), ['lsof', 'ps']);
+    await callerChain({ socket: { ...req.socket } }); // a new request looks again
+    assert.equal(fs.readFileSync(log, 'utf8').trim().split('\n').length, 4);
+  } finally { process.env.PATH = was; fs.rmSync(dir, { recursive: true, force: true }); }
 });
