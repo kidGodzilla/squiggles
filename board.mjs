@@ -160,6 +160,9 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
     for (const x of whoIs ? text.matchAll(loose ? /\b([A-Z][\w-]*)\b/g : /@([\w-]+)/g) : []) { const v = whoIs(x[1], loose); if (v) return { t: text, who: v }; }
     return { t: text };
   }
+  // A step is a job someone does, never a permission. Only the opening verb counts: "open the page and press Approve" is a job.
+  const APPROVAL = /^(\d+\.\s*)?(please\s+)?(approve|sign[- ]off|give (the|a|your) (go|ok|okay)\b|green[- ]?light|ok(ay)?\s+(the|this|running)\b|authori[sz]e)/i;
+  const plainJob = (t, id) => { if (APPROVAL.test(t)) throw new Error(`a step is a job someone does, not a permission. For a yes or no from the owner: pick ask "<question>" "Yes" "No" --task ${id}, then file the job itself once they answer. A console click is a job: say it as one ("open <page> and press Approve")`); };
   // Each tagged squiggle hears its open steps; the user's stay theirs, in the Review tab. Untagged ones go to the task's owner to tag.
   const told = [];
   function tellSteps(task, list, only) {
@@ -363,6 +366,7 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
         if (op === 'needs' && /^after\b/i.test(t)) throw new Error(`that is after merging: task after ${task.id} add "<owner>: <step>"`);
         const g = tagStep(t);
         if (whoIs && !g.who) throw new Error(`tag the step's owner first, a squiggle or Owner: task ${op} ${task.id} add "Owner: ${t.replace(/"/g, "'")}"`);
+        plainJob(g.t, task.id);
         list.push({ t: g.t, done: false, ...(g.who ? { who: g.who } : {}) });
         if (op === 'needs' ? task.status === 'review' : task.status === 'done') { task[op] = list; tellSteps(task, op, [list.length - 1]); }
       }
@@ -553,7 +557,9 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
   }
   // Concurrent callers share one listing; git runs off the event loop, 6 branches at a time.
   let listing = null;
-  const merges = () => listing ||= (async () => { const q = memo(); await mergeSweep(q); return conflictSweep(await pool(inQueue(), 6, (t) => mergeInfo(t, q))); })().finally(() => { listing = null; });
+  // Steps come off the board last: git takes seconds, and a step ticked meanwhile must not come back open.
+  const liveSteps = (list) => { const now = new Map(tasks().map((t) => [t.id, t])); return list.map((r) => { const t = now.get(r.id); return t ? { ...r, needs: t.needs || [], after: t.after || [] } : r; }); };
+  const merges = () => listing ||= (async () => { const q = memo(); await mergeSweep(q); return liveSteps(await conflictSweep(await pool(inQueue(), 6, (t) => mergeInfo(t, q)))); })().finally(() => { listing = null; });
   // Auto send-back: a review branch that conflicts with its base goes back to doing with the files, and onConflict
   // tells the owner. Once per conflict: the same branch and base commits stay in review if resubmitted unchanged.
   async function conflictSweep(list) {

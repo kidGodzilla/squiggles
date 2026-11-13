@@ -189,3 +189,26 @@ test('an open goal\'s review branch shows in the Review tab; one on main does no
   assert.deepEqual((await b.merges()).map((x) => x.id), ['t1']);
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+// A step ticked while a listing ran came back unticked, in that listing and any request that joined it.
+test('a listing already running answers with the steps as they are now', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'merges-live-')), repo = path.join(dir, 'repo'), bin = path.join(dir, 'bin'), started = path.join(dir, 'started'), was = process.env.PATH;
+  const g = (...a) => execFileSync('git', ['-C', repo, ...a], { stdio: 'pipe', env: { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' } });
+  fs.mkdirSync(repo); g('init', '-q', '-b', 'main'); fs.writeFileSync(path.join(repo, 'a'), 'a'); g('add', 'a'); g('commit', '-q', '-m', 'base');
+  g('checkout', '-q', '-b', 'work'); fs.writeFileSync(path.join(repo, 'b'), 'b'); g('add', 'b'); g('commit', '-q', '-m', 'work'); g('checkout', '-q', 'main');
+  fs.writeFileSync(path.join(dir, 'goals.json'), JSON.stringify({ active: [{ id: 'g', title: 'G', merge: 'gated' }] }));
+  fs.writeFileSync(path.join(dir, 'tasks.json'), JSON.stringify({ tasks: [{ id: 't1', title: 'x', goal: 'g', status: 'review', repo, branch: 'work', needs: [{ t: 'sync it', done: false }] }] }));
+  // Holds the listing at its first `git log`, past the point where the row was read.
+  fs.mkdirSync(bin); fs.writeFileSync(path.join(bin, 'git'), `#!/bin/sh\nfor a in "$@"; do if [ "$a" = log ]; then touch ${started}; sleep 1; fi; done\nexec ${execFileSync('which', ['git'], { encoding: 'utf8' }).trim()} "$@"\n`, { mode: 0o755 });
+  process.env.PATH = `${bin}:${was}`;
+  try {
+    const b = createBoard(dir, () => {}), running = b.merges();
+    while (!fs.existsSync(started)) await new Promise((r) => setTimeout(r, 20));
+    b.taskOp({ op: 'needs', id: 't1', act: 'done', n: '1' });
+    b.taskOp({ op: 'after', id: 't1', act: 'add', text: 'run the migration' });
+    const [a, [c]] = [await running, await b.merges()];
+    assert.deepEqual(a[0].needs, [{ t: 'sync it', done: true }]);
+    assert.deepEqual(a[0].after, [{ t: 'run the migration', done: false }]);
+    assert.deepEqual(c.needs, a[0].needs);
+  } finally { process.env.PATH = was; fs.rmSync(dir, { recursive: true, force: true }); }
+});
