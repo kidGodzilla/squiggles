@@ -49,3 +49,21 @@ test('merge steps carry an owner and go to them on review and merge', async () =
   assert.throws(() => b.taskOp({ op: 'after', id: 't1', act: 'tag', n: '2', who: 'nobody' }), /tag 2 with/);
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test('a step is a job, never an approval: those go to picks', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'approve-'));
+  const b = createBoard(dir, () => {}, { whoIs: (x) => ({ owner: 'owner', otto: 'ops' })[String(x).toLowerCase()] });
+  const t = b.taskOp({ op: 'add', title: 'x' }), add = (op, text) => b.taskOp({ op, id: t.id, act: 'add', text });
+  for (const s of ['Owner: approve running `backfill --apply`', 'Owner: Approve the deploy', '1. Owner: sign off on the migration', 'Owner: give the go-ahead for Otto', 'Owner: OK the rollout', 'Otto: please approve this', 'Owner: green-light the sync'])
+    for (const op of ['needs', 'after']) assert.throws(() => add(op, s), /pick ask/, s);
+  add('after', 'Otto: run `backfill --apply`');
+  add('after', 'Owner: open https://example.com/consent and press Approve');
+  add('needs', 'Otto: confirm the key is set on every app');
+  const x = b.tasks().find((y) => y.id === t.id);
+  assert.equal(x.after.length, 2); assert.equal(x.needs.length, 1);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('the squiggle prompt keeps approvals out of the step lists', () => {
+  assert.match(fs.readFileSync(new URL('../prompts/squiggle.md', import.meta.url), 'utf8'), /never an approval/);
+});
