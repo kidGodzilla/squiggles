@@ -24,11 +24,11 @@ test('upgrade: an older clone checks, then pulls and keeps its room', () => {
     }
     git(src, 'init', '-q', '-b', 'main'); git(src, 'add', '-A'); git(src, 'commit', '-qm', 'old');
     const bare = path.join(t, 'up.git');
-    git(t, 'clone', '-q', '--bare', src, bare);
+    git(t, 'clone', '-q', '--no-local', '--bare', src, bare); // no hardlinks: git's local-clone copy check fails under heavy load
 
     // The user's install: a clone of the old version, with a room in its data dir and (old layout) inside the clone.
     const clone = path.join(t, 'squiggles'), home = path.join(t, 'data');
-    git(t, 'clone', '-q', bare, clone);
+    git(t, 'clone', '-q', '--no-local', bare, clone);
     const room = {
       [path.join(home, 'squiggles', 'lead', 'charter.md')]: 'My lead, my words.\n',
       [path.join(home, 'squiggles', 'lead', 'journal.md')]: '## day one\n',
