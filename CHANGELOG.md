@@ -328,7 +328,6 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Views, the open chat, board filters, merge diff and calendar week live in the URL: back, forward, reload and copied links work.
 
 ### Changed
-- Squiggle builds run two at a time: `xcodebuild` and `gradle` wait for a free slot (at most 15 minutes), and `./gradlew` gets two workers.
 - The scheduler staggers wakes per provider, 2 minutes apart (was 10 minutes across all).
 
 ### Fixed
