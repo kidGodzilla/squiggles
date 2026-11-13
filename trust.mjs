@@ -35,8 +35,11 @@ export const PERMISSION_MODES = ['auto', 'acceptEdits', 'plan', 'bypassPermissio
 const badMode = (b) => 'permissionMode' in b && !PERMISSION_MODES.includes(b.permissionMode) && { status: 400, error: `permissionMode: ${PERMISSION_MODES.join(', ')}` };
 // Hiring: a new squiggle is all lead-only fields, so only the lead or the user's unlocked page creates one.
 // With no room passcode any local program could claim the room, so nobody hires, the lead included, until one is set.
+// The id a hire gets; the server and the guard share it so a nameless body can't become an 'undefined' squiggle.
+export const squiggleSlug = ({ id, name } = {}) => String(id || name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+const badHire = (b) => (!String(b.name || '').trim() || !squiggleSlug(b)) && { status: 400, error: 'name required (usage: create <id> <name> <role> <cwd> <every> <charter>)' };
 export function createRefusal(b, { caller = '', callerLead = false, owner = () => false, passcode = true, user = 'the user' } = {}) {
-  const bad = badMode(b); if (bad) return bad;
+  const bad = badMode(b) || badHire(b); if (bad) return bad;
   if (caller && !callerLead) return { status: 403, error: `${caller} can't hire: ${user} or the lead does` };
   if (!passcode) return { status: 403, error: `Set a room passcode first (Settings > Security): ${user} sets it before the first hire` };
   if (caller) return null;

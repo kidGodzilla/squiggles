@@ -384,7 +384,7 @@ const cmds = {
     return call('/defaults', { [a[0]]: a[1] === 'default' ? '' : a[1] });
   },
   rename: () => call(`/squiggles/${a[0]}/update`, { name: a[1], ...(a[2] ? { role: a[2] } : {}) }),
-  create: () => call('/squiggles', { id: a[0], name: a[1], role: a[2], cwd: a[3], every: a[4], charter: a[5] }),
+  create: () => { if (a.slice(0, 6).length < 6 || a.slice(0, 6).some((x) => !String(x).trim()) || !/^\d+$/.test(a[4])) throw new Error('usage: create <id> <name> <role> <cwd> <every> <charter> (every in minutes, 0 for none)'); return call('/squiggles', { id: a[0], name: a[1], role: a[2], cwd: a[3], every: a[4], charter: a[5] }); },
   // look <id> [<generator>[:<options>]|<character>|auto|shuffle]: the squiggle's character; auto follows the room default
   // (room characters <generator>); shuffle rerolls the seed. Options: a bare value or k=v,k=v, checked against ui/cast.js.
   look: async () => {

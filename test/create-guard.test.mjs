@@ -32,3 +32,20 @@ test('a squiggle cannot set, clear or loosen the room passcode', () => {
   const route = src.slice(src.indexOf("url.pathname === '/api/passcode'"), src.indexOf('pass.op(req, b)'));
   assert.match(route, /\['set', 'clear', 'local'\]\.includes\(b\.op\) && await callerSquiggle\(req\)/);
 });
+
+test('create without a name is refused, never an "undefined" squiggle', () => {
+  const lead = { caller: 'lead', callerLead: true };
+  assert.equal(createRefusal({}, lead)?.status, 400);
+  assert.equal(createRefusal({ role: 'x' }, lead)?.status, 400);
+  assert.equal(createRefusal({ name: '  ', role: 'x' }, lead)?.status, 400);
+  assert.equal(createRefusal({ id: '!!', name: '??', role: 'x' }, lead)?.status, 400, 'no usable id');
+  assert.equal(createRefusal({ name: 'Ann' }, lead), null);
+});
+
+test('bare create in the CLI prints usage and calls nothing', async () => {
+  const { execFileSync } = await import('node:child_process');
+  let out = '';
+  try { execFileSync(process.execPath, [new URL('../bin/agents.mjs', import.meta.url).pathname, 'create', 'ann'], { env: { ...process.env, PORT: '9' }, stdio: 'pipe' }); }
+  catch (e) { out = String(e.stderr) + String(e.stdout); }
+  assert.match(out, /usage: create <id> <name> <role> <cwd> <every> <charter>/);
+});

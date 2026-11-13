@@ -225,6 +225,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Settings number inputs show an accent border on focus and are 44px tall on touch screens.
 
 ### Fixed
+- Hiring: a create with no usable name is refused instead of making an "undefined" squiggle; the CLI prints `create` usage when arguments are missing.
 - `upgrade` restarts the login item only when it runs this clone, so upgrading a second copy can't restart your room.
 - Merge: a branch named after its task (`t12-x`, `me/t12`) is found in every goal's repos, so a repo only another goal lists merges with the rest; generic branch names stay in their goal.
 - Wake times no longer replay missed slots late: a fixed time missed by 3 hours or more waits for its next slot, and a work window that has ended skips to its next day (a 9:00 wake no longer runs at 21:00 after a day off).

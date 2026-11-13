@@ -25,7 +25,7 @@ import { wantsPrecheck, precheckPrompt, runPrecheck, PRECHECK_MODEL } from './pr
 import { createWaits, bgStarted, bgEnded, ownRuns } from './waits.mjs';
 import { createWatches } from './watches.mjs';
 import { mimeFor } from './mime.mjs';
-import { trustLevel, trustOf, trustRules, updateRefusal, createRefusal, quitRefusal, slotsRefusal, shareRefusal, fileRmRefusal, fileBy, charterDiff, charterEdit, charterStart } from './trust.mjs';
+import { trustLevel, trustOf, trustRules, updateRefusal, createRefusal, squiggleSlug, quitRefusal, slotsRefusal, shareRefusal, fileRmRefusal, fileBy, charterDiff, charterEdit, charterStart } from './trust.mjs';
 import { KEYS, DEFAULT_SLOTS, slotKey, rankOf, limitOf, enqueue, drain, leave, checkSlots } from './slots.mjs';
 import { dropStale } from './stale.mjs';
 import { createLedger } from './cost.mjs';
@@ -126,7 +126,7 @@ function setDefaults(b) {
   fs.writeFileSync(ROOMCFG, JSON.stringify({ ...roomCfg(), defaults: d }, null, 2) + '\n'); return d;
 }
 function createSquiggle({ id, name, role, cwd, charter, every, permissionMode = 'auto', model }) {
-  id = String(id || name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  id = squiggleSlug({ id, name });
   if (!id || fs.existsSync(sqDir(id))) throw new Error('name taken or empty');
   checkModelEffort({ model }, EXTRA_MODELS); const d = teamDefaults();
   saveSquiggle({ id, name, role, cwd: cwd || '~', every: every == null || every === '' ? d.every : Number(every) || 0, permissionMode, model: model || d.model || undefined, effort: d.effort || undefined, paused: false, created: now() });
