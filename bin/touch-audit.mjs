@@ -1,9 +1,9 @@
 // Touch-target audit: every visible control under 44x44 on a coarse pointer at 390x844, on a temp data dir (never the live room).
-// node bin/touch-audit.mjs [--json out.json]; exits 1 when a control is too small.
+// node bin/touch-audit.mjs [--json out.json] [--shots dir]; exits 1 when a control is too small.
 import fs from 'node:fs'; import net from 'node:net'; import os from 'node:os'; import path from 'node:path';
 import { spawn, execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-const REPO = path.dirname(path.dirname(fileURLToPath(import.meta.url))), JSON_OUT = process.argv.includes('--json') ? process.argv[process.argv.indexOf('--json') + 1] : null;
+const REPO = path.dirname(path.dirname(fileURLToPath(import.meta.url))), arg = (k) => (process.argv.includes(k) ? process.argv[process.argv.indexOf(k) + 1] : null), JSON_OUT = arg('--json'), SHOTS = arg('--shots'); // --shots <dir>: one PNG per view
 const SET_TABS = JSON.parse(fs.readFileSync(path.join(REPO, 'ui/board.js'), 'utf8').match(/const SET_TABS = (\[[^\]]*\])/)[1].replace(/'/g, '"'));
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 const freePort = () => new Promise((res) => { const s = net.createServer().listen(0, '127.0.0.1', () => { const { port } = s.address(); s.close(() => res(port)); }); });
@@ -46,13 +46,14 @@ try {
   const ws = new WebSocket(tgt.webSocketDebuggerUrl); await new Promise((r) => (ws.onopen = r));
   let n = 0; const wait = new Map();
   ws.onmessage = (m) => { const d = JSON.parse(m.data); if (d.id && wait.has(d.id)) { wait.get(d.id)(d); wait.delete(d.id); } };
-  const cdp = (method, params = {}) => new Promise((r) => { const id = ++n; wait.set(id, r); ws.send(JSON.stringify({ id, method, params })); });
+  const cdp = (method, params = {}) => new Promise((r, j) => { const id = ++n; wait.set(id, r); ws.send(JSON.stringify({ id, method, params })); setTimeout(() => wait.delete(id) && j(new Error(`${method}: no reply in 20s`)), 20e3).unref(); }); // a reply lost to a navigation fails instead of hanging
   const ev = async (expr) => { const r = await cdp('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true }); if (r.result?.exceptionDetails) throw new Error(JSON.stringify(r.result.exceptionDetails).slice(0, 400)); return r.result?.result?.value; };
+  const go = async (why) => { for (let i = 0; ; i++) { try { return await cdp('Page.navigate', { url: base + '/' }); } catch (e) { if (i === 2) throw new Error(`${why}: ${e.message}`); console.log(`retry navigate (${why})`); } } };
   await cdp('Page.enable'); await cdp('Runtime.enable');
   await cdp('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
   await cdp('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
   await cdp('Emulation.setEmitTouchEventsForMouse', { enabled: true, configuration: 'mobile' });
-  await cdp('Page.navigate', { url: base + '/' }); await pause(2500);
+  await go('first load'); await pause(2500);
   const MQ = "({coarse: matchMedia('(pointer: coarse)').matches, fine: matchMedia('(pointer: fine)').matches, hoverNone: matchMedia('(hover: none)').matches})";
   coarse = await ev(MQ);
   if (!coarse.coarse) {
@@ -103,11 +104,14 @@ try {
     ['task popup', "openTaskNote('t3')"], ['diff', `${nav('merge')};; openDiff('t3')`], ['meeting form', `${nav('calendar')};; editMeeting(${first('#calAdd')})`],
     ['keys', 'window.openKeys?.()'], ['jump', 'window.openJump?.()']];
   for (const [name, js] of views) {
-    await cdp('Page.navigate', { url: base + '/' }); await pause(1800); await ev("document.querySelector('#joinBtn')?.click(), true"); await ev("setView('room'), true"); await pause(400); // fresh page per view: nothing left open from the last one
+    await go(name);
+    for (let t = 0; t < 60 && !(await ev("typeof setView === 'function'").catch(() => false)); t++) await pause(250); // wait for the scripts, not a fixed time
+    await ev("document.querySelector('#joinBtn')?.click(), true"); await ev("setView('room'), true"); await pause(400); // fresh page per view: nothing left open from the last one
     let err; for (let i = 0; i < 3; i++) { try { for (const step of js.split(';;')) { await ev(`(() => { ${step}; return true; })()`); await pause(600); } err = null; break; } catch (e) { err = e; await pause(1000); } } // the board may still be loading
     if (err) { results[name] = { error: String(err.message).slice(0, 200) }; continue; }
     await pause(1200);
     results[name] = await ev(COLLECT);
+    if (SHOTS) { fs.mkdirSync(SHOTS, { recursive: true }); const { result } = await cdp('Page.captureScreenshot', { format: 'png' }); fs.writeFileSync(path.join(SHOTS, name.replace(/\W+/g, '-') + '.png'), Buffer.from(result.data, 'base64')); }
   }
   ws.close();
 } finally {
@@ -130,5 +134,5 @@ for (const [v, r] of Object.entries(results)) {
   for (const x of r.undersized) console.log(`  ${x.pointerOnly ? '(ptr) ' : ''}${x.w}x${x.h}\t${x.key.slice(0, 50)}\t${x.sel.slice(0, 60)}\t${x.file}`);
 }
 const misses = Object.values(results).reduce((n, r) => n + (r.error ? 1 : r.undersized.length), 0);
-console.log(coarse?.coarse ? (misses ? `${misses} problem(s)` : 'all controls 44px or more') : 'coarse pointer not emulated');
+console.log(coarse?.coarse ? (misses ? `${misses} problem(s) in: ${Object.entries(results).filter(([, r]) => r.error || r.undersized.length).map(([v]) => v).join(', ')}` : 'all controls 44px or more') : 'coarse pointer not emulated');
 process.exitCode = coarse?.coarse && !misses ? 0 : 1;
