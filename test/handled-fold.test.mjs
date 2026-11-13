@@ -17,9 +17,9 @@ function room() {
 test('bare Handled. replies share one fold that moves to the bottom', () => {
   const r = room();
   r.report('[Ann · DONE] a'); r.handled();
-  r.report('[Bo · DONE] b'); r.say('Cy is checking it.');
+  r.report('[Bo · DONE] b'); r.say('Al is checking it.');
   r.report('[Di · DONE] c'); r.handled();
   r.report('[Ed · DONE] d'); r.handled();
-  assert.deepEqual(r.shown.map((l) => (l.fold ? `fold ${l.fold.length}` : l.text || l.rep[0])), ['[Bo · DONE] b', 'Cy is checking it.', 'fold 3']);
+  assert.deepEqual(r.shown.map((l) => (l.fold ? `fold ${l.fold.length}` : l.text || l.rep[0])), ['[Bo · DONE] b', 'Al is checking it.', 'fold 3']);
   assert.equal(r.h.filter((l) => l.fold).length, 1);
 });

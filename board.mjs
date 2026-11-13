@@ -145,7 +145,7 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
   const num = (x) => parseInt(String(x.id).slice(1), 10) || 0;
   const lastId = (t) => Math.max(Number(read(TASKS, {}).last) || 0, ...t.map(num), 0);
   const saveTasks = (t) => write(TASKS, { last: lastId(t), tasks: t });
-  // Merge steps name their owner: "Ada: …", "@ops …" or "Owner: …" (the user, or their name). whoIs(word, namesOnly) gives a squiggle id or 'owner'.
+  // Merge steps name their owner: "Bea: …", "@ops …" or "Owner: …" (the user, or their name). whoIs(word, namesOnly) gives a squiggle id or 'owner'.
   // loose (steps filed before tags): the first squiggle named anywhere in the text.
   function tagStep(text, loose) {
     const m = whoIs && text.match(/^(\d+\.\s*)?@?([\w-]+)\s*:\s+|^(\d+\.\s*)?@([\w-]+)\s+/), w = m && whoIs(m[2] || m[4]);

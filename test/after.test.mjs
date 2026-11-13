@@ -27,14 +27,14 @@ test('merge steps carry an owner and go to them on review and merge', async () =
   fs.mkdirSync(repo); g('init', '-q', '-b', 'main'); fs.writeFileSync(path.join(repo, 'a'), 'a'); g('add', 'a'); g('commit', '-q', '-m', 'base');
   g('checkout', '-q', '-b', 't1-x'); fs.writeFileSync(path.join(repo, 'b'), 'b'); g('add', 'b'); g('commit', '-q', '-m', 'x'); g('checkout', '-q', 'main');
   fs.writeFileSync(path.join(dir, 'goals.json'), JSON.stringify({ active: [{ id: 'g', title: 'G', repos: [repo] }] }));
-  fs.writeFileSync(path.join(dir, 'tasks.json'), JSON.stringify({ tasks: [{ id: 't1', title: 'x', goal: 'g', owner: 'builder', status: 'doing', after: [{ t: 'Ada syncs the bucket', done: false }, { t: 'Merge t9 first', done: false }] }] }));
-  const sq = { ops: 'Ada', builder: 'Builder' }, heard = [];
+  fs.writeFileSync(path.join(dir, 'tasks.json'), JSON.stringify({ tasks: [{ id: 't1', title: 'x', goal: 'g', owner: 'builder', status: 'doing', after: [{ t: 'Bea syncs the bucket', done: false }, { t: 'Merge t9 first', done: false }] }] }));
+  const sq = { ops: 'Bea', builder: 'Builder' }, heard = [];
   const whoIs = (w, namesOnly) => { const k = w.toLowerCase(); if (k === 'owner') return 'owner'; return Object.keys(sq).find((id) => (!namesOnly && id === k) || sq[id].toLowerCase() === k) || null; };
   const b = createBoard(dir, () => {}, { whoIs, onSteps: (x) => heard.push(x) });
   let t = b.tasks()[0];
   assert.equal(t.after[0].who, 'ops'); assert.equal(t.after[1].who, undefined); // old steps tagged from names once
   assert.throws(() => b.taskOp({ op: 'needs', id: 't1', act: 'add', text: 'deploy api first' }), /tag the step's owner/);
-  b.taskOp({ op: 'needs', id: 't1', act: 'add', text: 'Ada: deploy api first' });
+  b.taskOp({ op: 'needs', id: 't1', act: 'add', text: 'Bea: deploy api first' });
   b.taskOp({ op: 'needs', id: 't1', act: 'add', text: 'Owner: flip the flag' });
   t = b.tasks()[0]; assert.deepEqual(t.needs, [{ t: 'deploy api first', done: false, who: 'ops' }, { t: 'flip the flag', done: false, who: 'owner' }]);
   assert.equal(heard.length, 0); // not in review yet
@@ -44,7 +44,7 @@ test('merge steps carry an owner and go to them on review and merge', async () =
   assert.equal(heard[0].who, 'builder'); assert.deepEqual(heard[0].steps, [{ n: 3, t: 'rebase on main' }]);
   heard.length = 0; await b.merge('t1', 'owner');
   assert.deepEqual(heard.map((x) => [x.who, x.untagged, x.steps.map((y) => y.n)]), [['ops', false, [1]], ['builder', true, [2]]]);
-  heard.length = 0; b.taskOp({ op: 'after', id: 't1', act: 'tag', n: '2', who: 'Ada' });
+  heard.length = 0; b.taskOp({ op: 'after', id: 't1', act: 'tag', n: '2', who: 'Bea' });
   assert.equal(b.tasks()[0].after[1].who, 'ops'); assert.equal(heard[0].who, 'ops');
   assert.throws(() => b.taskOp({ op: 'after', id: 't1', act: 'tag', n: '2', who: 'nobody' }), /tag 2 with/);
   fs.rmSync(dir, { recursive: true, force: true });

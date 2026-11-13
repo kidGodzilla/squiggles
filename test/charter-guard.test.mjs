@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { updateRefusal, charterDiff } from '../trust.mjs';
 
-const s = { id: 'support', name: 'Tess', trust: 'medium' }, own = (askers, leadId = 'lead') => updateRefusal({}, s, { caller: 'support', charter: true, askers, leadId });
+const s = { id: 'support', name: 'Sam', trust: 'medium' }, own = (askers, leadId = 'lead') => updateRefusal({}, s, { caller: 'support', charter: true, askers, leadId });
 
 test('own charter: refused on a scheduled wake, an inbox note or another squiggle asking', () => {
   for (const a of [[], ['harness'], ['security'], ['Sam']]) assert.equal(own(a)?.status, 403, JSON.stringify(a));

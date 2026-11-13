@@ -1,4 +1,4 @@
-// Vex's scan: a caller the server can't place (curl, a squiggle's detached child) dropped any watch. Only an unlocked session may.
+// Security scan: a caller the server can't place (curl, a squiggle's detached child) dropped any watch. Only an unlocked session may.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
