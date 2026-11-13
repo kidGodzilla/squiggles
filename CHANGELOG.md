@@ -92,6 +92,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - The private-data fence refuses a script fed in by xargs (`xargs sh`, `xargs -I{} sh -c '{} box'`), reads xargs flags clustered ahead of the mark (`-0I{}`), and stays fast on a long run of `function` words, so a slow check can't fail open.
 
 ### Added
+- Squiggles sharing a checkout commit only their own work: a pre-commit check refuses staged lines that were already uncommitted when the turn started, or that another squiggle wrote during it. Installed only in repos with no hooks of their own.
 - Stuck work: `stuck`, the Tasks tab's Stuck filter and the lead's wakes list what stopped moving, oldest first: blocked, waiting, doing or review notes with no status change, week-old todos a person asked for, steps around a review that sit, parents whose parts all finished, and notes whose owner is paused.
 - Burn mode (Settings, Room, or `burn on|off`): Claude squiggles that wake hourly or more often start again as soon as a turn ends, skipping the stagger, the quiet skip and the pre-check. Turns at once still applies. The page or the lead turns it on.
 - `upgrade check` and Settings, Room, Check for updates: see if you're behind, what changed, and what would block the upgrade, without pulling anything.

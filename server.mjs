@@ -5,6 +5,7 @@ import { spawn, execFile, execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import crypto from 'node:crypto';
 import { slowSync, timed } from './slow.mjs';
+import { snapshot as dirtySnapshot, installHook, noteWrite } from './commit-guard.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -319,7 +320,7 @@ function launch(s) {
   r.resumedFrom = r.sessionId || null;
 
   // CLAUDE_ENV_FILE runs before each Bash command: nvm's Node, not Homebrew's.
-  const proc = spawn('claude', args, { cwd: home(s.cwd), stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, ...buildEnv(), AGENTS_ID: s.id, AGENTS_NODE: process.execPath, CLAUDE_ENV_FILE: path.join(ROOT, 'bin', 'squiggle-env.sh'), ...mcp.env } });
+  const proc = spawn('claude', args, { cwd: home(s.cwd), stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, ...buildEnv(), AGENTS_ID: s.id, AGENTS_NODE: process.execPath, SQUIGGLES_HOME: DATA, CLAUDE_ENV_FILE: path.join(ROOT, 'bin', 'squiggle-env.sh'), ...mcp.env } });
   lowPriority(s, proc);
   r.proc = proc;
   let buf = '', lastText = '';
@@ -352,7 +353,7 @@ function launch(s) {
         }
         for (const c of ev.message.content || []) {
           if (c.type === 'text' && c.text.trim()) { lastText = c.text; const t = s.lead ? unstale(s.id, c.text) : c.text; if (t.trim()) emit(s.id, { k: 'say', text: t }); }
-          else if (c.type === 'tool_use') emit(s.id, toolEvent(c));
+          else if (c.type === 'tool_use') { noteWrite(s.id, c, DATA); emit(s.id, toolEvent(c)); }
         }
       } else if (ev.type === 'user' && Array.isArray(ev.message?.content)) {
         for (const c of ev.message.content) if (c.type === 'tool_result') emit(s.id, resultEvent(c));
@@ -648,7 +649,7 @@ function send(id, text, from = 'owner', { replay = false, human, images = [], as
   // A wake keeps its ⟨wake due⟩ token through the slot and restart queues; what's shown or sent is stamped now.
   const raw = text; text = stampWake(text);
   // Who asked this turn (Proactive): the user, a person, the lead, or a non-scheduled wake. Tasks filed while it runs are theirs, not the squiggle's own idea.
-  if (!replay && r.status !== 'working') { r.asked = []; charterAtStart(s); } // checked again at turn end
+  if (!replay && r.status !== 'working') { r.asked = []; charterAtStart(s); dirtySnapshot(id, home(s.cwd), DATA); } // checked again at turn end
   asker ||= askerOf(from, human, id);
   if (asker) (r.askedBy ||= {})[asker] = Date.now(); // outlives the turn, so a later turn can still file the ask
   if (s.lead && from === 'owner' && !replay) r.userAt = Date.now(); // team reports hold while the user talks with the lead
@@ -1935,5 +1936,10 @@ server.listen(PORT, '127.0.0.1', () => {
   // tailscale serve outlives this server: a room with no passcode doesn't stay shared. After listen, so it's only ever this port's own room.
   // A shorter old code stays shared behind its lock: this asks for any passcode, not a long one.
   if (CONFIG.tailnet && !pass.status({ headers: {}, socket: {} }).set) shareOff().catch((e) => console.error(`share off: ${e.message}`));
+  // Squiggles commit only their own work: a checkout two squiggles share gets bin/hooks/pre-commit (commit-guard.mjs). Not from a temp workspace.
+  if (!tempWorkspace(DATA)) {
+    const byCwd = new Map(); for (const x of listSquiggles()) { const c = home(x.cwd); if (c && c !== ROOT) byCwd.set(c, (byCwd.get(c) || 0) + 1); }
+    for (const [c, n] of byCwd) if (n > 1) installHook(c, path.join(ROOT, 'bin', 'hooks'), (set) => set && console.log(`commit guard hook: ${c}`));
+  }
 });
 for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(sig, () => shutdown(0, false, `${sig}, parent ${process.ppid}`));

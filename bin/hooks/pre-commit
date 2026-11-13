@@ -1,0 +1,4 @@
+#!/bin/sh
+# Squiggles commit only their own work in a shared checkout. The Owner is never checked.
+[ -z "$AGENTS_ID" ] && exit 0
+exec "${AGENTS_NODE:-node}" "$(dirname "$0")/../../commit-guard.mjs"
