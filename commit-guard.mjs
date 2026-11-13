@@ -1,7 +1,7 @@
 // Pre-commit check for squiggle commits (AGENTS_ID set). The Owner is never checked.
 // In a checkout several squiggles share, a squiggle may not commit lines that are someone else's work:
 // lines already uncommitted when its turn started (the server snapshots `git diff HEAD` at turn start),
-// or lines another squiggle wrote with Edit/Write during the turn.
+// or lines another squiggle wrote during the turn, with Edit/Write or with Bash.
 import { execFile, execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -49,6 +49,63 @@ export function noteWrite(id, c, data = dataDir()) {
   if (!id || !file || !path.isAbsolute(file)) return;
   const lines = writtenLines(c.name, c.input); if (!lines.length) return;
   fs.mkdir(dirty(data), { recursive: true }, () => fs.appendFile(wrotePath(id, data), JSON.stringify({ at: Date.now(), file, lines }) + '\n', () => {}));
+}
+// Bash edits (sed, heredocs, scripts) aren't tool inputs, so at the end of each Bash call the files it changed in the
+// squiggle's repo (mtime inside the call) are read back: lines new since its turn start, claimed by nobody, are its writes.
+// When another squiggle's Bash call in the same checkout overlaps, neither is recorded: no guess beats a wrong owner.
+const bashOpen = new Map(), bashDone = []; // tool_use id -> {id, cwd, at}; ended windows, for overlap
+export function bashStart(id, c, cwd) {
+  if (id && cwd && c?.name === 'Bash' && c.id && !c.input?.run_in_background) bashOpen.set(c.id, { id, cwd, at: Date.now() });
+}
+export function bashEnd(useId, data = dataDir(), done = () => {}) {
+  const b = bashOpen.get(useId); if (!b) return done(null);
+  bashOpen.delete(useId); const end = Date.now(); b.end = end;
+  while (bashDone.length && bashDone[0].end < end - 36e5) bashDone.shift();
+  const clash = [...bashOpen.values(), ...bashDone].some((o) => o.id !== b.id && o.cwd === b.cwd && o.at <= end && (o.end ?? end) >= b.at);
+  bashDone.push(b);
+  if (clash) return done(null);
+  execFile('git', ['-C', b.cwd, 'rev-parse', '--show-toplevel'], (e, top) => {
+    if (e) return done(null); top = top.trim();
+    execFile('git', ['-C', top, 'status', '--porcelain', '-z', '--untracked-files=all'], { maxBuffer: 16 << 20 }, (e2, st) => {
+      if (e2) return done(null);
+      const tracked = [], fresh = [];
+      for (const r of st.split('\0')) {
+        if (r.length < 4 || r[2] !== ' ') continue; const f = r.slice(3), abs = path.join(top, f);
+        let m = 0; try { const x = fs.statSync(abs); if (!x.isFile() || x.size > 2e6) continue; m = x.mtimeMs; } catch { continue; }
+        if (m < b.at - 50 || m > end + 50) continue;
+        (r.startsWith('??') ? fresh : tracked).push(f);
+      }
+      if (!tracked.length && !fresh.length) return done(null);
+      const finish = (diff) => {
+        const now = addedLines(diff);
+        for (const f of fresh) { try { now.set(f, new Set(fs.readFileSync(path.join(top, f), 'utf8').split('\n').filter(keep).map((l) => l.trim()))); } catch {} }
+        let snap = null; try { snap = JSON.parse(fs.readFileSync(snapPath(b.id, data), 'utf8')); } catch {}
+        const before = snap?.repo === top ? addedLines(snap.diff) : new Map(), claimed = claimedLines(b.id, data);
+        const rows = [];
+        for (const [f, set] of now) {
+          const abs = path.join(top, f), was = before.get(f);
+          const lines = [...set].filter((l) => !was?.has(l) && !claimed.has(`${abs}\0${l}`)).slice(0, 2000);
+          if (lines.length) rows.push({ at: end, file: abs, lines, bash: true });
+        }
+        if (!rows.length) return done([]);
+        fs.mkdir(dirty(data), { recursive: true }, () =>
+          fs.appendFile(wrotePath(b.id, data), rows.map((r) => JSON.stringify(r)).join('\n') + '\n', () => done(rows)));
+      };
+      if (!tracked.length) return finish('');
+      execFile('git', ['-C', top, 'diff', 'HEAD', '-U0', '--no-color', '--no-ext-diff', '--', ...tracked], { maxBuffer: 64 << 20 }, (e3, d) => finish(e3 ? '' : d));
+    });
+  });
+}
+// Lines (absolute file + line) other squiggles recorded in the last day: never re-claimed as this squiggle's Bash writes.
+function claimedLines(id, data) {
+  const out = new Set(), real = new Map(); let names = [];
+  const rp = (f) => { if (!real.has(f)) { let r = f; try { r = path.join(fs.realpathSync(path.dirname(f)), path.basename(f)); } catch {} real.set(f, r); } return real.get(f); };
+  try { names = fs.readdirSync(dirty(data)).filter((f) => f.endsWith('.wrote.jsonl') && f !== `${id}.wrote.jsonl`); } catch {}
+  for (const n of names) {
+    let t = ''; try { t = fs.readFileSync(path.join(dirty(data), n), 'utf8'); } catch { continue; }
+    for (const row of t.split('\n')) { let e; try { e = JSON.parse(row); } catch { continue; } if (e.at > Date.now() - DAY) for (const l of e.lines || []) out.add(`${rp(e.file)}\0${l}`); }
+  }
+  return out;
 }
 // Staged lines (repo-relative file -> count) that another squiggle wrote since `since` and `id` itself didn't.
 export function peerWrites(id, staged, top, since, data = dataDir()) {

@@ -5,7 +5,7 @@ import { spawn, execFile, execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import crypto from 'node:crypto';
 import { slowSync, timed } from './slow.mjs';
-import { snapshot as dirtySnapshot, installHook, noteWrite } from './commit-guard.mjs';
+import { snapshot as dirtySnapshot, installHook, noteWrite, bashStart, bashEnd } from './commit-guard.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -357,10 +357,10 @@ function launch(s) {
         }
         for (const c of ev.message.content || []) {
           if (c.type === 'text' && c.text.trim()) { lastText = c.text; const t = s.lead ? unstale(s.id, c.text) : c.text; if (t.trim()) emit(s.id, { k: 'say', text: t }); }
-          else if (c.type === 'tool_use') { noteWrite(s.id, c, DATA); emit(s.id, toolEvent(c)); }
+          else if (c.type === 'tool_use') { noteWrite(s.id, c, DATA); bashStart(s.id, c, home(s.cwd)); emit(s.id, toolEvent(c)); }
         }
       } else if (ev.type === 'user' && Array.isArray(ev.message?.content)) {
-        for (const c of ev.message.content) if (c.type === 'tool_result') emit(s.id, resultEvent(c));
+        for (const c of ev.message.content) if (c.type === 'tool_result') { bashEnd(c.tool_use_id, DATA); emit(s.id, resultEvent(c)); }
       } else if (ev.type === 'rate_limit_event') { emit(s.id, { k: 'rate', info: ev.rate_limit_info }); if (ev.rate_limit_info?.status === 'rejected' && ev.rate_limit_info.resetsAt) limitHit(ev.rate_limit_info.resetsAt * 1000); }
       else if (ev.type === 'result' && r.compacting) { // the compaction after a wake (compactNow), not a turn
         r.compacting = false; r.ctx = 0;

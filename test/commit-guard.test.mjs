@@ -79,6 +79,51 @@ test('hook refuses lines a peer wrote with Edit during this turn; own and shared
   for (const d of [home, repo]) fs.rmSync(d, { recursive: true, force: true });
 });
 
+test('hook refuses lines a peer wrote with Bash during this turn; overlapping Bash calls record nobody', async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'cgh-')), repo = fs.mkdtempSync(path.join(os.tmpdir(), 'cgr-'));
+  fs.mkdirSync(path.join(home, 'bin/hooks'), { recursive: true });
+  fs.copyFileSync(path.join(ROOT, 'bin/hooks/pre-commit'), path.join(home, 'bin/hooks/pre-commit'));
+  fs.chmodSync(path.join(home, 'bin/hooks/pre-commit'), 0o755);
+  for (const f of ['commit-guard.mjs', 'config.mjs', 'fence.mjs', 'migrate.mjs']) fs.copyFileSync(path.join(ROOT, f), path.join(home, f));
+  const g = (...a) => execFileSync('git', ['-C', repo, ...a], { encoding: 'utf8' });
+  g('init', '-q'); g('config', 'user.email', 't@t'); g('config', 'user.name', 't');
+  const lines = Array.from({ length: 40 }, (_, i) => `const line${i} = original(${i});`);
+  const f = path.join(repo, 'app.js'), put = (i, t) => { lines[i] = t; fs.writeFileSync(f, lines.join('\n') + '\n'); };
+  fs.writeFileSync(f, lines.join('\n') + '\n');
+  g('add', '-A'); g('commit', '-qm', 'init'); g('config', 'core.hooksPath', path.join(home, 'bin/hooks'));
+  const m = await import(path.join(home, 'commit-guard.mjs'));
+  for (const id of ['a', 'b']) await new Promise((ok) => m.snapshot(id, repo, home, ok));
+  const pause = (ms = 60) => new Promise((ok) => setTimeout(ok, ms)), end = (u) => new Promise((ok) => m.bashEnd(u, home, ok));
+  // b runs sed mid a's turn; a's Edit lands inside b's Bash window and stays a's.
+  m.bashStart('b', { name: 'Bash', id: 'u1', input: {} }, repo);
+  put(2, 'const peerStyle = layerCorners(style);');
+  fs.writeFileSync(path.join(repo, 'peer-new.js'), 'export const peerNewFile = makeThing(1);\n');
+  put(35, 'const ownDrag = ignoreStack(item);'); m.noteWrite('a', { name: 'Edit', input: { file_path: f, new_string: lines[35] } }, home);
+  await pause();
+  const rows = await end('u1');
+  assert.deepEqual(rows.map((r) => [path.basename(r.file), r.lines]).sort(), [['app.js', ['const peerStyle = layerCorners(style);']], ['peer-new.js', ['export const peerNewFile = makeThing(1);']]]);
+  // Two squiggles' Bash calls overlap in one checkout: neither is recorded.
+  m.bashStart('a', { name: 'Bash', id: 'u2', input: {} }, repo); m.bashStart('b', { name: 'Bash', id: 'u3', input: {} }, repo);
+  await pause(); put(10, 'const whoWroteThis = nobodyKnows(10);');
+  assert.equal(await end('u2'), null); assert.equal(await end('u3'), null);
+  // A Bash call that changes nothing records nothing; background calls aren't tracked.
+  m.bashStart('a', { name: 'Bash', id: 'u4', input: {} }, repo); await pause(); assert.equal(await end('u4'), null);
+  m.bashStart('a', { name: 'Bash', id: 'u5', input: { run_in_background: true } }, repo); assert.equal(await end('u5'), null);
+  const env = { ...process.env, AGENTS_ID: 'a', AGENTS_NODE: process.execPath, SQUIGGLES_HOME: home };
+  g('add', 'app.js', 'peer-new.js');
+  const r = spawnSync('git', ['-C', repo, 'commit', '-qm', 'drag'], { env, encoding: 'utf8' });
+  assert.notEqual(r.status, 0); assert.match(r.stderr, /app\.js: 1 line by b/); assert.match(r.stderr, /peer-new\.js: 1 line by b/);
+  // The same staging is refused for b too: a's Edit line is in it, and b's Bash record didn't take it.
+  const peer = spawnSync('git', ['-C', repo, 'commit', '-qm', 'style'], { env: { ...env, AGENTS_ID: 'b' }, encoding: 'utf8' });
+  assert.notEqual(peer.status, 0); assert.match(peer.stderr, /app\.js: 1 line by a/); assert.doesNotMatch(peer.stderr, /peer-new/);
+  for (const d of [home, repo]) fs.rmSync(d, { recursive: true, force: true });
+});
+
+test('the server tracks each Bash call from tool use to its result', () => {
+  const s = fs.readFileSync(path.join(ROOT, 'server.mjs'), 'utf8');
+  assert.match(s, /bashStart\(s\.id, c, home\(s\.cwd\)\)/); assert.match(s, /bashEnd\(c\.tool_use_id, DATA\)/);
+});
+
 test('writtenLines: Write, Edit, MultiEdit content, short lines dropped', async () => {
   const { writtenLines } = await import('../commit-guard.mjs');
   assert.deepEqual(writtenLines('Write', { content: '}\nconst longEnough = 1;\n' }), ['const longEnough = 1;']);
