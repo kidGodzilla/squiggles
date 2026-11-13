@@ -99,6 +99,37 @@ test('screen: room.json never shows, by its real path', () => {
   } finally { fs.rmSync(d, { recursive: true, force: true }); }
 });
 
+test('screen: room.json under another case or a hard link is still room.json', () => {
+  const d = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'room-')));
+  try {
+    const config = path.join(d, 'room.json'), hard = path.join(os.tmpdir(), `plain-${path.basename(d)}.txt`);
+    fs.writeFileSync(config, '{"passcode":{"salt":"x"}}'); fs.linkSync(config, hard);
+    try {
+      for (const file of [path.join(d, 'ROOM.JSON'), path.join(d.toUpperCase(), 'Room.json'), hard])
+        assert.equal(screenRefusal({ id: 'a', kind: 'file', file, caller: 'a', claude: true, config })?.status, 403, file);
+    } finally { fs.rmSync(hard, { force: true }); }
+  } finally { fs.rmSync(d, { recursive: true, force: true }); }
+});
+
+test('screen: the data folder\'s own files and backups stay off; its folders keep their rules', () => {
+  const d = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'data-')));
+  const out = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'out-')));
+  try {
+    for (const f of ['config.json', 'humans.json', 'tasks.json', 'backups/1-schema-2/config.json', 'squiggles/a/journal.md', 'files/shot.png', 'research/notes.md']) {
+      fs.mkdirSync(path.dirname(path.join(d, f)), { recursive: true }); fs.writeFileSync(path.join(d, f), 'x');
+    }
+    const at = { dir: d, home: out, cwd: out }, who = { caller: 'a', claude: true };
+    for (const f of ['config.json', 'humans.json', 'HUMANS.json', 'tasks.json', 'backups/1-schema-2/config.json', 'files/../config.json'])
+      assert.equal(screenRefusal({ id: 'a', kind: 'file', file: path.join(d, f), ...who }, at)?.status, 403, f);
+    const hard = path.join(out, 'people.txt'); fs.linkSync(path.join(d, 'humans.json'), hard);
+    assert.equal(screenRefusal({ id: 'a', kind: 'file', file: hard, ...who }, at)?.status, 403, 'hard link');
+    for (const f of ['files/shot.png', 'research/notes.md', 'squiggles/a/journal.md'])
+      assert.equal(screenRefusal({ id: 'a', kind: 'file', file: path.join(d, f), ...who }, at), null, f);
+    fs.writeFileSync(path.join(out, 'own.md'), 'x');
+    assert.equal(screenRefusal({ id: 'a', kind: 'file', file: path.join(out, 'own.md'), ...who }, at), null);
+  } finally { for (const x of [d, out]) fs.rmSync(x, { recursive: true, force: true }); }
+});
+
 test('screen: a squiggle keeps its own, not another\'s; the lead may use any', () => {
   assert.equal(screenRefusal({ id: 'a', kind: 'text', caller: 'b' })?.status, 403);
   assert.equal(screenRefusal({ id: 'b', kind: 'text', caller: 'b' }), null);

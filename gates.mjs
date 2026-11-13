@@ -2,12 +2,31 @@
 // caller: the squiggle whose process tree it came from, '' for none. page: a person's page (pass.page).
 // Neither: the owner's terminal or a detached process, which look alike, so neither may speak as the owner or the lead.
 import fs from 'node:fs';
+import path from 'node:path';
 import { pathReason, secretReason, peerReason, privateCheck } from './fence.mjs';
 
 const UNLOCK = { status: 403, error: 'Unlock with the room passcode first', unlock: true };
 // No code to type, so a terminal isn't asked for one.
 const NOCODE = { status: 403, error: 'Use the page, or set a room passcode so your terminal can unlock this' };
 const real = (p) => { try { return fs.realpathSync(p); } catch { return p; } };
+// On-disk spelling, case-folded: APFS opens ROOM.JSON as room.json, so a plain string compare misses it.
+const folded = (p) => { let r; try { r = fs.realpathSync.native(p); } catch { r = real(p); } return r.normalize('NFC').toLowerCase(); };
+const within = (f, d) => f === d || f.startsWith(d.endsWith(path.sep) ? d : d + path.sep);
+const sameFile = (a, b) => { try { const x = fs.statSync(a), y = fs.statSync(b); return x.dev === y.dev && x.ino === y.ino; } catch { return false; } };
+// The data folder's own files (config, people, board, the passcode hash) and backups/ (copies of them) stay off the screen.
+// Its folders keep their own rules: journals and transcripts go through the peer gate, files/ and research/ show.
+// A hard link elsewhere to one of its top-level files is that file, so it's matched by device and inode.
+function dataRefusal(file, dir, config) {
+  const f = folded(file);
+  if (config && (f === folded(config) || sameFile(file, config))) return 'room.json stays off the screen';
+  if (!dir) return '';
+  const d = folded(dir), rel = within(f, d) ? f.slice(d.length).replace(/^[\\/]+/, '') : null;
+  if (rel !== null && (rel === '' || rel === 'backups' || rel.startsWith(`backups${path.sep}`) || !rel.includes(path.sep)))
+    return 'The data folder\'s own files stay off the screen';
+  let top = [];
+  try { if (fs.statSync(file).nlink > 1) top = fs.readdirSync(dir, { withFileTypes: true }).filter((e) => e.isFile()).map((e) => path.join(dir, e.name)); } catch {}
+  return top.some((t) => sameFile(file, t)) ? 'That file is a link into the data folder, which stays off the screen' : '';
+}
 
 export function sender({ caller = '', page = false, human, people = [] } = {}) {
   if (caller) return { from: caller };
@@ -66,7 +85,8 @@ export function labelled(text, { from, who, leadId, name }) {
 export function screenRefusal({ id, kind, file, caller = '', lead = false, claude = false, config = '' }, { cwd, home, dir } = {}) {
   if (caller && !lead && caller !== id) return { status: 403, error: `${caller} can only use its own screen` };
   if (kind !== 'file') return null;
-  if (config && real(file) === real(config)) return { status: 403, error: 'room.json stays off the screen' };
+  const data = dataRefusal(file, dir, config);
+  if (data) return { status: 403, error: data };
   const why = pathReason(file, cwd, home) || secretReason(file, cwd, home) || (caller && !lead ? peerReason('read', { path: file }, { self: caller, cwd, home, root: dir }) : '') || (caller && claude ? '' : privateCheck('read', { file_path: file }, cwd, home, dir));
   return why ? { status: 403, error: why } : null;
 }
