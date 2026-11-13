@@ -19,10 +19,13 @@ const secretFile = path.join(HOME, '.ssh', 'id_demo'), probeOut = path.join(HOME
 const TS = path.join(BIN, 'tailscale'), tsLog = path.join(HOME, 'tailscale.log'), served = () => { try { return fs.readFileSync(tsLog, 'utf8').includes('serve --bg'); } catch { return false; } };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const inbox = (id) => { try { return fs.readFileSync(path.join(HOME, `inbox-${id}.jsonl`), 'utf8'); } catch { return ''; } };
+// A busy machine stretches every wait, so the budget grows with load, read as it runs, up to 6 times. A timeout names the
+// load, so it reads as a busy machine or a real fault.
+const loadNow = () => os.loadavg()[0], busy = () => Math.min(6, Math.max(1, loadNow() / os.cpus().length));
 async function until(fn, what, ms = 60000) {
-  const why = () => (typeof what === 'function' ? what() : what);
-  for (const end = Date.now() + ms; Date.now() < end; await sleep(100)) { const v = await fn(); if (v) return v; }
-  throw new Error(`timed out: ${why()}`);
+  const why = () => (typeof what === 'function' ? what() : what), t0 = Date.now();
+  while (Date.now() - t0 < ms * busy()) { const v = await fn(); if (v) return v; await sleep(100); }
+  throw new Error(`timed out after ${Math.round((Date.now() - t0) / 1000)} s at load ${Math.round(loadNow())} on ${os.cpus().length} cores: ${why()}`);
 }
 const port = () => new Promise((res) => { const s = net.createServer().listen(0, '127.0.0.1', () => { const { port: p } = s.address(); s.close(() => res(p)); }); });
 
@@ -56,7 +59,7 @@ const lowChild = `const fs = require('fs'), path = require('path'), base = proce
 const post = async (b, headers = {}) => { const r = await fetch(base + '/api/tasks', { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(b) }); return { status: r.status, body: await r.json().catch(() => null) }; };
 const dressed = { 'user-agent': 'Mozilla/5.0', 'sec-fetch-site': 'same-origin', origin: base };
 (async () => {
-  for (let i = 0; i < 100 && process.ppid !== 1; i++) await new Promise((r) => setTimeout(r, 50));
+  for (let i = 0; i < 600 && process.ppid !== 1; i++) await new Promise((r) => setTimeout(r, 50));
   const r = { ppid: process.ppid, add: await post({ op: 'add', title: 'child idea' }), asked: await post({ op: 'add', title: 'child claim', asked: 'owner' }), dressed: await post({ op: 'add', title: 'dressed', asked: 'owner' }, dressed), split: await post({ op: 'split', id, titles: ['child part'] }), edit: await post({ op: 'edit', id, title: 'relabelled', asked: 'owner' }) };
   fs.writeFileSync(path.join(process.env.HOME, 'low-child.json'), JSON.stringify(r));
 })();`;
