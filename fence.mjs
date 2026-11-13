@@ -61,7 +61,7 @@ const topSplit = (s) => { const out = []; let d = 0, a = 0;
   return out; };
 // A glob is walked, never turned into a regex or a tree: repeated {*,*} backtracks for ever, and spelling out a long glob costs more
 // than the check. The walk holds every place in t the glob can have reached and stops when none is left, so a long glob that can't
-// match costs a few characters (t4201). Group ends and the next ] come from tables built once. Past 64 deep, or at a class no regex
+// match costs a few characters. Group ends and the next ] come from tables built once. Past 64 deep, or at a class no regex
 // can read, it throws, and every caller reads a throw as a match. A bad class the walk never reaches can't match either.
 const LINE_END = /[\n\r\u2028\u2029]/;
 const globTables = (g) => {
@@ -96,7 +96,7 @@ const globRe = (g) => {
   const tables = lastTables;
   return { test: (t) => globWalk(g, tables, t, new Set([0]), 0, g.length, 0).has(t.length) };
 };
-// Past this size a word with a brace in it is refused unread: no real command needs one, and spelling it out costs seconds (t4201).
+// Past this size a word with a brace in it is refused unread: no real command needs one, and spelling it out costs seconds.
 const WORD_MAX = 65536;
 const bigBrace = (cmd) => { let n = 0; for (const w of String(cmd).replace(/\\\n/g, '').split(/[\s;|&()<>`]+/)) if (w.length > 1024 && /[{}]/.test(w) && (n += w.length) > WORD_MAX) return true; return false; };
 const globHits = (seg, names = DIRS) => /[*?[{]/.test(seg) && names.some((d) => { try { return globRe(seg).test(d); } catch { return true; } });
@@ -128,7 +128,7 @@ const startsHome = (cmd, cwd, home) => places(cmd, cwd, home).some((d) => d.toLo
 // {a,b} spelled out, so a brace can hold the home path or a folder above it ({~,x}/.ssh, {/home/me,/x}/Downloads).
 // {} and {x} stay literal, as in the shell. Capped: past the cap a word keeps its braces and globRe reads them.
 // Depth capped too: thousands of groups overflowed the stack.
-// The leftmost { that closes with a comma of its own, in one pass: asking of each { in turn was quadratic on nested groups (t4201).
+// The leftmost { that closes with a comma of its own, in one pass: asking of each { in turn was quadratic on nested groups.
 const firstGroup = (w) => {
   const open = [], comma = []; let first = -1, end = -1;
   for (let i = w.indexOf('{'); i >= 0 && i < w.length; i++) {

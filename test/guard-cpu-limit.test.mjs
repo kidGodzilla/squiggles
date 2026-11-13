@@ -1,4 +1,4 @@
-// t4268: a guard spinning in a synchronous loop outlives its caller: a hook timeout kills guard.sh, not node. 18 of them ran for hours
+// A guard spinning in a synchronous loop outlives its caller: a hook timeout kills guard.sh, not node. 18 of them ran for hours
 // at parent 1 and froze the Mac. Each wrapper caps CPU time, which works during the loop and doesn't count a busy machine against a guard.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -15,7 +15,7 @@ const cpu = (pid) => { try { return execFileSync('ps', ['-o', 'time=', '-p', Str
 const until = async (f) => { while (!f()) await new Promise((r) => setTimeout(r, 200)); };
 // A node that spins in place of the real guard. It says its pid first, so the test can watch it, and stops itself at 30 CPU seconds, so even a killed test leaves nothing behind. It checks rarely: asking for CPU time on every pass keeps macOS from enforcing the limit.
 const rig = () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 't4268-')), pidFile = path.join(dir, 'pid'), stub = path.join(dir, 'node');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cpu-')), pidFile = path.join(dir, 'pid'), stub = path.join(dir, 'node');
   fs.writeFileSync(stub, `#!/bin/sh\nexec "${process.execPath}" -e 'require("fs").writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); let i = 0; while (++i % 1e7 || process.cpuUsage().user < 3e7);'\n`, { mode: 0o755 });
   return { dir, pidFile, env: { PATH: process.env.PATH, AGENTS_ID: 'c', AGENTS_NODE: stub } };
 };

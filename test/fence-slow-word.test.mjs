@@ -63,7 +63,7 @@ test('a long run of > or -e that names no owned file takes under 1 s', () => {
   for (const c of ['>'.repeat(200000), `node -e x ${' -e'.repeat(13000)}`]) fast(c.slice(0, 11), () => commandReason(c, cwd));
 });
 
-// t4201: nested braces took seconds, then no answer at all. Too big to expand, so refused unread; the real guard answers too.
+// nested braces took seconds, then no answer at all. Too big to expand, so refused unread; the real guard answers too.
 const huge = ['{a,'.repeat(250000) + 'b' + '}'.repeat(250000), '{'.repeat(500000) + '}'.repeat(500000), '{a,b}'.repeat(200000)];
 const guard = fileURLToPath(new URL('../codex/guard.sh', import.meta.url));
 test('a 1 MB nested-brace word is refused under 1 s, with or without a fenced read after it', () => {
