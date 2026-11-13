@@ -115,6 +115,9 @@ function setTalk() {
 }
 $('#setGen').onchange = (e) => { SET.gen = e.target.value; renderSettings(); };
 $('#setTalk').onchange = setTalk;
+// Burn mode, a room setting. CLI: burn on|off.
+api('/room').then((r) => { $('#burnOn').checked = r?.burn === 'on'; }).catch(() => {});
+$('#burnOn').onchange = async (e) => { const r = await unlocked(() => api('/room', { action: 'burn', value: e.target.checked ? 'on' : 'off' }), 'Unlock settings'); if (r === null || r.error) { if (r) toast(r.error); e.target.checked = !e.target.checked; } else toast(e.target.checked ? 'Burn on' : 'Burn off'); };
 $('#reactOn').onchange = async (e) => { const r = await unlocked(() => api('/room', { action: 'reactions', value: e.target.checked ? 'on' : 'off' }), 'Unlock this browser'); if (r === null || r.error) { if (r) toast(r.error); e.target.checked = S.rxOn; } };
 $('#setRoom').onclick = async () => { const r = await unlocked(() => api('/room', { action: 'characters', value: SET.gen }), 'Unlock this browser'); if (r === null) return; if (r && r.error) return toast(r.error); roomGen(SET.gen); S.order.forEach(reskin); renderSettings(); };
 $('#setGrid').onclick = async (e) => {

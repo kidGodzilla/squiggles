@@ -829,6 +829,7 @@ async function roomCommand(ev) {
     case 'volume': prefs.musicVol = Math.max(0, Math.min(1, +v || 0)); paintSound(); break;
     case 'voices': prefs.voice = v !== 'off'; paintSound(); break;
     case 'reactions': rxPower(v !== 'off'); break;
+    case 'burn': { const c = document.getElementById('burnOn'); if (c) c.checked = v === 'on'; break; }
     case 'react': rxUpdate(ev); break;
     case 'chatter': if (['quiet', 'normal', 'lively'].includes(v)) { prefs.chatter = v; paintSound(); } break;
     case 'theme': if (['flat', 'clean'].includes(v)) { prefs.theme = v; savePrefs(); applyTheme(); paintSound(); } break;

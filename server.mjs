@@ -22,6 +22,7 @@ import { compactAtEnd, ctxOf, COMPACT_PROMPT } from './compact.mjs';
 import { HOME_FENCE } from './fence.mjs';
 import { sender, askerOf, askSeen, writesNote, noteRefusal, labelled, screenRefusal, humansRefusal, roomRefusal, peersRefusal, squiggleRefusal, peerRefusal } from './gates.mjs';
 import { wantsPrecheck, precheckPrompt, runPrecheck, PRECHECK_MODEL } from './precheck.mjs';
+import { burns, burnDue, BURN_TEXT } from './burn.mjs';
 import { createWaits, bgStarted, bgEnded, ownRuns } from './waits.mjs';
 import { createWatches } from './watches.mjs';
 import { mimeFor } from './mime.mjs';
@@ -782,7 +783,7 @@ function wake(id, why = 'scheduled', asker = '', due = 0, pre = '') {
   const s = loadSquiggle(id);
   if (!s || R(id).status === 'working') return false;
   let news = []; try { news = board.suggestionNews(id); } catch {}
-  send(id, `Wake (${why}), ${wakeToken(due)}. Read your charter and the end of your journal, decide the single most valuable thing to do now, do it, verify it, append a dated journal entry, then end with a status line. You have ${s.maxTurns ?? 40} turns this wake; journal findings as you confirm them.${limitOf(roomCfg(), slotKey(providerOf(s))) ? ' Your provider runs a few turns at a time, so your next turn may start much later: leave work resumable, and file a wait rather than checking back.' : ''}${news.length ? `\n\nYour suggestions, decided by the lead:\n${news.map((x) => `- ${x}`).join('\n')}` : ''}${pre ? `\n\nA quick pre-check found: ${pre}` : ''}`, 'harness', { asker });
+  send(id, `Wake (${why}), ${wakeToken(due)}. Read your charter and the end of your journal, decide the single most valuable thing to do now, do it, verify it, append a dated journal entry, then end with a status line. You have ${s.maxTurns ?? 40} turns this wake; journal findings as you confirm them.${limitOf(roomCfg(), slotKey(providerOf(s))) ? ' Your provider runs a few turns at a time, so your next turn may start much later: leave work resumable, and file a wait rather than checking back.' : ''}${news.length ? `\n\nYour suggestions, decided by the lead:\n${news.map((x) => `- ${x}`).join('\n')}` : ''}${pre ? `\n\nA quick pre-check found: ${pre}` : ''}${why === 'burn' ? `\n\n${BURN_TEXT}` : ''}`, 'harness', { asker });
   return true;
 }
 
@@ -1042,17 +1043,19 @@ function setSlots(b) {
 // ---------- scheduler: squiggles wake themselves on their cadence ----------
 // Paused while the session limit is hit. Staggered per provider: no two squiggles on the same provider start within 2 minutes of each other. Jittered: schedule.mjs.
 const dueAt = createSchedule();
+const TICK = Number(process.env.SQUIGGLES_SCHED_MS) || 30000; // tests only shorten it
 setInterval(() => {
-  const all = listSquiggles();
+  const all = listSquiggles(), cfg = roomCfg();
   const newest = {};
   for (const s of all) { const t = Date.parse(R(s.id).lastWake || 0) || 0; const p = providerOf(s); if (!(newest[p] > t)) newest[p] = t; }
   drainSlots(); // a raised cap, or a turn that ended without turnEnded (its process died)
   const started = new Set();
   for (const s of all) {
     if (s.lead || s.paused || !(s.every > 0 || s.wakes) || slotWaiting(s.id)) continue;
-    const p = providerOf(s);
+    const p = providerOf(s), r = R(s.id);
+    // Burn mode skips the stagger, the quiet skip and the pre-check; due a tick or two after the last wake (burn.mjs).
+    if (burns(cfg, s, p)) { if (r.status !== 'working' && !r.prechecking && Date.now() >= burnDue(r.lastWake, 2 * TICK)) timed(`wake ${s.id}`, () => wake(s.id, 'burn')); continue; }
     if (started.has(p) || Date.now() - (newest[p] || 0) < 2 * 60000) continue;
-    const r = R(s.id);
     const last = Math.max(Date.parse(r.lastWake || 0) || 0, Date.parse(r.skipAt || 0) || 0);
     let due; try { const w = s.wakes && parseWakes(s.wakes); due = w ? wakeDue(w, { last, lastEnd: Date.parse(r.lastEnd || 0) || 0, endStatus: r.endStatus, now: Date.now() }) : null; } catch { due = null; }
     if (due == null) { if (!(s.every > 0)) continue; due = dueAt(s.id, s.every, last); }
@@ -1064,7 +1067,7 @@ setInterval(() => {
     if (r.status !== 'working' && Date.now() >= due && wantsPrecheck(r, Date.now(), p)) { started.add(p); precheck(s, r, due); continue; }
     if (r.status !== 'working' && Date.now() >= due && timed(`wake ${s.id}`, () => wake(s.id, 'scheduled', '', due))) started.add(p);
   }
-}, 30000);
+}, TICK);
 
 function precheck(s, r, due) {
   r.prechecking = true;
@@ -1653,6 +1656,11 @@ const server = http.createServer(async (req, res) => {
       const b = await body(req, res), rc = await callerSquiggle(req);
       const no = roomRefusal({ action: b.action, caller: rc, lead: !!(rc && loadSquiggle(rc)?.lead), page: await pass.page(req), passcode: !!roomCfg().passcode?.hash });
       if (no) return json(res, { error: no.error, ...(no.unlock && { unlock: true }) }, no.status);
+      if (b.action === 'burn') { // every frequent Claude squiggle back to back until off (burn.mjs)
+        const v = String(b.value || '').toLowerCase();
+        if (!['on', 'off'].includes(v)) return json(res, { error: 'burn on|off' }, 400);
+        setRoom('burn', v === 'on' ? 'on' : null); b.value = v;
+      }
       if (b.action === 'reactions') { // on or off for the whole room. Stored reactions stay, so off then on brings them back.
         const v = String(b.value || '').toLowerCase();
         if (!['on', 'off'].includes(v)) return json(res, { error: 'room reactions on|off' }, 400);
