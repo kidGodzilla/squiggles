@@ -150,3 +150,19 @@ test('interrupted: a run the old server left is marked, logged and handed back o
   assert.equal(asks.interrupted().length, 0);
   assert.equal(log().filter((x) => x.ev === 'interrupted').length, 1);
 });
+
+test('a folder swapped after filing is refused, and the run uses the folder resolved at filing', async () => {
+  const { d, asks } = setup();
+  const a1 = path.join(d, 'one'), b1 = path.join(d, 'two'), link = path.join(d, 'link');
+  fs.mkdirSync(a1); fs.mkdirSync(b1); fs.symlinkSync(a1, link);
+  const a = asks.file({ by: 'ops', cwd: link, cmd: 'pwd -P' });
+  assert.equal(a.real, fs.realpathSync(a1));
+  fs.unlinkSync(link); fs.symlinkSync(b1, link);
+  assert.throws(() => asks.claim(a.id, askHash(link, 'pwd -P'), 'owner'), (e) => e.code === 409 && /folder/.test(e.message));
+  assert.equal(asks.get(a.id).status, 'pending');
+  fs.unlinkSync(link); fs.symlinkSync(a1, link);
+  const r = asks.claim(a.id, askHash(link, 'pwd -P'), 'owner');
+  fs.unlinkSync(link); fs.symlinkSync(b1, link); // swapped between claim and spawn: the run still uses the filed folder
+  const { runAsk } = await import('../asks.mjs');
+  assert.equal((await runAsk(r)).out.trim(), fs.realpathSync(a1));
+});

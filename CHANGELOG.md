@@ -5,6 +5,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 ## 0.1.2 (unreleased)
 
 ### Security
+- An ask runs in the folder its cwd led to when it was filed. If a symlink on the way now leads elsewhere, Run is refused. The card and the Run prompt show the real folder when it differs.
 - The fence's check for recursive reads from home or above (`du -sh ~`, `find /`) now sees commands after shell keywords (`do`, `then`, `!`, `{`), which used to skip it. A `$VAR` path resolves when the command sets it to a plain path, `$HOME`, `$TMPDIR` or `mktemp`; any other variable is still refused.
 - Pausing a squiggle, changing its wake schedule or capping its turns from a terminal or an unidentified caller now needs the unlocked page once a room passcode is set. Squiggles still set their own; the lead still sets anyone's.
 - Clearing the room passcode turns tailnet sharing off first, and if that fails the passcode stays. A room with no passcode unshares at boot, since `tailscale serve` outlives the server.

@@ -72,13 +72,13 @@ function watchBody(w) {
     ${w.ignore ? `<p class="asknote">Ignores lines matching <code>${i.html}</code></p>` : ''}`;
 }
 function askCard(a) {
-  ASK.shown[a.id] = { cwd: a.cwd, cmd: a.cmd };
+  ASK.shown[a.id] = { cwd: a.cwd, cmd: a.cmd, real: a.real };
   const c = showCmd(a.cmd), d = showCmd(a.cwd), r = risky(a.cmd);
   const run = ASK.can.run || ASK.can.local
     ? '<button class="chip primary" data-a="run">Run</button>'
     : '<span class="asknote">Run works only on the computer running the room. Copy it there.</span>';
   return `<div class="ask" data-id="${esc(a.id)}" data-ts="${+new Date(a.created)}">
-    <div class="askh"><button class="rvwho" type="button" data-one="${esc(a.by)}" title="Open ${esc(askWho(a.by))}'s 1:1">${esc(askWho(a.by))}</button> asks to run this <small>${esc(a.id)}, ${esc(askTime(a.created))}, in <code>${d.html}</code>${c.lines > 1 ? `, ${c.lines} lines` : ''}</small></div>
+    <div class="askh"><button class="rvwho" type="button" data-one="${esc(a.by)}" title="Open ${esc(askWho(a.by))}'s 1:1">${esc(askWho(a.by))}</button> asks to run this <small>${esc(a.id)}, ${esc(askTime(a.created))}, in <code>${d.html}</code>${a.real && a.real !== a.cwd ? `, which is <code>${showCmd(a.real).html}</code>` : ''}${c.lines > 1 ? `, ${c.lines} lines` : ''}</small></div>
     ${a.why ? `<p class="askwhy">${esc(a.why)}</p>` : ''}
     ${askWarn(c, d.hidden, r)}
     <pre class="askcmd"><code>${c.html}</code></pre>
@@ -123,7 +123,7 @@ document.addEventListener('click', async (e) => {
   }
   if (btn.dataset.a === 'run') {
     const r0 = risky(shown.cmd);
-    if (!await askCode(`Run ${a.id}?`, `<p>Runs once, as you, in <code>${showCmd(shown.cwd).html}</code>. ${esc(askWho(a.by))} gets the output.</p><pre class="askcmd"><code>${showCmd(shown.cmd).html}</code></pre>${r0.length ? `<p class="askrisk">Careful: ${esc(r0.join(', '))}.</p>` : ''}`, 'Run', null)) return;
+    if (!await askCode(`Run ${a.id}?`, `<p>Runs once, as you, in <code>${showCmd(shown.real || shown.cwd).html}</code>. ${esc(askWho(a.by))} gets the output.</p><pre class="askcmd"><code>${showCmd(shown.cmd).html}</code></pre>${r0.length ? `<p class="askrisk">Careful: ${esc(r0.join(', '))}.</p>` : ''}`, 'Run', null)) return;
     btn.disabled = true; btn.textContent = 'Running';
     const sha = await askSha(shown.cwd, shown.cmd);
     const r = await unlocked(() => askPost({ op: 'run', id, sha }), 'Unlock to run');

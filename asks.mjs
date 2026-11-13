@@ -7,6 +7,7 @@ import crypto from 'node:crypto';
 import { spawn as spawn_ } from 'node:child_process';
 
 const DAY = 864e5, MAX_CMD = 8192, MAX_WHY = 1000, MAX_PENDING = 5;
+const realOf = (p) => { try { return fs.realpathSync(p); } catch { return ''; } };
 export const askHash = (cwd, cmd) => crypto.createHash('sha256').update(Buffer.from(`${cwd}\u0000${cmd}`, 'utf8')).digest('hex');
 const RUN_MS = 10 * 6e4, MAX_OUT = 256 * 1024, SH = fs.existsSync('/bin/zsh') ? '/bin/zsh' : '/bin/sh';
 // Secret-shaped strings are masked in stored and posted output . Commit hashes and ids stay readable.
@@ -58,7 +59,7 @@ export function runAsk(a, { spawn = spawn_, ms: limit = RUN_MS, cap = MAX_OUT, o
       if (done) return; done = true; clearTimeout(kill);
       resolve({ exit, ms: Date.now() - t0, out: mask(out + (cut ? `\n[output cut at ${cap / 1024} KB]` : '') + (timedOut ? `\n[stopped after ${Math.round(limit / 1000)}s]` : '') + extra) });
     };
-    let p; try { p = spawn(SH, ['-c', a.cmd], { cwd: a.cwd, env, stdio: ['ignore', 'pipe', 'pipe'], detached: true }); } catch (e) { return end(127, e.message); }
+    let p; try { p = spawn(SH, ['-c', a.cmd], { cwd: a.real || a.cwd, env, stdio: ['ignore', 'pipe', 'pipe'], detached: true }); } catch (e) { return end(127, e.message); }
     onSpawn?.(p.pid);
     const take = (d) => { if (size >= cap) { cut = true; return; } const s = d.toString('utf8'); size += d.length; out += size > cap ? s.slice(0, cap - (size - d.length)) : s; if (size > cap) cut = true; };
     p.stdout.on('data', take); p.stderr.on('data', take);
@@ -93,7 +94,7 @@ export function createAsks({ file, log, now = () => Date.now() }) {
     if (!path.isAbsolute(String(cwd || '')) || !fs.statSync(cwd, { throwIfNoEntry: false })?.isDirectory()) throw err(`cwd ${cwd} is not a folder`);
     const s = fresh();
     if (s.asks.filter((a) => a.by === by && a.status === 'pending').length >= MAX_PENDING) throw err(`${by} already has ${MAX_PENDING} pending asks: wait or withdraw one`, 429);
-    const a = { id: `a${++s.n}`, by, cwd, cmd, why: String(why || '').slice(0, MAX_WHY), sha: askHash(cwd, cmd), status: 'pending', created: now(), expires: now() + DAY };
+    const a = { id: `a${++s.n}`, by, cwd, cmd, why: String(why || '').slice(0, MAX_WHY), real: fs.realpathSync(cwd), sha: askHash(cwd, cmd), status: 'pending', created: now(), expires: now() + DAY };
     s.asks.push(a); save(s); note('filed', a, { cwd, cmd });
     return a;
   }
@@ -115,6 +116,8 @@ export function createAsks({ file, log, now = () => Date.now() }) {
     if (!a) throw err(`no ask ${id}`, 404);
     if (a.status !== 'pending') throw err(`${id} is ${a.status}`, 409);
     if (typeof sha !== 'string' || sha !== askHash(a.cwd, a.cmd) || sha !== a.sha) throw err(`${id} changed since the page showed it: reload and check it again`, 409);
+    // The folder is pinned as resolved at filing: a symlink swapped since then would run the command somewhere else.
+    if (a.real && realOf(a.cwd) !== a.real) throw err(`${id}'s folder ${a.cwd} no longer leads to ${a.real}: deny it and ask again`, 409);
     Object.assign(a, { status: 'running', started: now(), runBy: who }); save(s); note('running', a, { who });
     return { ...a };
   }
