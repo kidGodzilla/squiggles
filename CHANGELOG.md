@@ -241,7 +241,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Settings number inputs show an accent border on focus and are 44px tall on touch screens.
 
 ### Fixed
-- The worktrees listing checks uncommitted files in six worktrees at once instead of one after another, so a long list loads in seconds.
+- The worktrees listing reads every repo's worktree list at once and checks uncommitted files in six worktrees at a time, instead of one after another, so a long list loads in seconds.
 - The Review tab's merge listing reads each repo's refs once and keeps branch facts while both tips stay put: a second listing of 12 rows runs a handful of git processes instead of a dozen per row.
 - The worktree list and the orphan note cover every folder in the worktree dir, including worktrees of repos in no goal and folders git no longer knows.
 - A merge step ticked while the Merge tab was loading no longer shows as open again.

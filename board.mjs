@@ -458,9 +458,12 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
     const t = tasks(), seen = new Set(), out = [], rc = {}, realOf = (r) => r ? (rc[r] ??= (() => { try { return fs.realpathSync(expand(r)); } catch { return ''; } })()) : '';
     const temp = (p) => /\/(merge-t\d+-|branch-d-)[^/]+$/.test(p); // the Review tab's own temp worktrees, gone in a moment
     const check = []; // rows whose dirty count is read at the end, several at once (one at a time, 134 took 9-43 s)
+    const lists = new Map(); // real repo -> its worktree list, fetched several at once
+    const fetch = (repo) => { let real; try { real = fs.realpathSync(expand(repo)); } catch { return; } if (!lists.has(real)) lists.set(real, worktreesOfA(repo)); }; // off the loop
     const scan = async (repo) => {
       let real; try { real = fs.realpathSync(expand(repo)); } catch { return; } if (seen.has(real)) return; seen.add(real);
-      for (const w of await worktreesOfA(repo)) { // off the loop
+      fetch(repo);
+      for (const w of await lists.get(real)) {
         if (temp(w.path)) continue;
         const task = t.find((x) => x.status !== 'done' && ((x.worktrees || []).includes(w.path) || (w.branch && x.branch === w.branch && realOf(x.repo) === real))) || null;
         const missing = !fs.existsSync(w.path);
@@ -469,7 +472,9 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
         if (!missing) check.push(out.at(-1));
       }
     };
-    for (const repo of TIERS.flatMap((x) => goals()[x]).flatMap((g) => g.repos || [])) await scan(repo);
+    const repos = TIERS.flatMap((x) => goals()[x]).flatMap((g) => g.repos || []);
+    repos.forEach(fetch); // all lists start now; scan still walks them in goal order, so rows keep their order
+    for (const repo of repos) await scan(repo);
     let folders = []; try { folders = fs.readdirSync(wtReal, { withFileTypes: true }).filter((d) => d.isDirectory() && !d.name.startsWith('.')).map((d) => path.join(wtReal, d.name)); } catch {}
     const listed = (p) => out.some((w) => w.path === p);
     for (const p of folders) {
