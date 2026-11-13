@@ -199,12 +199,12 @@ const watches = createWatches({ file: path.join(RUNS, 'watches.json'), outDir: (
 const ledger = createLedger(path.join(RUNS, 'cost.jsonl'));
 const unstale = (id, text) => {
   let all = [], ts = [];
-  try { all = asks.list({ all: true }); } catch {} try { ts = board.tasks(); } catch {}
+  try { all = asks.list({ all: true }); } catch {} try { ts = board.view(); } catch {}
   const r = dropStale(text, { ask: (a) => all.find((x) => x.id === a)?.status, task: (t) => ts.find((x) => x.id === t)?.status });
   if (r.dropped.length) emit(id, { k: 'log', text: `Stale line dropped: ${r.dropped.join(' | ')}` });
   return r.text;
 };
-const files = createFiles({ root: DATA, extra: Object.fromEntries(Object.entries(CONFIG.fileSources || {}).map(([k, v]) => [k, tilde(v)])), tasks: () => { try { return board.tasks(); } catch { return []; } } });
+const files = createFiles({ root: DATA, extra: Object.fromEntries(Object.entries(CONFIG.fileSources || {}).map(([k, v]) => [k, tilde(v)])), tasks: () => { try { return board.view(); } catch { return []; } } });
 // Awake squiggles: while one with awake: true is working, caffeinate keeps the display on and the Mac from idle sleep or locking.
 // -w ties it to this server, so a crash can't leave the Mac awake for good.
 function keepAwake(id, on) {
@@ -221,7 +221,7 @@ function setStatus(id, status, note, proactive) {
   saveState();
   emit(id, { k: 'state', status, note: r.note || '', ...(r.proactive && { proactive: r.proactive }) });
 }
-const ownTasks = (id, since) => { try { return ownIdeas(board.tasks(), id, since); } catch { return []; } }; // Proactive
+const ownTasks = (id, since) => { try { return ownIdeas(board.view(), id, since); } catch { return []; } }; // Proactive
 
 // Subagents (t4): live while a squiggle's Agent call runs; the page shows each as a temporary tile.
 function subStart(id, ev) {
@@ -792,11 +792,11 @@ function wake(id, why = 'scheduled', asker = '', due = 0, pre = '') {
 }
 
 // A person asked for a note when its asker isn't a squiggle: the owner, or someone they added.
-const stuckNow = () => { const sq = listSquiggles(); return stuckList({ tasks: board.tasks(), holds: (board.goals().hold || []).map((g) => g.id), paused: sq.filter((x) => x.paused).map((x) => x.id), byPerson: (a) => !sq.some((x) => x.id === a) }); };
+const stuckNow = () => { const sq = listSquiggles(); return stuckList({ tasks: board.view(), holds: (board.goals().hold || []).map((g) => g.id), paused: sq.filter((x) => x.paused).map((x) => x.id), byPerson: (a) => !sq.some((x) => x.id === a) }); };
 const leadStuck = () => { try { const b = stuckBrief(stuckNow()); return b ? `\n\n${b}` : ''; } catch { return ''; } };
 
-const quietSigOf = (s) => { try { return quietSig(s.id, board.tasks(), readText(path.join(sqDir(s.id), 'charter.md'))); } catch { return ''; } };
-const ownNotes = (id) => { try { return Object.fromEntries(board.tasks().filter((t) => t.owner === id).map((t) => [t.id, `${t.status}\n${t.note || ''}`])); } catch { return {}; } };
+const quietSigOf = (s) => { try { return quietSig(s.id, board.view(), readText(path.join(sqDir(s.id), 'charter.md'))); } catch { return ''; } };
+const ownNotes = (id) => { try { return Object.fromEntries(board.view().filter((t) => t.owner === id).map((t) => [t.id, `${t.status}\n${t.note || ''}`])); } catch { return {}; } };
 // What a capped squiggle managed to save this wake: its journal's last entry heading and the notes it moved.
 function lastSaved(s) {
   const since = Date.parse(R(s.id).lastWake) || 0, out = [];
@@ -1080,7 +1080,7 @@ setInterval(() => {
 function precheck(s, r, due) {
   r.prechecking = true;
   const rd = (f) => readText(path.join(sqDir(s.id), f), '');
-  let notes = ''; try { notes = board.tasks().filter((t) => t.owner === s.id && !['done', 'dropped'].includes(t.status)).map((t) => `- ${t.id} [${t.status}] ${t.title}${t.note ? `\n  ${String(t.note).slice(-400)}` : ''}`).join('\n'); } catch {}
+  let notes = ''; try { notes = board.view().filter((t) => t.owner === s.id && !['done', 'dropped'].includes(t.status)).map((t) => `- ${t.id} [${t.status}] ${t.title}${t.note ? `\n  ${String(t.note).slice(-400)}` : ''}`).join('\n'); } catch {}
   const mins = Math.round((Date.now() - (Date.parse(r.lastWake || 0) || 0)) / 60000);
   const prompt = precheckPrompt({ s, user: USER, charter: rd('charter.md'), journal: rd('journal.md'), notes, lastEnd: `${String(r.endStatus).toUpperCase()}${r.note ? `: ${r.note}` : ''}`, sinceWake: mins >= 120 ? `${Math.round(mins / 60)} hours` : `${mins} minutes` });
   let own = {}; try { own = JSON.parse(rd('settings.json') || '{}'); } catch {}
@@ -1098,7 +1098,7 @@ let waitTick = false;
 setInterval(async () => {
   if (waitTick) return; waitTick = true;
   try {
-    let st; const taskStatus = (id) => (st ??= new Map(board.tasks().map((t) => [t.id, t.status]))).get(id); // read once per pass
+    let st; const taskStatus = (id) => (st ??= new Map(board.view().map((t) => [t.id, t.status]))).get(id); // read once per pass
     const ended = await waits.tick({ taskStatus, skip: (id) => !!loadSquiggle(id)?.paused });
     for (const w of ended) try {
       const how = { done: 'is over', timedout: 'timed out', failed: 'could not be checked' }[w.status] || w.status;
@@ -1124,7 +1124,7 @@ setInterval(async () => {
 const meetingNow = () => persisted['*meeting'] || null;
 // Deferred questions: a blocked note saying "for review <meeting id or title>" joins that meeting's agenda.
 function withDeferred(m) {
-  let ts = []; try { ts = board.tasks(); } catch {}
+  let ts = []; try { ts = board.view(); } catch {}
   const keys = [m.id, m.title].filter(Boolean).map((k) => `for review ${String(k).toLowerCase()}`);
   const d = ts.filter((t) => t.status === 'blocked' && keys.some((k) => (t.note || '').toLowerCase().includes(k)));
   if (!d.length) return m;
@@ -1181,7 +1181,7 @@ function lastShow(m) {
   return (prev || local(new Date(new Date(m.start).getTime() - 7 * 864e5))).slice(0, 10);
 }
 function showItems(id, since) {
-  let ts = []; try { ts = board.tasks(); } catch {}
+  let ts = []; try { ts = board.view(); } catch {}
   return ts.filter((t) => t.owner === id && ((t.status === 'done' && (t.finished || '') >= since) || (t.status === 'review' && (t.reviewed || '') >= since)))
     .slice(-12).map((t) => `- ${t.id} ${String(t.title).slice(0, 110)}${t.status === 'review' ? ' (in review)' : ''}`);
 }
@@ -1240,7 +1240,7 @@ function macAlert(title, text, join, always = false) {
 // Serious alerts: one still open 2 hours after filing leads Review and pops one Mac notification, open page or not.
 // Each alert once; the list is remembered across restarts.
 function alertEscalate() {
-  const seen = new Set(persisted['*alerted'] || []), fresh = needsList({ tasks: board.tasks() }).filter((n) => n.kind === 'alert' && !seen.has(n.id));
+  const seen = new Set(persisted['*alerted'] || []), fresh = needsList({ tasks: board.view() }).filter((n) => n.kind === 'alert' && !seen.has(n.id));
   if (!fresh.length) return;
   persisted['*alerted'] = [...seen, ...fresh.map((n) => n.id)].slice(-200); saveState();
   for (const n of fresh) macAlert(`Serious alert: ${loadSquiggle(n.by)?.name || n.by || 'unowned'}`, `${n.text} (${n.id}). Open 2 hours. In the Review tab.`, false, true);
@@ -1362,7 +1362,7 @@ function callStatus() {
 function callPrompt() {
   const lead = listSquiggles().find((s) => s.lead) || {};
   const g = board.goals(), line = (x) => `- ${x.title}${x.owner ? ` (owner ${x.owner})` : ''}${x.due ? `, due ${x.due}` : ''}${x.note ? `: ${x.note}` : ''}`;
-  const open = board.tasks().filter((t) => t.status === 'doing' || t.status === 'blocked' || t.status === 'review');
+  const open = board.view().filter((t) => t.status === 'doing' || t.status === 'blocked' || t.status === 'review');
   return `You are ${lead.name || 'Lead'}, the lead of ${USER}'s agent team, joining this call on their behalf. ${User} is in the call. Answer as the lead, with the team's context below. Your workspace is ${ROOT}; \`node bin/agents.mjs\` there shows the live team and board (list, goals, tasks, tail <id>). Do not wake, tell or change squiggles from the call unless ${USER} asks.
 
 Your responsibility:
@@ -1698,14 +1698,14 @@ const server = http.createServer(async (req, res) => {
     }
     if (url.pathname === '/api/defaults') return json(res, teamDefaults());
     if (url.pathname === '/api/room') { const { passcode, ...c } = roomCfg(); return json(res, { ...c, fileRoots: files.SOURCES, fileReal: realRoots(), home: os.homedir(), piModels: PI_MODELS, cursorModels: CURSOR_MODELS }); } // never the passcode hash; fileRoots: chat images; fileReal: the same behind symlinks (CLI paths are realpaths)
-    if (url.pathname === '/api/board') return json(res, { goals: board.goals(), tasks: board.tasks() });
+    if (url.pathname === '/api/board') return json(res, { goals: board.goals(), tasks: board.view() });
     if (url.pathname === '/api/goals' && req.method === 'POST') return json(res, board.goalOp(await body(req, res)));
     if (url.pathname === '/api/tasks' && req.method === 'POST') {
       const b = await body(req, res);
       if (writesNote(b)) {
         const c = await callerSquiggle(req), cs = c && loadSquiggle(c), isLow = (x) => !x.lead && trustOf(x) === 'low';
         const ws = !c && loadSquiggle(watches.watchOf(await callerChain(req)));
-        const no = noteRefusal({ b, caller: c, low: !!cs && isLow(cs), lowInRoom: listSquiggles().some(isLow), page: !c && await pass.page(req), marked: !!board.tasks().find((t) => t.id === b.id)?.split, passcode: !!roomCfg().passcode?.hash, watch: !!ws && !isLow(ws) });
+        const no = noteRefusal({ b, caller: c, low: !!cs && isLow(cs), lowInRoom: listSquiggles().some(isLow), page: !c && await pass.page(req), marked: !!board.view().find((t) => t.id === b.id)?.split, passcode: !!roomCfg().passcode?.hash, watch: !!ws && !isLow(ws) });
         if (no) return json(res, { error: no.error, ...(no.unlock && { unlock: true }) }, no.status);
       }
       // Filed in a turn the user or the lead started: their ask, not the squiggle's own idea (Proactive).
@@ -1763,7 +1763,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/waits' && req.method === 'POST') {
       const b = await body(req, res), who = await callerSquiggle(req);
       try {
-        if (b.op === 'add') { if (b.state && !board.tasks().some((t) => t.id === b.task)) return json(res, { error: `no task ${b.task}` }, 404); const w = waits.add({ ...b, by: who }); broadcast('*room', { k: 'room', action: 'waits' }); return json(res, w); }
+        if (b.op === 'add') { if (b.state && !board.view().some((t) => t.id === b.task)) return json(res, { error: `no task ${b.task}` }, 404); const w = waits.add({ ...b, by: who }); broadcast('*room', { k: 'room', action: 'waits' }); return json(res, w); }
         if (b.op === 'drop') {
           const boss = !who || !!loadSquiggle(who)?.lead; // the page is past the room gate already; a drop reaches nothing outside
           const w = waits.drop(String(b.id || ''), { by: who || 'owner', boss }); broadcast('*room', { k: 'room', action: 'waits' }); return json(res, w);
@@ -1778,7 +1778,7 @@ const server = http.createServer(async (req, res) => {
       try {
         if (b.op === 'add') {
           if (!who) return json(res, { error: 'a squiggle files its own watch' }, 403);
-          if (b.task && !board.tasks().some((t) => t.id === b.task)) return json(res, { error: `no task ${b.task}` }, 404);
+          if (b.task && !board.view().some((t) => t.id === b.task)) return json(res, { error: `no task ${b.task}` }, 404);
           const w = watches.add({ owner: who, cmd: b.cmd, cwd: b.cwd ? path.resolve(home(String(b.cwd))) : home(loadSquiggle(who)?.cwd || '~'), every: b.every, ignore: b.ignore, task: b.task, timeout: b.timeout, added: !!b.added });
           broadcast('*room', { k: 'room', action: 'watches' }); return json(res, w);
         }
@@ -1793,7 +1793,7 @@ const server = http.createServer(async (req, res) => {
       } catch (e) { return json(res, { error: e.message }, e.code || 400); }
     }
     if (url.pathname === '/api/stuck' && req.method === 'GET') return json(res, stuckNow());
-    if (url.pathname === '/api/needs' && req.method === 'GET') return json(res, needsList({ asks: asks.list({}), picks: picks.list({}), merges: await board.merges().catch(() => []), squiggles: listSquiggles().map(view), tasks: board.tasks(), watches: watches.list({}) }));
+    if (url.pathname === '/api/needs' && req.method === 'GET') return json(res, needsList({ asks: asks.list({}), picks: picks.list({}), merges: await board.merges().catch(() => []), squiggles: listSquiggles().map(view), tasks: board.view(), watches: watches.list({}) }));
     if (url.pathname === '/api/picks' && req.method === 'GET') return json(res, picks.list({ all: url.searchParams.get('all') === '1' }));
     if (url.pathname === '/api/picks' && req.method === 'POST') {
       const b = await body(req, res), who = await callerSquiggle(req), lead = !!(who && loadSquiggle(who)?.lead);

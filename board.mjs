@@ -156,16 +156,23 @@ export const ASK_RULE = `a review needs --ask "<plain words: what this is, why, 
 export const askedFor = (t) => !!t.asked;
 export const ownIdeas = (tasks, id, since) => { const t0 = Date.parse(since) || 0; return tasks.filter((t) => t.owner === id && t.by === id && t.idea && !askedFor(t) && t.status === 'done' && (t.finishedAt || 0) >= t0).map((t) => t.id); };
 export function similar(a, b) { const x = words(a), y = words(b); if (!x.size || !y.size) return false; let i = 0; for (const w of x) if (y.has(w)) i++; return i / (x.size + y.size - i) >= 0.5; }
+const freeze = (o) => { if (o && typeof o === 'object' && !Object.isFrozen(o)) { Object.freeze(o); for (const v of Object.values(o)) freeze(v); } return o; };
 export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {}) {
   const GOALS = path.join(root, 'goals.json'), TASKS = path.join(root, 'tasks.json');
   const read = (f, d) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return d; } };
   const goals = () => { const g = read(GOALS, {}); for (const t of TIERS) { g[t] = g[t] || []; for (const x of g[t]) x.merge = x.merge === 'open' ? 'open' : 'gated'; } return g; };
-  const tasks = () => read(TASKS, { tasks: [] }).tasks;
-  const write = (f, v) => { fs.writeFileSync(f, JSON.stringify(v, null, 2) + '\n'); };
+  let lastNum = 0; // tasks.json `last` as of the newest read or write: saveTasks needn't parse the file again for it
+  const tasks = () => { const d = read(TASKS, { tasks: [] }); lastNum = Math.max(lastNum, Number(d.last) || 0); return d.tasks; };
+  // Read-only tasks: parsed once per change of tasks.json and frozen, so a wake or a tick over every squiggle
+  // doesn't parse the whole file per caller. Callers that change tasks use tasks(), which always returns a fresh copy.
+  let snap = null;
+  const stamp = () => { try { const s = fs.statSync(TASKS); return `${s.ino}:${s.size}:${s.mtimeMs}`; } catch { return ''; } };
+  const view = () => { const k = stamp(); if (!k) return Object.freeze([]); if (snap?.k !== k) snap = { k, t: freeze(tasks()) }; return snap.t; };
+  const write = (f, v) => { fs.writeFileSync(f, JSON.stringify(v, null, 2) + '\n'); if (f === TASKS) snap = null; };
   const saveGoals = (g) => write(GOALS, g);
   // Ids never come back: tasks.json keeps the highest number ever handed out, so a dropped task's id stays retired.
   const num = (x) => parseInt(String(x.id).slice(1), 10) || 0;
-  const lastId = (t) => Math.max(Number(read(TASKS, {}).last) || 0, ...t.map(num), 0);
+  const lastId = (t) => (lastNum = Math.max(lastNum, ...t.map(num), 0));
   const saveTasks = (t) => write(TASKS, { last: lastId(t), tasks: t });
   // Merge steps name their owner: "Bea: …", "@ops …" or "Owner: …" (the user, or their name). whoIs(word, namesOnly) gives a squiggle id or 'owner'.
   // loose (steps filed before tags): the first squiggle named anywhere in the text.
@@ -729,6 +736,7 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
   }
   // The author hears what became of their suggestions at their next wake, once.
   function suggestionNews(id) {
+    if (!view().some((x) => x.kind === 'suggestion' && x.by === id && x.untold)) return [];
     const t = tasks(), mine = t.filter((x) => x.kind === 'suggestion' && x.by === id && x.untold); if (!mine.length) return [];
     for (const x of mine) delete x.untold; saveTasks(t);
     return mine.map((x) => x.decision === 'accepted' ? `${x.id} "${x.title}" accepted, on ${x.goal} for ${x.owner}` : `${x.id} "${x.title}" declined: ${x.why}`);
@@ -738,5 +746,5 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
     return taskOp({ op: 'move', id, status: 'doing', note: `sent back${by ? ` by ${by}` : ''}: ${String(note).trim()}` });
   }
 
-  return { retired, goals, tasks, goalOp, taskOp, suggestionNews, merges, mergeSweep, mergeDiff, merge, mergeState, gated, mergeBack, worktrees, orphanNotes, TIERS, STATUSES, MERGE };
+  return { retired, goals, tasks, view, goalOp, taskOp, suggestionNews, merges, mergeSweep, mergeDiff, merge, mergeState, gated, mergeBack, worktrees, orphanNotes, TIERS, STATUSES, MERGE };
 }
