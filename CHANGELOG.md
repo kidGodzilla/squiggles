@@ -255,6 +255,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 
 - The stall log also records sync work over 200 ms when no 1-second stall happened; the load view still counts only real stalls.
 ### Fixed
+- A broken edit to fence.mjs or a guard no longer locks out every squiggle and the lead: when the working guard doesn't load or throws, the committed one answers. A squiggle commit of guards that don't answer is refused.
 - On touch screens every control is at least 44px: the brand, add goal, chat composer and header, volume sliders, settings controls, new squiggle form, sheet buttons, close chips, jump list, diff and note owner. `node bin/touch-audit.mjs` checks every view and popup at 390 px on a temp room; `--shots <dir>` saves one screenshot per view, and a failing run names its views.
 - Cached speech unused for a week is deleted, at start and every 6 hours, so the voice cache no longer grows without end. Replaying a line keeps it.
 - Wakes, ticks and the board page share one read of the task list per change instead of parsing it again for every caller.

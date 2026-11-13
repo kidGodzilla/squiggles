@@ -2,8 +2,9 @@
 // In a checkout several squiggles share, a squiggle may not commit lines that are someone else's work:
 // lines already uncommitted when its turn started (the server snapshots `git diff HEAD` at turn start),
 // or lines another squiggle wrote during the turn, with Edit/Write or with Bash.
-import { execFile, execFileSync } from 'node:child_process';
+import { execFile, execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { dataDir } from './config.mjs';
@@ -171,12 +172,34 @@ export function installHook(repo, hooks = path.join(ROOT, 'bin', 'hooks'), done 
   });
 }
 
+// The hook guards and what they load. A commit that breaks them makes HEAD's copy broken too, and guard-run.sh's fallback
+// with it, so every squiggle and the lead would be locked out: in this repo the staged guards must answer `ls` first.
+export const GUARD_PROVIDERS = ['claude', 'codex', 'cursor'];
+export const GUARD_FILES = ['fence.mjs', 'bin/guard-run.sh', 'bin/guard-wall.pl', 'bin/guard-head.mjs',
+  ...GUARD_PROVIDERS.flatMap((d) => [`${d}/guard.sh`, `${d}/guard.mjs`])];
+export function brokenGuards(top, git) {
+  if (!git('diff', '--cached', '--name-only', '-z', '--', ...GUARD_FILES).split('\0').some(Boolean)) return [];
+  const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'guards-'))); // realpath: a guard run by a linked path isn't main
+  try {
+    git('-C', top, 'checkout-index', `--prefix=${tmp}/`, '--', ...GUARD_FILES);
+    const call = JSON.stringify({ tool_name: 'Bash', tool_input: { command: 'ls' }, cwd: tmp });
+    return GUARD_PROVIDERS.filter((d) => spawnSync('sh', [path.join(tmp, d, 'guard.sh')],
+      { input: call, env: { PATH: process.env.PATH, HOME: os.homedir(), AGENTS_ID: 'guard-check' }, encoding: 'utf8', timeout: 60e3 }).status !== 0);
+  } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+}
+
 // A guard bug must not stop every squiggle commit: on a crash it warns and lets the commit through.
 if (process.argv[1] && fs.realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) try {
   const id = process.env.AGENTS_ID; if (!id) process.exit(0);
   const git = (...a) => execFileSync('git', a, { encoding: 'utf8', maxBuffer: 64 << 20 });
   const top = git('rev-parse', '--show-toplevel').trim();
   const msgs = [], fix = 'Stage only your own hunks: git restore --staged <file>; git diff <file> > /tmp/mine.patch; delete the other hunks from the patch; git apply --cached /tmp/mine.patch.';
+  const real = (p) => { try { return fs.realpathSync(p); } catch { return null; } };
+  const own = real(path.join(ROOT, '.git')); // the room's own checkout; an installed copy without one checks nothing here
+  if (own && real(path.resolve(top, git('rev-parse', '--git-common-dir').trim())) === own) {
+    const broken = brokenGuards(top, git);
+    if (broken.length) msgs.push(`staged fence or guard files that don't answer a plain ls in ${broken.join(', ')}. Committed, they would lock out every squiggle and the lead. Run node --test test/guard-head.test.mjs and fix them first.`);
+  }
   let snap = null; try { snap = JSON.parse(fs.readFileSync(snapPath(id), 'utf8')); } catch {}
   if (snap?.repo === top && !process.env.AGENTS_MINE) {
     const staged = git('diff', '--cached', '-U0', '--no-color', '--no-ext-diff');

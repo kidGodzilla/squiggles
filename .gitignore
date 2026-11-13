@@ -12,3 +12,5 @@ meetings.json
 node_modules/
 bin/calendar-reader
 bin/CalendarReader.app/
+# committed guard copies bin/guard-run.sh falls back to
+.head.*
