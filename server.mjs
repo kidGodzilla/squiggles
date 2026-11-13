@@ -71,6 +71,9 @@ const FILES = path.join(DATA, 'files'); // shared drop folder; chat images land 
 const STATE = path.join(RUNS, 'state.json');
 const TTS_DIR = path.join(RUNS, 'tts');
 for (const d of [SQ, RUNS, MEDIA, TTS_DIR]) fs.mkdirSync(d, { recursive: true });
+// Speech unused for a week goes, at start and every 6 hours.
+const pruneTts = () => { const r = pruneSpeech(TTS_DIR); if (r.files) console.log(`voice cache: pruned ${r.files} files, ${Math.round(r.bytes / 1048576)}M`); };
+setTimeout(pruneTts, 30e3).unref(); setInterval(pruneTts, 6 * 36e5).unref();
 // Run by the login item? Squiggles inherit XPC_SERVICE_NAME, so a server they start must also not be launchd's child.
 const LAUNCHD = process.env.XPC_SERVICE_NAME === 'local.squiggles.server' && process.ppid === 1;
 // Every exit says why in runs/shutdowns.log. Signals can't name their sender, so the parent is logged with it.
@@ -89,6 +92,7 @@ if (fs.existsSync(path.join(RUNS, 'quit'))) {
 }
 
 const kokoro = createRequire(import.meta.url)('./voice/kokoro.cjs');
+import { pruneSpeech, used } from './voice/cache.mjs';
 const now = () => new Date().toISOString();
 const readText = (f, d = '') => { try { return fs.readFileSync(f, 'utf8'); } catch { return d; } };
 
@@ -1360,7 +1364,7 @@ function tts(text, voice) {
   text = String(text).slice(0, 1500);
   const key = crypto.createHash('sha1').update(voice + '|' + text).digest('hex');
   const file = path.join(TTS_DIR, key + '.wav');
-  if (fs.existsSync(file)) return Promise.resolve(file);
+  if (fs.existsSync(file)) return Promise.resolve(used(file));
   if (!ttsJobs.has(key)) {
     const tmp = file + '.part.wav';
     ttsJobs.set(key, kokoro.synth(text, voice, 1.08, tmp).then(() => { fs.renameSync(tmp, file); return file; }).finally(() => ttsJobs.delete(key)));

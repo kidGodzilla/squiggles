@@ -255,6 +255,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 
 - The stall log also records sync work over 200 ms when no 1-second stall happened; the load view still counts only real stalls.
 ### Fixed
+- Cached speech unused for a week is deleted, at start and every 6 hours, so the voice cache no longer grows without end. Replaying a line keeps it.
 - Wakes, ticks and the board page share one read of the task list per change instead of parsing it again for every caller.
 - The worktrees listing reads every repo's worktree list at once and checks uncommitted files in six worktrees at a time, instead of one after another, so a long list loads in seconds.
 - The Review tab's merge listing reads each repo's refs once and keeps branch facts while both tips stay put: a second listing of 12 rows runs a handful of git processes instead of a dozen per row.
