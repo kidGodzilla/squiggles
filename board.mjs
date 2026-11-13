@@ -423,26 +423,40 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
   }
   // Resolves when every pending retire is done (tests, clean shutdown).
   const retired = () => Promise.all([...retiring]);
-  // Every extra worktree in the goals' repos, with the task that owns it. No live task = orphan.
+  // Every extra worktree in the goals' repos and every folder in the worktree dir, with the task that owns it. No live task = orphan.
+  // plain: a folder there git can't place, its repo gone or never one. Listed so nothing there goes unseen; nothing removes it.
   async function worktrees() {
     let wtReal = WT; try { wtReal = fs.realpathSync(WT); } catch {}
     const t = tasks(), seen = new Set(), out = [], rc = {}, realOf = (r) => r ? (rc[r] ??= (() => { try { return fs.realpathSync(expand(r)); } catch { return ''; } })()) : '';
-    for (const repo of TIERS.flatMap((x) => goals()[x]).flatMap((g) => g.repos || [])) {
-      let real; try { real = fs.realpathSync(expand(repo)); } catch { continue; } if (seen.has(real)) continue; seen.add(real);
+    const temp = (p) => /\/(merge-t\d+-|branch-d-)[^/]+$/.test(p); // the Review tab's own temp worktrees, gone in a moment
+    const scan = async (repo) => {
+      let real; try { real = fs.realpathSync(expand(repo)); } catch { return; } if (seen.has(real)) return; seen.add(real);
       for (const w of await worktreesOfA(repo)) { // off the loop
-        if (/\/(merge-t\d+-|branch-d-)[^/]+$/.test(w.path)) continue; // the Review tab's own temp worktrees, gone in a moment
+        if (temp(w.path)) continue;
         const task = t.find((x) => x.status !== 'done' && ((x.worktrees || []).includes(w.path) || (w.branch && x.branch === w.branch && realOf(x.repo) === real))) || null;
         let dirty = 0; try { dirty = fs.existsSync(w.path) ? (await dirtyOfA(w.path)).length : 0; } catch {}
         out.push({ repo: real, path: w.path, branch: w.branch, head: w.head, dirty, missing: !fs.existsSync(w.path), home: w.path.startsWith(wtReal + '/'),
           task: task?.id || '', status: task?.status || '', owner: task?.owner || '', title: task?.title || '', orphan: !task });
       }
+    };
+    for (const repo of TIERS.flatMap((x) => goals()[x]).flatMap((g) => g.repos || [])) await scan(repo);
+    let folders = []; try { folders = fs.readdirSync(wtReal, { withFileTypes: true }).filter((d) => d.isDirectory() && !d.name.startsWith('.')).map((d) => path.join(wtReal, d.name)); } catch {}
+    const listed = (p) => out.some((w) => w.path === p);
+    for (const p of folders) {
+      if (listed(p) || temp(p)) continue;
+      if (fs.existsSync(path.join(p, '.git'))) { // the .git check: a bare folder must not resolve to a repo above the worktree dir
+        try { const c = await gitA(p, ['rev-parse', '--path-format=absolute', '--git-common-dir']); await scan(path.basename(c) === '.git' ? path.dirname(c) : c); } catch {}
+        if (listed(p)) continue;
+      }
+      const task = t.find((x) => x.status !== 'done' && (x.worktrees || []).includes(p)) || null;
+      out.push({ repo: '', path: p, branch: '', head: '', dirty: 0, missing: false, home: true, plain: true, task: task?.id || '', status: task?.status || '', owner: task?.owner || '', title: task?.title || '', orphan: !task });
     }
     return out;
   }
   // The lead keeps one note listing orphan worktrees: refreshed when the list changes, done when there are none.
   async function orphanNotes() {
     const list = (await worktrees()).filter((x) => x.orphan), t = tasks(), cur = t.find((x) => x.status !== 'done' && x.owner === 'lead' && String(x.title).startsWith('Orphan worktrees'));
-    const note = list.map((w) => `${w.path} (${path.basename(w.repo)}${w.branch ? ` ${w.branch}` : ' detached'}${w.dirty ? `, ${w.dirty} uncommitted` : ''})`).join('; ');
+    const note = list.map((w) => w.plain ? `${w.path} (not a working worktree)` : `${w.path} (${path.basename(w.repo)}${w.branch ? ` ${w.branch}` : ' detached'}${w.dirty ? `, ${w.dirty} uncommitted` : ''})`).join('; ');
     if (!list.length) return cur ? taskOp({ op: 'move', id: cur.id, status: 'done', note: 'no orphan worktrees left' }) : null;
     const title = `Orphan worktrees: ${list.length} with no live task. Find each owner (task edit <id> branch repo:branch) or remove it if clean and merged. See: worktrees`;
     if (cur) return cur.note === note ? cur : taskOp({ op: 'edit', id: cur.id, title, note });

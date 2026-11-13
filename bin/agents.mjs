@@ -217,10 +217,10 @@ const cmds = {
     if (op === 'edit') return call('/tasks', { op, id: x, [y]: z ?? '' });
     return call('/tasks', { op, id: x });
   },
-  // worktrees [check]: every extra worktree in the goals' repos with its task and owner; check refreshes the lead's orphan note.
+  // worktrees [check]: every extra worktree in the goals' repos and every folder in the worktree dir, with its task and owner; check refreshes the lead's orphan note.
   worktrees: async () => {
     const r = a[0] === 'check' ? (await call('/worktrees', {})).worktrees : await call('/worktrees'), home = (p) => p.replace(/^\/Users\/[^/]+/, '~');
-    return r.map((w) => `${w.orphan ? 'ORPHAN  ' : `${w.task}  `}${home(w.path)}  ${w.branch || '(detached)'}${w.task ? `  ${w.status}${w.owner ? ` @${w.owner}` : ''}` : ''}${w.dirty ? `  ${w.dirty} uncommitted` : ''}${w.missing ? '  folder gone' : ''}${w.home ? '' : '  (not in ~/wt)'}`).join('\n') || 'no extra worktrees';
+    return r.map((w) => `${w.orphan ? 'ORPHAN  ' : `${w.task}  `}${home(w.path)}  ${w.plain ? 'not a working worktree' : w.branch || '(detached)'}${w.task ? `  ${w.status}${w.owner ? ` @${w.owner}` : ''}` : ''}${w.dirty ? `  ${w.dirty} uncommitted` : ''}${w.missing ? '  folder gone' : ''}${w.home ? '' : '  (not in ~/wt)'}`).join('\n') || 'no extra worktrees';
   },
   // merges | merge <task> | merge diff <task> | merge back <task> <note>. The user merges from the Review tab; the lead runs `merge` only when they say so for that item.
   merges: async () => a[0] === 'refresh'

@@ -413,8 +413,8 @@ function worktreesHtml() {
   return `<h3 class="wth">Worktrees <span>${w.length}${orphans ? `, ${orphans} without a task` : ''}</span></h3><table class="mtab wtab"><thead><tr><th>Task</th><th>Folder</th><th>Branch</th><th>State</th><th>Owner</th></tr></thead><tbody>${w.map((x) => `<tr>
     <td class="mid">${x.orphan ? '<span class="mtag">Orphan</span>' : esc(x.task)}</td>
     <td title="${esc(x.path)}"><code>${esc(home(x.path))}</code></td>
-    <td title="${esc(x.branch)}"><code>${esc(x.branch || 'detached')}</code></td>
-    <td class="wst">${[x.task ? esc(x.status) : '', x.dirty ? `${x.dirty} uncommitted` : '', x.missing ? 'folder gone' : '', x.home ? '' : 'not in ~/wt'].filter(Boolean).join(', ')}</td>
+    <td title="${esc(x.branch)}">${x.plain ? 'None' : `<code>${esc(x.branch || 'detached')}</code>`}</td>
+    <td class="wst">${[x.task ? esc(x.status) : '', x.dirty ? `${x.dirty} uncommitted` : '', x.missing ? 'folder gone' : '', x.plain ? 'not a working worktree' : '', x.home ? '' : 'not in ~/wt'].filter(Boolean).join(', ')}</td>
     <td class="mown">${x.owner ? face(x.owner, 'wt' + hash(x.path) + '_') : ''}</td></tr>`).join('')}</tbody></table>`;
 }
 function diffHtml(text) {

@@ -233,6 +233,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Settings number inputs show an accent border on focus and are 44px tall on touch screens.
 
 ### Fixed
+- The worktree list and the orphan note cover every folder in the worktree dir, including worktrees of repos in no goal and folders git no longer knows.
 - A merge step ticked while the Merge tab was loading no longer shows as open again.
 - Every field on the squiggle sheet is a 44px target on touch, and paired fields stay level when a label wraps.
 - A request that asks who is calling more than once looks it up once: each look ran `lsof` and `ps -A`.
@@ -328,6 +329,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - The scheduler staggers wakes per provider, 2 minutes apart (was 10 minutes across all).
 
 ### Fixed
+- The worktree list and the orphan note cover every folder in the worktree dir, including worktrees of repos in no goal and folders git no longer knows.
 - Review tasks in an open goal that sit on a branch (not main) now show in the Merge tab; before, nobody could merge them.
 - A dropped task's id is never handed out again; tasks.json keeps the highest id issued.
 - Merge tab between 760 and 1100px wide: opening a row no longer squeezes the titles.
