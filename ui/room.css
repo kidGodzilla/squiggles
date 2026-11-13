@@ -124,7 +124,8 @@ main { flex: 1; display: flex; min-height: 0 }
 .lookrow { display: flex; gap: 8px } .lookrow select { flex: 1; min-width: 0 }
 .swatches { display: flex; flex-wrap: wrap; gap: 6px } .swatches button { width: 28px; height: 28px; padding: 0; border-radius: 6px; border: 1px solid var(--line); cursor: pointer }
 .swatches button[aria-pressed="true"] { outline: 2px solid var(--text); outline-offset: 2px }
-@media (pointer: coarse) { .swatches button { width: 44px; height: 44px } }
+@media (pointer: coarse) { .swatches button { width: 44px; height: 44px } #sheetBody select, #sheetBody input:not([type=checkbox]), .lookrow .btn { min-height: 44px } }
+#sheetBody .row2 { align-items: end } /* a wrapped label keeps paired fields level */
 .bloom { display: none } .speaking .bloom { display: inline } .speaking .bud { display: none }
 .hand { animation: type .34s ease-in-out infinite } .hand.r { animation-delay: -.17s } @keyframes type { 50% { transform: translateY(-1.3px) } }
 .tw { animation: tw 3.2s ease-in-out infinite } .pulse { animation: tw 1.7s ease-in-out infinite } @keyframes tw { 50% { opacity: .25 } }

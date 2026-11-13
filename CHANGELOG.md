@@ -173,6 +173,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Settings > Defaults > Turns at once, and `slots`, set how many turns each provider runs at once.
 - Review lists watches waiting for approval, with the command, folder, schedule and reason, plus Approve and Drop. They count on the Review tab, in a chat's waiting line and in `needs`.
 ### Changed
+- Merge steps must be jobs: the board refuses a step that opens with approve or sign off, and points to `pick ask` for a yes or no.
 - Shared prompt: the code in a squiggle's area is theirs to shape; in code a task touches they merge repeats and fix small related problems, named in the review note, keeping existing behavior.
 - Squiggles that wake every hour or more often now only drift earlier than their schedule, never later, so each wake lands inside the 1-hour prompt cache. Longer cadences still drift both ways.
 - Squiggles launch with only the built-in tools they use (Task, Bash, Edit, Read, Write, WebFetch, WebSearch, ToolSearch, TaskStop), about 12k fewer tokens a cold wake. Skills are off unless turned on in the sheet or with `set <id> skills true`.
@@ -232,6 +233,8 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Settings number inputs show an accent border on focus and are 44px tall on touch screens.
 
 ### Fixed
+- A merge step ticked while the Merge tab was loading no longer shows as open again.
+- Every field on the squiggle sheet is a 44px target on touch, and paired fields stay level when a label wraps.
 - A request that asks who is calling more than once looks it up once: each look ran `lsof` and `ps -A`.
 - Usage skips a folder named like a run log instead of failing the report.
 - A video whose read fails mid-stream closes the response instead of hanging it.
