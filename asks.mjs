@@ -39,6 +39,8 @@ export function mask(text) {
   t = t.replace(/(\b[A-Za-z0-9_.-]*(?:key|keys|secret|token|pass|password|passwd|auth|sig|signature|dsn)%3D)[^&\s"'%]+/gi, '$1[masked]'); // token%3Dvalue
   t = t.replace(/((?:^|\s)-p)(["'])[^\n]*?\2/g, '$1$2[masked]$2');
   t = t.replace(/((?:^|\s)-p)(?=[^\s]*[^\d\s])[^\s-][^\s]{3,}/g, '$1[masked]'); // mysql -pPASS (not -p 22, not -p2222)
+  // --password hunter2, --api-key "x y", --token=x is above: a flag named for a secret takes the next word as its value (not --no-x).
+  t = t.replace(/((?:^|\s)--(?!no-)[\w-]*(?:password|passwd|passphrase|pass|token|secret|api-?key|access-?key|private-?key|auth|credentials?)[ \t]+)(?:"[^"\n]*"|'[^'\n]*'|(?!-)[^\s"']+)/gi, (_, k) => `${k}[masked]`);
   t = t.replace(/((?:^|\s)(?:-u|--user)(?:[ \t]+|=)["']?)[^\s"']+/g, '$1[masked]'); // curl -u user:pass
   // Auth headers: custom x-*auth* ones and the standard ones.
   t = t.replace(/(\b(?:x-[\w-]*auth[\w-]*|authorization|proxy-authorization|cookie|set-cookie|x-api-key)["']?[ \t]*:[ \t]*)[^\s"'][^\n]*/gi, '$1[masked]');

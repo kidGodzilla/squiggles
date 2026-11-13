@@ -166,3 +166,11 @@ test('a folder swapped after filing is refused, and the run uses the folder reso
   const { runAsk } = await import('../asks.mjs');
   assert.equal((await runAsk(r)).out.trim(), fs.realpathSync(a1));
 });
+
+test('mask: a secret-named flag hides the next word; other flags and --no-x stay readable', async () => {
+  const { mask } = await import('../asks.mjs');
+  const leaks = { 'mysql --password hunter2xyz db': 'hunter2xyz', 'cli login --token abcd1234 --verbose': 'abcd1234', 'x --api-key "sk ab" y': 'sk ab',
+    'psql --PASSWORD pw9': 'pw9', 'vault --client-secret s3cr1t': 's3cr1t', 'npm --auth-token tok1': 'tok1' };
+  for (const [s, leak] of Object.entries(leaks)) assert.ok(!mask(s).includes(leak), `${JSON.stringify(s)} -> ${JSON.stringify(mask(s))}`);
+  for (const keep of ['mysql --no-password -v', 'git log --oneline main', 'curl --auth-type basic', 'x --token --next', 'git show 0123456789abcdef0123456789abcdef01234567']) assert.equal(mask(keep), keep);
+});

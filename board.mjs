@@ -23,12 +23,16 @@ function pinTips(task, repos) {
   task.tips = {}; for (const r of new Set([task.repo, ...repos].filter(Boolean).map(realRepo))) { const sha = tipOf(r, task.branch); if (sha) task.tips[r] = sha; }
   if (!Object.keys(task.tips).length) delete task.tips;
 }
-const hasBranch = (repo, branch) => { try { execFileSync('git', ['-C', expand(repo), 'rev-parse', '--verify', '--quiet', `refs/heads/${branch}`], { stdio: 'pipe' }); return true; } catch { return false; } };
+// A branch name git takes as a branch, never as an option: git itself refuses to create -x, but update-ref can.
+export const badBranch = (b) => { b = String(b || ''); if (!b || b.startsWith('-')) return true; try { execFileSync('git', ['check-ref-format', `refs/heads/${b}`], { stdio: 'pipe' }); return false; } catch { return true; } };
+const usable = (b) => { if (badBranch(b)) throw new Error(`${JSON.stringify(String(b))} is not a usable branch name: rename the branch`); return b; };
+const hasBranch = (repo, branch) => { if (badBranch(branch)) return false; try { execFileSync('git', ['-C', expand(repo), 'rev-parse', '--verify', '--quiet', `refs/heads/${branch}`], { stdio: 'pipe' }); return true; } catch { return false; } };
 // A review task names a branch. "repo:branch" pins the repo (a path or a goal repo's name); a bare branch is looked up in the goal's repos.
 function resolveBranch(spec, goal) {
   const m = /^(.*?):([^:]+)$/.exec(String(spec || '').trim());
   let repo = m ? m[1] : '', branch = (m ? m[2] : String(spec || '')).trim();
   if (!branch) throw new Error('review needs a branch: task move <id> review [repo:]<branch> ["<test result>"]');
+  usable(branch);
   const repos = goal?.repos || [];
   // A bare name (api) means the goal's repo of that name, else ~/<name>.
   if (repo && !/[/~]/.test(repo)) repo = repos.find((r) => path.basename(expand(r)) === repo) || `~/${repo}`;
@@ -93,7 +97,10 @@ const worktreesOfA = async (repo) => { try { return parseWorktrees(await gitA(re
 const parseWorktrees = (list) => {
   return list.split(/\n\n+/).slice(1).map((b) => ({ path: b.match(/^worktree (.+)$/m)?.[1], branch: b.match(/^branch refs\/heads\/(.+)$/m)?.[1] || '', head: b.match(/^HEAD (\w+)/m)?.[1]?.slice(0, 8) || '', locked: /^locked/m.test(b), prunable: /^prunable/m.test(b) })).filter((w) => w.path);
 };
-// Worktrees on a branch or at one of the given paths: clean ones are removed (never --force), dirty or locked kept; then prune.
+// Ignored files git worktree remove would delete without asking that nobody can rebuild: env files, keys, local secrets.
+const SECRET = /^(\.env(\..+)?|\.dev\.vars|\.npmrc|\.netrc|credentials(\..+)?|secrets?(\..+)?|.+\.(pem|key|p8|p12|pfx|keystore|jks|mobileprovision))$/i;
+const secretsOfA = async (p) => (await gitA(p, ['status', '--porcelain', '--ignored=matching', '--untracked-files=all'])).split('\n').filter((l) => l.startsWith('!! ')).map((l) => l.slice(3).replace(/\/$/, '')).filter((f) => SECRET.test(path.basename(f)));
+// Worktrees on a branch or at one of the given paths: clean ones are removed (never --force), dirty, locked or holding ignored secrets (.env) kept; then prune.
 // Off the event loop: removing a checkout of a big repo blocks for seconds.
 async function dropWorktreesA(repo, branch, paths = []) {
   const out = { removed: [], kept: [] };
@@ -101,7 +108,7 @@ async function dropWorktreesA(repo, branch, paths = []) {
     if (!((branch && w.branch === branch) || paths.includes(w.path))) continue;
     try {
       if (!fs.existsSync(w.path)) { out.removed.push(w.path); continue; }
-      if (w.locked || (await dirtyOfA(w.path)).length) throw new Error('dirty');
+      if (w.locked || (await dirtyOfA(w.path)).length || (await secretsOfA(w.path)).length) throw new Error('dirty');
       if (isLink(path.join(w.path, 'node_modules'))) fs.unlinkSync(path.join(w.path, 'node_modules'));
       await gitA(repo, ['worktree', 'remove', w.path]); out.removed.push(w.path);
     } catch { out.kept.push(w.path); }
@@ -277,6 +284,7 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
       const repos = goal?.repos || [], repo = repoArg || task.repo || (repos.length === 1 ? repos[0] : '');
       if (!repo) throw new Error(repos.length ? `say which repo: task worktree ${task.id} <${repos.join('|')}>` : `${task.id} has no repo: task worktree ${task.id} <repo>`);
       const name = path.basename(expand(repo)), at = path.join(WT, `${name}-${task.id}`), br = (task.repo && expand(task.repo) === expand(repo) && task.branch) || `${task.id}-${slug(task.title).slice(0, 30).replace(/-$/, '')}`;
+      usable(br);
       if (!adding.has(at)) adding.set(at, addWorktree(task.id, repo, at, br).finally(() => adding.delete(at)));
       return adding.get(at);
     }
@@ -340,6 +348,7 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
       if (!task.repo || !task.branch) throw new Error(`${task.id} has no branch yet`);
       if (!hasBranch(task.repo, task.branch)) throw new Error(`branch ${task.branch} is gone from ${task.repo}`);
       const b = branch === 'auto' || !branch ? detectBase(task.repo, task.branch) : String(branch);
+      usable(b);
       if (b === task.branch) throw new Error('a branch cannot merge into itself');
       if (!hasBranch(task.repo, b)) throw new Error(`no branch ${b} in ${task.repo}`);
       if (b !== baseOf(task.repo)) task.base = b; else delete task.base;
@@ -446,6 +455,7 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
   async function repoInfo(repo, branch, q, into) {
     const r = { repo, branch };
     try {
+      usable(branch); if (into) usable(into);
       if (!(await okA(gitA(repo, ['rev-parse', '--verify', '--quiet', `refs/heads/${branch}`])))) throw new Error(`branch ${branch} is gone from ${repo}`);
       const base = into || await q(`base ${repo}`, () => baseOfA(repo));
       if (into && !(await okA(gitA(repo, ['rev-parse', '--verify', '--quiet', `refs/heads/${into}`])))) throw new Error(`base branch ${into} is gone from ${repo}: task base <id> <branch>|auto`);
