@@ -28,9 +28,12 @@ export function makePasscode({ read, write, now = () => Date.now(), localBrowser
   // Node's fetch sends sec-fetch-mode too, so only these mark a browser.
   const isBrowser = (req) => ['sec-fetch-site', 'origin', 'cookie'].some((h) => req.headers?.[h] !== undefined) || /Mozilla\//.test(req.headers?.['user-agent'] || '');
   // Local non-browser callers (CLI, scripts) get their own bucket, so one can't lock out the user's browser on 127.0.0.1.
+  // Browser headers are easy to send, so a local request joins the browser's bucket only once prove() found a real browser on the socket.
+  const proven = new WeakSet();
+  async function prove(req) { if (isLocal(req) && isBrowser(req) && await localBrowser(req)) proven.add(req); }
   // Behind a proxy, the address it saw: Cloudflare's cf-connecting-ip, else the last X-Forwarded-For entry (the proxy appends;
   // earlier entries are whatever the client sent).
-  const client = (req) => String(req.headers?.['cf-connecting-ip'] || String(req.headers?.['x-forwarded-for'] || '').split(',').pop().trim() || req.socket?.remoteAddress || '').trim() + (isLocal(req) && !isBrowser(req) ? ' cli' : '');
+  const client = (req) => String(req.headers?.['cf-connecting-ip'] || String(req.headers?.['x-forwarded-for'] || '').split(',').pop().trim() || req.socket?.remoteAddress || '').trim() + (isLocal(req) && !proven.has(req) ? ' cli' : '');
   const live = (p) => { const t = now(), s = {}; for (const [k, exp] of Object.entries(p.sessions || {})) if (exp > t) s[k] = exp; return s; };
   const hasSession = (req, p) => { const t = cookieTok(req); return !!t && (live(p)[sha(t)] || 0) > now(); };
 
@@ -132,5 +135,5 @@ export function makePasscode({ read, write, now = () => Date.now(), localBrowser
     throw err('op: unlock, lock, set, clear, local or status');
   }
 
-  return { ok, status, op, allowed, session, owner, page, codeLen: () => mem?.codeLen || 0 };
+  return { ok, status, op, allowed, prove, session, owner, page, codeLen: () => mem?.codeLen || 0 };
 }

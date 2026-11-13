@@ -41,7 +41,7 @@ test('the store stops growing', () => {
 test('off refuses new reactions, and who reacted never comes from a squiggle-controlled field', () => {
   const s = src('server.mjs'), route = s.slice(s.indexOf("'/api/react' && req.method === 'POST'"), s.indexOf("if (url.pathname === '/api/react') return"));
   assert.ok(route.indexOf("reactions === 'off'") < route.indexOf('reactions.toggle'));
-  assert.match(route, /by = c \|\| humans\.all\(\)\.find/);
+  assert.match(route, /w = await whoSent\(req, b\.human\)[\s\S]*by = c \|\| w\.human \|\| .owner./);
   assert.doesNotMatch(route, /b\.by/);
 });
 

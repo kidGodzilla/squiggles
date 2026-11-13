@@ -22,7 +22,7 @@ import { reportHoldMs, reportsText, reportLines, away } from './focus.mjs';
 import { quietSig, skipWake, alwaysWakes, ownEnd } from './quiet.mjs';
 import { compactAtEnd, ctxOf, COMPACT_PROMPT } from './compact.mjs';
 import { HOME_FENCE } from './fence.mjs';
-import { sender, askerOf, askSeen, writesNote, noteRefusal, labelled, screenRefusal, humansRefusal, roomRefusal, peersRefusal, goalsRefusal, squiggleRefusal, peerRefusal } from './gates.mjs';
+import { sender, askerOf, askSeen, writesNote, noteRefusal, labelled, screenRefusal, humansRefusal, roomRefusal, peersRefusal, goalsRefusal, squiggleRefusal, peerRefusal, eventOwner } from './gates.mjs';
 import { wantsPrecheck, precheckPrompt, runPrecheck, PRECHECK_MODEL } from './precheck.mjs';
 import { burns, burnDue, BURN_TEXT } from './burn.mjs';
 import { createWaits, bgStarted, bgEnded, ownRuns } from './waits.mjs';
@@ -945,9 +945,14 @@ const roomEvent = (raw) => {
   }
   return ev;
 };
+// A private squiggle's events skip pages opened by another squiggle (the lead excepted), as its transcript does.
 function broadcast(id, ev) {
-  const line = `data: ${JSON.stringify({ id, ev })}\n\n`;
-  for (const res of clients) res.write(line);
+  const line = `data: ${JSON.stringify({ id, ev })}\n\n`, owner = eventOwner(id, ev);
+  let closed;
+  for (const res of clients) {
+    if (res.caller && res.caller !== owner && !res.lead && (closed ??= loadSquiggle(owner)?.private === true)) continue;
+    res.write(line);
+  }
 }
 
 // Restart without killing anyone mid-turn: wait until nobody is working, then exit; the login item starts the server again.
@@ -1496,6 +1501,12 @@ async function whoSent(req, human) {
   const caller = await callerSquiggle(req);
   return { caller, ...sender({ caller, page: await pass.page(req), human, people: humans.all() }) };
 }
+// Reactions in a private chat are its own and the lead's, like its transcript. Keys are `chat:ts`.
+async function reactionsFor(req) {
+  const c = await callerSquiggle(req), lead = !!(c && loadSquiggle(c)?.lead);
+  const shut = (chat) => !!peerRefusal({ owner: chat, closed: loadSquiggle(chat)?.private === true, caller: c, lead });
+  return Object.fromEntries(Object.entries(reactions.all()).filter(([k]) => !shut(k.slice(0, k.lastIndexOf(':')))));
+}
 async function merger(req, b) {
   const id = await callerSquiggle(req);
   if (id) return loadSquiggle(id)?.lead ? { by: id } : { error: `${id} can't merge gated work: ${USER} presses Merge on the Review tab` };
@@ -1580,7 +1591,7 @@ const server = http.createServer(async (req, res) => {
       if (tunnel && roomCfg().cloudflare && b.op === 'clear') return json(res, { error: 'The room is shared on Cloudflare: stop that first (Settings > Sharing)' }, 409);
       try {
         // Sharing goes first: if it can't be turned off, the passcode stays.
-        let off = false;
+        let off = false; await pass.prove(req);
         if (b.op === 'clear') { pass.allowed(req, b); try { off = await shareOff(); } catch (e) { throw Object.assign(new Error(`Sharing couldn't be turned off, so the passcode stays: ${e.message}`), { code: 409 }); } }
         const r = pass.op(req, b); if (r.cookie) res.setHeader('set-cookie', r.cookie); return json(res, off ? { ...r.body, sharingOff: true } : r.body);
       } catch (e) { return json(res, { error: e.message }, e.code || 400); }
@@ -1597,6 +1608,7 @@ const server = http.createServer(async (req, res) => {
     if (p[0] === 'files' && (p[1] || '').startsWith('@')) { const f = files.resolve(decodeURIComponent(p[1].slice(1)), p.slice(2).map(decodeURIComponent).join('/')); return f ? serveFile(res, f) : json(res, { error: 'not found' }, 404); }
     if (p[0] === 'files') { const f = path.basename(decodeURIComponent(p[1] || '')); return f.startsWith('.') ? json(res, { error: 'not found' }, 404) : serveFile(res, path.join(FILES, f)); }
     if (url.pathname === '/api/stream') {
+      res.caller = await callerSquiggle(req); res.lead = !!(res.caller && loadSquiggle(res.caller)?.lead);
       res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' });
       res.write(': hi\n\n');
       // A page on this Mac (not proxied by tailscale serve, which adds x-forwarded-for): meeting alerts are left to it.
@@ -1703,17 +1715,20 @@ const server = http.createServer(async (req, res) => {
       broadcast('*room', { ...b, k: 'room' }); return json(res, 'ok');
     }
     if (url.pathname === '/api/react' && req.method === 'POST') { // `by` is the process tree first; only a person's page names itself
-      const b = await body(req, res), c = await callerSquiggle(req), chat = String(b.chat || '');
+      const b = await body(req, res), w = await whoSent(req, b.human), c = w.caller, chat = String(b.chat || ''), s = loadSquiggle(chat);
       if (roomCfg().reactions === 'off') return json(res, { error: 'Reactions are off' }, 409);
-      if (!loadSquiggle(chat)) return json(res, { error: 'no such chat' }, 404);
-      const ts = b.ts ?? findMessage(tailEvents(chat), b.match)?.ts;
-      if (ts == null) return json(res, { error: b.match ? `no recent message in ${chat} says "${b.match}"` : `no messages in ${chat}` }, 404);
-      const by = c || humans.all().find((h) => h.id === b.human)?.id || 'owner', r = reactions.toggle({ chat, ts, emoji: b.emoji, by });
+      if (!s) return json(res, { error: 'no such chat' }, 404);
+      const no = peerRefusal({ owner: chat, closed: s.private === true, caller: c, lead: !!(c && loadSquiggle(c)?.lead) });
+      if (no) return json(res, { error: no.error }, no.status);
+      // Only a message that is there: a made-up ts would pin a reaction no page shows.
+      const evs = tailEvents(chat), ts = b.ts != null ? evs.find((e) => String(e.ts) === String(b.ts))?.ts : findMessage(evs, b.match)?.ts;
+      if (ts == null) return json(res, { error: b.ts != null ? `no message in ${chat} at ${b.ts}` : b.match ? `no recent message in ${chat} says "${b.match}"` : `no messages in ${chat}` }, 404);
+      const by = c || w.human || 'owner', r = reactions.toggle({ chat, ts, emoji: b.emoji, by });
       if (r.error) return json(res, { error: r.error }, 400);
       broadcast('*room', { k: 'room', action: 'react', chat, ts, list: r.list });
       return json(res, { chat, ts, list: r.list });
     }
-    if (url.pathname === '/api/react') return json(res, { on: roomCfg().reactions !== 'off', items: reactions.all(), pack: packNames() });
+    if (url.pathname === '/api/react') return json(res, { on: roomCfg().reactions !== 'off', items: await reactionsFor(req), pack: packNames() });
     if (url.pathname === '/api/defaults' && req.method === 'POST') {
       const d = setDefaults(await body(req, res)); broadcast('*room', { k: 'room', action: 'defaults' }); return json(res, d);
     }

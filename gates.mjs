@@ -94,6 +94,9 @@ export function screenRefusal({ id, kind, file, caller = '', lead = false, claud
 }
 
 // A squiggle marked private: its transcript and journal are closed to its peers. Itself, the lead, pages and the terminal read them.
+// Whose a streamed event is: a room event about a chat (a reaction) is that chat's.
+export const eventOwner = (id, ev) => (id === '*room' && ev?.chat ? String(ev.chat) : id);
+
 export function peerRefusal({ owner, closed = false, caller = '', lead = false }) {
   return closed && caller && caller !== owner && !lead ? { status: 403, error: `${owner}'s transcript and journal are closed to other squiggles: ask the lead` } : null;
 }

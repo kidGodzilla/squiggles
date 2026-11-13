@@ -2,9 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { makePasscode } from '../passcode.mjs';
 
-const setup = () => {
+const setup = (o = {}) => {
   let store = null, t = 1e12;
-  const pc = makePasscode({ read: () => store, write: (p) => { store = p; }, now: () => t });
+  const pc = makePasscode({ read: () => store, write: (p) => { store = p; }, now: () => t, ...o });
   return { pc, get store() { return store; }, tick: (ms) => { t += ms; } };
 };
 const remote = (cookie) => ({ socket: { remoteAddress: '127.0.0.1' }, headers: { 'x-forwarded-for': '100.64.0.9', 'sec-fetch-site': 'same-origin', ...(cookie && { cookie }) } });
@@ -136,11 +136,15 @@ test('wrong current codes share the unlock limiter', () => {
   assert.throws(() => s.pc.op(r, { op: 'unlock', code: '24682468' }), (e) => e.code === 429);
 });
 
-test('empty codes and local scripts cannot lock the user out', () => {
-  const s = setup(), r = remote(), local = localBrowser();
+test('empty codes and local scripts cannot lock the user out', async () => {
+  const local = localBrowser(), forged = localBrowser(), s = setup({ localBrowser: async (req) => req === local }), r = remote();
   s.pc.op(cli, { op: 'set', code: '24682468' });
   for (let i = 0; i < 40; i++) assert.throws(() => s.pc.op(r, { op: 'unlock' }), /wrong/);
   for (let i = 0; i < 40; i++) assert.throws(() => s.pc.op(cli, { op: 'unlock', code: '0000' }), /wrong|too many/);
+  // A script sending browser headers isn't the browser: its failures fill the script bucket.
+  await s.pc.prove(forged);
+  for (let i = 0; i < 40; i++) assert.throws(() => s.pc.op(forged, { op: 'unlock', code: '0000' }), /wrong|too many/);
+  await s.pc.prove(local);
   assert.equal(s.pc.op(local, { op: 'unlock', code: '24682468' }).body.ok, true, 'the local browser has its own bucket');
   assert.equal(s.pc.op(r, { op: 'unlock', code: '24682468' }).body.ok, true, 'neither counted toward the tailnet client or the global cap');
 });
