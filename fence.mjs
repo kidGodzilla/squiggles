@@ -780,8 +780,18 @@ export function roomReason(input = {}, dir = dataDir()) {
   try { cfg = JSON.parse(fs.readFileSync(path.join(dir, 'config.json'), 'utf8')) ?? {}; }
   catch (e) { if (e.code !== 'ENOENT') return 'config.json in the data folder could not be read, so the room address is unknown: fix it to go on'; }
   const port = process.env.PORT || cfg.port || ROOM_PORT, hosts = [cfg.tailnet && 'ts\\.net', cfg.cloudflare && 'trycloudflare\\.com'].filter(Boolean);
-  const room = new RegExp(`:${esc(String(port))}(?!\\d)${hosts.map((h) => `|\\.${h}(?![\\w-])`).join('')}`, 'i');
-  return room.test(JSON.stringify(input) ?? '') ? REASONS.room : '';
+  const room = new RegExp(`:0*${esc(String(port))}(?!\\d)${hosts.map((h) => `|\\.${h}(?![\\w-])`).join('')}`, 'i');
+  return strings(input).some((t) => room.test(asChromeReads(t))) ? REASONS.room : '';
+}
+const strings = (v) => (typeof v === 'string' ? [v] : v && typeof v === 'object' ? Object.entries(v).flatMap(([k, x]) => [k, ...strings(x)]) : []);
+// Chrome decodes a URL before it opens it, and a script decodes its own escapes: undo both, a few rounds deep, and fold wide dots and digits.
+const code = (h) => { const n = parseInt(h, 16); return n <= 0x10ffff ? String.fromCodePoint(n) : ''; };
+function asChromeReads(t) {
+  for (let i = 0, was = ''; i < 5 && was !== t; i++) {
+    was = t;
+    t = t.replace(/%([0-9a-f]{2})/gi, (_, h) => code(h)).replace(/\\(?:x([0-9a-f]{2})|u([0-9a-f]{4})|u\{([0-9a-f]{1,6})\})/gi, (_, a, b, c) => code(a || b || c));
+  }
+  return t.normalize('NFKC').replace(/[\u3002\uff61]/g, '.');
 }
 
 // Peer-private logs. Every squiggle's private/ folder is closed to the others; a squiggle marked private closes its journal

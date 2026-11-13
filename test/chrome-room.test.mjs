@@ -78,3 +78,12 @@ test('the real hook refuses the room and lets other sites through', () => {
   assert.equal(no.status, 2); assert.equal(no.stderr, REASONS.room);
   assert.equal(run('https://example.com/').status, 0);
 });
+test('URLs Chrome normalises to the room are refused: padded port, encoded or wide dots, script escapes', () => {
+  config({ port: 4555, tailnet: true, cloudflare: true });
+  for (const url of ['http://localhost:04555/', 'http://127.0.0.1:0004555/x', 'https://mac.tail1234.ts%2enet/', 'https://mac.tail1234.ts%252Enet/', 'https://x.trycloudflare%2ecom/',
+    'https://mac.tail1234.ts。net/', 'https://mac.tail1234.ts．net/', 'https://x.trycloudflare｡com/'])
+    assert.equal(nav(url), REASONS.room, url);
+  for (const text of ["location = 'https://mac.tail1234.ts\\x2enet/'", "open('https://x.trycloudflare\\u002ecom')", "fetch('https://mac.tail1234.ts\\u{2e}net')", "fetch('http://localhost:\\x34555/')"])
+    assert.equal(chrome('javascript_tool', { text }), REASONS.room, text);
+  for (const url of ['http://localhost:045550/', 'https://ts%2enetwork/']) assert.equal(nav(url), '', url);
+});
