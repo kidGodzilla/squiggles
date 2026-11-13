@@ -58,6 +58,13 @@ test('fence: relative cd to home, and push by alias, variable or send-pack', () 
     assert.equal(commandReason(c, sub), '', c);
 });
 
+test('fence: push through a shell alias for git', () => {
+  for (const c of ['shopt -s expand_aliases; alias g=git\ng push', "alias g='git'; g push origin", 'alias up="git push"\nup'])
+    assert.equal(commandReason(c, '/tmp/w'), REASONS.push, c);
+  for (const c of ['git commit -m "alias push docs"', 'alias ll="ls -l"; git status', 'alias g=git; g status'])
+    assert.equal(commandReason(c, '/tmp/w'), '', c);
+});
+
 test('fence: relative paths and globs to home folders, cd spelled other ways, subtree and lfs push', () => {
   const sub = path.join(H, 'code');
   for (const c of ['ls ../D*', 'cat ../Docu*/x', 'builtin cd ..; ls D*', 'command cd .. && ls De*', 'env -C .. ls D*', 'cd ~someone; ls D*'])

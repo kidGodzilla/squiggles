@@ -5,6 +5,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 ## 0.1.2 (unreleased)
 
 ### Security
+- The git push fence also refuses push through a shell alias for git (`alias g=git` then `g push`).
 - Command output masking also hides values after --api_key, --access_key, --private_key and --key.
 - Fence guards kill their whole process group at 30 seconds, so a child a stuck guard started can't outlive it and hold the hook open.
 - Chrome tools refuse room URLs written the way Chrome still reads as the room: a zero-padded port, a percent-encoded or full-width dot, or a script escape like `\x2e`.
