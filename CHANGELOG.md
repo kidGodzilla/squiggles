@@ -5,6 +5,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 ## 0.1.2 (unreleased)
 
 ### Security
+- Command output masking also hides values after --api_key, --access_key, --private_key and --key.
 - Fence guards kill their whole process group at 30 seconds, so a child a stuck guard started can't outlive it and hold the hook open.
 - Chrome tools refuse room URLs written the way Chrome still reads as the room: a zero-padded port, a percent-encoded or full-width dot, or a script escape like `\x2e`.
 - The private-data fence checks 1,000 repeated brace words in about a third of a second instead of several: each distinct word and glob is checked once per command, so a long command no longer nears the hook timeout.
