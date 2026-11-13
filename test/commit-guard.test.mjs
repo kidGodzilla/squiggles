@@ -41,7 +41,7 @@ test('hook in a shared checkout refuses a peer\'s uncommitted hunk, takes the sq
   const ok = spawnSync('git', ['-C', repo, 'commit', '-qm', 'drag'], { env, encoding: 'utf8' });
   assert.equal(ok.status, 0, ok.stderr);
   assert.match(g('show', 'HEAD'), /ownDrag/); assert.doesNotMatch(g('show', 'HEAD'), /peerStyle/);
-  assert.equal(spawnSync('git', ['-C', repo, 'commit', '-qam', 'james'], { env: { ...process.env, AGENTS_ID: '' }, encoding: 'utf8' }).status, 0);
+  assert.equal(spawnSync('git', ['-C', repo, 'commit', '-qam', 'owner'], { env: { ...process.env, AGENTS_ID: '' }, encoding: 'utf8' }).status, 0);
   for (const d of [home, repo]) fs.rmSync(d, { recursive: true, force: true });
 });
 
