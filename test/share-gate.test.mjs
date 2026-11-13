@@ -4,26 +4,17 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
+import { boot } from './room.mjs';
 
-const PORT = 4395;
+let PORT;
 async function room(roomJson) {
   const d = fs.mkdtempSync(path.join(os.tmpdir(), 'sq-share-'));
-  fs.writeFileSync(path.join(d, 'config.json'), JSON.stringify({ schema: 1, port: PORT, tailnet: true }));
   fs.mkdirSync(path.join(d, 'runs'));
   if (roomJson) fs.writeFileSync(path.join(d, 'room.json'), JSON.stringify(roomJson));
-  const p = spawn(process.execPath, [new URL('../server.mjs', import.meta.url).pathname], { env: { ...process.env, SQUIGGLES_HOME: d, SQUIGGLES_TAILSCALE: path.join(d, 'no-tailscale') }, stdio: ['ignore', 'pipe', 'pipe'] });
-  let out = '';
-  const up = await new Promise((res) => {
-    const t = setTimeout(() => res(false), 15000);
-    for (const s of [p.stdout, p.stderr]) s.on('data', (b) => { out += b; if (/ on http/.test(out)) { clearTimeout(t); res(true); } });
-    p.on('exit', () => { clearTimeout(t); res(false); });
-  });
+  const { up, out, port, stop } = await boot(d, { tailnet: true }, { SQUIGGLES_TAILSCALE: path.join(d, 'no-tailscale') });
+  PORT = port;
   assert.ok(up, out);
-  return async () => {
-    const gone = new Promise((res) => (p.exitCode !== null || p.signalCode) ? res() : p.once('exit', res));
-    p.kill(); await gone; fs.rmSync(d, { recursive: true, force: true });
-  };
+  return stop;
 }
 const url = (p) => `http://127.0.0.1:${PORT}/api/${p}`;
 const remote = { 'x-forwarded-for': '100.64.0.9' }; // what tailscale serve adds

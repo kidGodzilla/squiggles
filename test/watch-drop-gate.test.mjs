@@ -4,27 +4,17 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
+import { boot } from './room.mjs';
 
-const PORT = 4397;
+let PORT;
 async function room(cfg) {
   const d = fs.mkdtempSync(path.join(os.tmpdir(), 'sq-wdrop-'));
-  fs.writeFileSync(path.join(d, 'config.json'), JSON.stringify({ schema: 1, port: PORT, ...cfg }));
   fs.mkdirSync(path.join(d, 'runs'));
   const file = path.join(d, 'runs', 'watches.json');
   fs.writeFileSync(file, JSON.stringify({ watches: [{ id: 'w1', owner: 'alpha', cmd: 'echo hi', cwd: '/tmp', state: 'pending', every: 3600000 }] }));
-  const p = spawn(process.execPath, [new URL('../server.mjs', import.meta.url).pathname], { env: { ...process.env, SQUIGGLES_HOME: d }, stdio: ['ignore', 'pipe', 'pipe'] });
-  let out = '';
-  const up = await new Promise((res) => {
-    const t = setTimeout(() => res(false), 15000);
-    for (const s of [p.stdout, p.stderr]) s.on('data', (b) => { out += b; if (/ on http/.test(out)) { clearTimeout(t); res(true); } });
-    p.on('exit', () => { clearTimeout(t); res(false); });
-  });
+  const { up, out, port, stop } = await boot(d, cfg);
+  PORT = port;
   assert.ok(up, out);
-  const stop = async () => {
-    const gone = new Promise((res) => (p.exitCode !== null || p.signalCode) ? res() : p.once('exit', res));
-    p.kill(); await gone; fs.rmSync(d, { recursive: true, force: true });
-  };
   return { file, stop };
 }
 const post = async (p, b, cookie) => {
