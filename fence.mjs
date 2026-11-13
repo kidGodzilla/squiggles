@@ -28,7 +28,7 @@ export function hookMain(check, allow = '') {
 }
 const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 // Follows symlinks through the part of the path that exists, and compares without case (APFS ignores it by default).
-// A prefix that resolves has parents that do, so the longest one is found by halving: walking up one folder at a time is quadratic in a long word.
+// A prefix that resolves has parents that do, so the longest one is found by galloping then halving: walking up one folder at a time is quadratic in a long word.
 // memo holds what one command's walk has resolved: a command of many words asks for home and each folder over and over.
 let memo = null;
 const real = (abs) => {
@@ -42,14 +42,22 @@ const real = (abs) => {
     return r;
   };
   let lo = 1, hi = segs.length, base = '/';
+  // The part that exists is usually a few folders: gallop up from the short end first, so no probe joins a long tail.
+  for (let k = 2; k < hi; k *= 2) { const r = at(k); if (r === null) { hi = k - 1; break; } base = r; lo = k + 1; }
   while (lo <= hi) { const k = (lo + hi) >> 1, r = at(k); if (r === null) hi = k - 1; else { base = r; lo = k + 1; } }
   const r = path.join(base, segs.slice(hi).join('/'));
   memo?.set(abs, r);
   return r;
 };
+// A path as written and as it resolves, lower case: the fenced and .ssh checks of one word share it.
+const both = (p, cwd, home) => {
+  const key = `\x01${cwd}\0${home}\0${p}`; if (memo?.has(key)) return memo.get(key);
+  const abs = path.resolve(cwd, String(p).replace(/^~(?=\/|$)/, home)), r = [abs.toLowerCase(), real(abs).toLowerCase()];
+  memo?.set(key, r); return r;
+};
 const under = (names, p, cwd, home) => {
-  const abs = path.resolve(cwd, String(p).replace(/^~(?=\/|$)/, home)), h = real(home).toLowerCase();
-  return [abs, real(abs)].some((a) => { a = a.toLowerCase(); return names.some((d) => a === path.join(h, d) || a.startsWith(path.join(h, d) + '/')); });
+  const h = real(home).toLowerCase();
+  return both(p, cwd, home).some((a) => names.some((d) => a === path.join(h, d) || a.startsWith(path.join(h, d) + '/')));
 };
 export const fencedPath = (p, cwd = process.cwd(), home = os.homedir()) => under(DIRS, p, cwd, home);
 export const sshPath = (p, cwd = process.cwd(), home = os.homedir()) => under(['.ssh'], p, cwd, home);
