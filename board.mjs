@@ -24,7 +24,10 @@ function pinTips(task, repos) {
   if (!Object.keys(task.tips).length) delete task.tips;
 }
 // A branch name git takes as a branch, never as an option: git itself refuses to create -x, but update-ref can.
-export const badBranch = (b) => { b = String(b || ''); if (!b || b.startsWith('-')) return true; try { execFileSync('git', ['check-ref-format', `refs/heads/${b}`], { stdio: 'pipe' }); return false; } catch { return true; } };
+// The verdict depends on the name only, so each name is checked once: it was one sync git per review row each listing.
+const refNames = new Map();
+export const badBranch = (b) => { b = String(b || ''); if (!b || b.startsWith('-')) return true; if (refNames.has(b)) return refNames.get(b); if (refNames.size > 5000) refNames.clear();
+  let bad; try { execFileSync('git', ['check-ref-format', `refs/heads/${b}`], { stdio: 'pipe' }); bad = false; } catch { bad = true; } refNames.set(b, bad); return bad; };
 const usable = (b) => { if (badBranch(b)) throw new Error(`${JSON.stringify(String(b))} is not a usable branch name: rename the branch`); return b; };
 const hasBranch = (repo, branch) => { if (badBranch(branch)) return false; try { execFileSync('git', ['-C', expand(repo), 'rev-parse', '--verify', '--quiet', `refs/heads/${branch}`], { stdio: 'pipe' }); return true; } catch { return false; } };
 // A review task names a branch. "repo:branch" pins the repo (a path or a goal repo's name); a bare branch is looked up in the goal's repos.
@@ -44,7 +47,13 @@ function resolveBranch(spec, goal) {
   throw new Error(`branch ${branch} not found in ${repos.join(' ')}: commit on it first, or give repo:branch`);
 }
 // https://github.com/o/r for a repo whose origin is on GitHub (ssh, scp-style or https), else ''.
+// The origin URL is kept a minute per repo: it was one sync git per review row each listing.
+const origins = new Map();
 function githubOf(repo) {
+  const k = realRepo(repo), c = origins.get(k); if (c && Date.now() - c.at < 60000) return c.v;
+  const v = githubOfNow(repo); origins.set(k, { v, at: Date.now() }); return v;
+}
+function githubOfNow(repo) {
   let u = ''; try { u = git(repo, ['remote', 'get-url', 'origin']); } catch { return ''; }
   const m = u.match(/^(?:git@github\.com:|ssh:\/\/git@github\.com\/|https:\/\/(?:[^@/]+@)?github\.com\/)([^/]+)\/(.+?)(?:\.git)?\/?$/);
   return m ? `https://github.com/${m[1]}/${m[2]}` : '';
@@ -64,6 +73,12 @@ async function baseOfA(repo) {
 }
 // One lookup per repo per listing: many review branches share a repo.
 const memo = () => { const m = new Map(); return (k, f) => (m.has(k) ? m : m.set(k, f())).get(k); };
+// Every local and origin ref of a repo in one git call, once per listing: 85 review rows ran about 1,000 git
+// processes and the Merge tab took 20-100 s under load. Map of refname to commit.
+const refsA = (repo, q) => q(`refs ${realRepo(repo)}`, async () => new Map((await gitA(repo, ['for-each-ref', '--format=%(refname) %(objectname)', 'refs/heads', 'refs/remotes/origin'])).split('\n').filter(Boolean).map((l) => l.split(' '))));
+// What git says about a branch against its base never changes while both tips stay put, so it is kept across listings.
+const facts = new Map();
+const factsA = (key, f) => { if (facts.has(key)) return facts.get(key); if (facts.size > 2000) facts.clear(); const v = f(); facts.set(key, v); v.catch(() => facts.delete(key)); return v; };
 // At most n at a time, results in order.
 async function pool(items, n, f) { const out = []; let i = 0; await Promise.all(Array.from({ length: n }, async () => { while (i < items.length) { const k = i++; out[k] = await f(items[k]); } })); return out; }
 // The branch a gated repo merges into: origin's default branch, else main, else master.
@@ -487,21 +502,25 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
     const r = { repo, branch };
     try {
       usable(branch); if (into) usable(into);
-      if (!(await okA(gitA(repo, ['rev-parse', '--verify', '--quiet', `refs/heads/${branch}`])))) throw new Error(`branch ${branch} is gone from ${repo}`);
+      const refs = await refsA(repo, q);
+      if (!refs.has(`refs/heads/${branch}`)) throw new Error(`branch ${branch} is gone from ${repo}`);
       const base = into || await q(`base ${repo}`, () => baseOfA(repo));
-      if (into && !(await okA(gitA(repo, ['rev-parse', '--verify', '--quiet', `refs/heads/${into}`])))) throw new Error(`base branch ${into} is gone from ${repo}: task base <id> <branch>|auto`);
-      r.tip = await gitA(repo, ['rev-parse', `refs/heads/${branch}`]);
+      if (into && !refs.has(`refs/heads/${into}`)) throw new Error(`base branch ${into} is gone from ${repo}: task base <id> <branch>|auto`);
+      r.tip = refs.get(`refs/heads/${branch}`);
       r.base = base; r.head = await q(`head ${repo}`, () => gitA(repo, ['rev-parse', '--abbrev-ref', 'HEAD']));
-      r.ahead = Number(await gitA(repo, ['rev-list', '--count', `${base}..${branch}`]));
-      r.behind = Number(await gitA(repo, ['rev-list', '--count', `${branch}..${base}`]));
-      r.conflicts = r.ahead && r.behind ? await conflictsA(repo, base, branch) : [];
+      const baseTip = refs.get(`refs/heads/${base}`) || await gitA(repo, ['rev-parse', base]);
+      Object.assign(r, await factsA(`info ${realRepo(repo)} ${base}@${baseTip} ${branch}@${r.tip}`, async () => {
+        const ahead = Number(await gitA(repo, ['rev-list', '--count', `${baseTip}..${r.tip}`])), behind = Number(await gitA(repo, ['rev-list', '--count', `${r.tip}..${baseTip}`]));
+        return { ahead, behind, conflicts: ahead && behind ? await conflictsA(repo, baseTip, r.tip) : [],
+          log: (await gitA(repo, ['log', '--format=%h %s', `${baseTip}..${r.tip}`])).split('\n').filter(Boolean) };
+      }));
+      r.conflicts = [...r.conflicts]; r.log = [...r.log];
       r.dirty = await q(`dirty ${repo}`, async () => (await gitA(repo, ['status', '--porcelain'])).split('\n').filter(Boolean).length);
-      r.log = (await gitA(repo, ['log', '--format=%h %s', `${base}..${branch}`])).split('\n').filter(Boolean);
       // Links, never a push: GitHub Desktop opens any local branch; the compare page only when origin already has it (as of the last fetch).
       const gh = githubOf(repo);
       if (gh) {
         r.desktop = `x-github-client://openRepo/${gh}?branch=${encodeURIComponent(branch)}`;
-        const onRemote = await okA(gitA(repo, ['rev-parse', '--verify', '--quiet', `refs/remotes/origin/${branch}`]));
+        const onRemote = refs.has(`refs/remotes/origin/${branch}`);
         if (onRemote) r.compare = `${gh}/compare/${base.replace(/^origin\//, '')}...${branch.split('/').map(encodeURIComponent).join('/')}`;
       }
     } catch (e) { r.error = String(e.message || e).split('\n')[0]; }
@@ -512,7 +531,7 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
     const seen = new Set([realRepo(task.repo)]), out = [];
     for (const repo of reposFor(task, goalOf(task.goal))) {
       if (seen.has(realRepo(repo))) continue; seen.add(realRepo(repo));
-      if (!(await okA(gitA(repo, ['rev-parse', '--verify', '--quiet', `refs/heads/${task.branch}`])))) continue;
+      try { if (!(await refsA(repo, q)).has(`refs/heads/${task.branch}`)) continue; } catch { continue; }
       const o = await repoInfo(repo, task.branch, q);
       if (o.error || o.ahead > 0) out.push(o);
     }
@@ -551,17 +570,22 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
   async function mergedOutside(task, q) {
     if (!task.repo || !task.branch || !fs.existsSync(expand(task.repo))) return '';
     try {
-      if (!(await okA(gitA(task.repo, ['rev-parse', '--verify', '--quiet', `refs/heads/${task.branch}`])))) return 'branch gone';
+      const refs = await refsA(task.repo, q), tip = refs.get(`refs/heads/${task.branch}`);
+      if (!tip) return 'branch gone';
       const base = task.base || await q(`base ${task.repo}`, () => baseOfA(task.repo));
-      // A branch nobody committed to sits on base too; only a moved branch can have been merged.
-      const reflog = (await gitA(task.repo, ['reflog', 'show', '--format=%H', `refs/heads/${task.branch}`])).split('\n').filter(Boolean);
-      if (reflog.length === 1) return '';
-      for (const b of [base, `origin/${base}`]) {
-        if (!(await q(`has ${task.repo} ${b}`, () => okA(gitA(task.repo, ['rev-parse', '--verify', '--quiet', b]))))) continue;
-        if (await okA(gitA(task.repo, ['merge-base', '--is-ancestor', task.branch, b]))) return `merged outside into ${b}`;
-        const cherry = (await gitA(task.repo, ['cherry', b, task.branch])).split('\n').filter(Boolean);
-        if (cherry.length && cherry.every((l) => l.startsWith('-'))) return `merged outside into ${b} (same patches)`;
-      }
+      const tips = [[base, refs.get(`refs/heads/${base}`) || ''], [`origin/${base}`, refs.get(`refs/remotes/origin/${base}`) || '']];
+      return await factsA(`outside ${realRepo(task.repo)} ${task.branch}@${tip} ${tips.map((x) => x.join('@')).join(' ')}`, async () => {
+        // A branch nobody committed to sits on base too; only a moved branch can have been merged.
+        const reflog = (await gitA(task.repo, ['reflog', 'show', '--format=%H', `refs/heads/${task.branch}`])).split('\n').filter(Boolean);
+        if (reflog.length === 1) return '';
+        for (const [b, bt] of tips) {
+          if (!bt) continue;
+          if (await okA(gitA(task.repo, ['merge-base', '--is-ancestor', tip, bt]))) return `merged outside into ${b}`;
+          const cherry = (await gitA(task.repo, ['cherry', bt, tip])).split('\n').filter(Boolean);
+          if (cherry.length && cherry.every((l) => l.startsWith('-'))) return `merged outside into ${b} (same patches)`;
+        }
+        return '';
+      });
     } catch {}
     return '';
   }
