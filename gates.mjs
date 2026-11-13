@@ -67,6 +67,8 @@ function controlRefusal({ what, caller = '', lead = false, page = false, passcod
 
 // Peering opens a line to another room.
 export const peersRefusal = (who) => controlRefusal({ ...who, what: 'change peers' });
+// Goals set what the board serves and which work is gated before merge.
+export const goalsRefusal = (who) => controlRefusal({ ...who, what: 'change goals' });
 
 // A squiggle may stop or clear itself. Stopping, clearing or removing another, or removing itself, is the owner's or the lead's.
 export function squiggleRefusal({ id, action, ...who }) {

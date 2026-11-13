@@ -31,6 +31,8 @@ const LEAD_ONLY = ['permissionMode', 'cwd', 'trust', 'model', 'alwaysWake', 'pri
 // Fields that silence a squiggle (pause it, stretch or stop its wakes, cap its turns): from an unidentified caller (a terminal,
 // a squiggle's detached child) they need the unlocked page, like stopping another squiggle does. Squiggles set their own as before.
 const QUIET = ['paused', 'every', 'maxTurns', 'wakes'];
+// Tools a squiggle launches with (a browser, skills): the owner's or the lead's to grant, even on itself.
+const TOOLS = ['chrome', 'skills'];
 export const PERMISSION_MODES = ['auto', 'acceptEdits', 'plan', 'bypassPermissions'];
 const badMode = (b) => 'permissionMode' in b && !PERMISSION_MODES.includes(b.permissionMode) && { status: 400, error: `permissionMode: ${PERMISSION_MODES.join(', ')}` };
 // Hiring: a new squiggle is all lead-only fields, so only the lead or the user's unlocked page creates one.
@@ -61,6 +63,11 @@ export function shareRefusal({ caller = '', owner = () => false, user = 'the use
   if (caller) return { status: 403, error: `${caller} can't share the room ${where}: ${user} does, in Settings > Sharing` };
   return owner() ? null : { status: 403, error: `Unlock with the room passcode first: sharing ${where} is ${user}'s`, unlock: true };
 }
+// Turning a share off cuts the owner's own link: the owner (unlocked page or terminal, or any page with no passcode) or the lead.
+export function unshareRefusal({ caller = '', callerLead = false, owner = () => false, passcode = true, user = 'the user' } = {}) {
+  if (caller) return callerLead ? null : { status: 403, error: `${caller} can't turn sharing off: ${user} or the lead does` };
+  return !passcode || owner() ? null : { status: 403, error: `Unlock with the room passcode first: turning sharing off is ${user}'s or the lead's`, unlock: true };
+}
 // Own charter (a guard against instructions planted in mail, web pages or files): a non-lead squiggle rewrites it only in
 // a turn the user or the lead asked for. `askers` is who asked this turn (R(caller).asked): 'owner', 'lead' or the lead's id.
 const CHARTER_ASKERS = (leadId) => ['owner', 'lead', leadId].filter(Boolean);
@@ -74,8 +81,9 @@ export function updateRefusal(meta, s, { caller = '', callerLead = false, charte
   if (caller && caller !== s.id && !callerLead) return { status: 403, error: `${caller} can't change ${s.id}: ${user} or the lead does` };
   const changed = (k) => k in meta && (k === 'trust' ? trustOf(meta) !== trustOf(s) : k === 'lead' || k === 'private' ? !!meta[k] !== !!s[k] : meta[k] !== s[k]);
   if (!caller) {
-    const what = changed('lead') ? 'lead' : LEAD_ONLY.find(changed) || QUIET.find(changed) || (charter && 'charter');
+    const what = changed('lead') ? 'lead' : LEAD_ONLY.find(changed) || QUIET.find(changed) || TOOLS.find(changed) || (charter && 'charter');
     if (!what) return null;
+    if (TOOLS.includes(what)) return !passcode || owner() ? null : { status: 403, error: `Unlock with the room passcode first: ${what} is set by ${user} or the lead`, unlock: true };
     if (QUIET.includes(what)) return !passcode || owner() ? null : { status: 403, error: `Unlock with the room passcode first: ${what} on another squiggle is set by ${user} or the lead`, unlock: true };
     const by = what === 'lead' ? user : `${user} or the lead`;
     if (!passcode) return what === 'charter' ? null : { status: 403, error: `Set a room passcode first (Settings > Security): ${what} is set by ${by}` };
@@ -84,7 +92,7 @@ export function updateRefusal(meta, s, { caller = '', callerLead = false, charte
   if (changed('lead')) return { status: 403, error: `lead is set by ${user}, not ${caller}` };
   if (charter && !callerLead && !askers.some((a) => CHARTER_ASKERS(leadId).includes(a)))
     return { status: 403, error: `${caller} changes its charter only when ${user} or the lead asks for it this turn` };
-  const k = !callerLead && LEAD_ONLY.find(changed);
+  const k = !callerLead && [...LEAD_ONLY, ...TOOLS].find(changed);
   return k ? { status: 403, error: `${k} is set by ${user} or the lead, not ${caller}` } : null;
 }
 

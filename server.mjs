@@ -22,13 +22,13 @@ import { reportHoldMs, reportsText, reportLines, away } from './focus.mjs';
 import { quietSig, skipWake, alwaysWakes, ownEnd } from './quiet.mjs';
 import { compactAtEnd, ctxOf, COMPACT_PROMPT } from './compact.mjs';
 import { HOME_FENCE } from './fence.mjs';
-import { sender, askerOf, askSeen, writesNote, noteRefusal, labelled, screenRefusal, humansRefusal, roomRefusal, peersRefusal, squiggleRefusal, peerRefusal } from './gates.mjs';
+import { sender, askerOf, askSeen, writesNote, noteRefusal, labelled, screenRefusal, humansRefusal, roomRefusal, peersRefusal, goalsRefusal, squiggleRefusal, peerRefusal } from './gates.mjs';
 import { wantsPrecheck, precheckPrompt, runPrecheck, PRECHECK_MODEL } from './precheck.mjs';
 import { burns, burnDue, BURN_TEXT } from './burn.mjs';
 import { createWaits, bgStarted, bgEnded, ownRuns } from './waits.mjs';
 import { createWatches } from './watches.mjs';
 import { mimeFor } from './mime.mjs';
-import { trustLevel, trustOf, trustRules, updateRefusal, createRefusal, squiggleSlug, quitRefusal, slotsRefusal, shareRefusal, fileRmRefusal, fileBy, charterDiff, charterEdit, charterStart } from './trust.mjs';
+import { trustLevel, trustOf, trustRules, updateRefusal, createRefusal, squiggleSlug, quitRefusal, slotsRefusal, shareRefusal, unshareRefusal, fileRmRefusal, fileBy, charterDiff, charterEdit, charterStart } from './trust.mjs';
 import { KEYS, DEFAULT_SLOTS, slotKey, rankOf, limitOf, enqueue, drain, leave, checkSlots } from './slots.mjs';
 import { dropStale } from './stale.mjs';
 import { createLedger } from './cost.mjs';
@@ -1624,7 +1624,10 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/config') { const { userName, model, codex, tailnet } = CONFIG; return json(res, { userName, model, codex, tailnet, call: fs.existsSync(CALL_DIR), version: VERSION, schema: CONFIG.schema }); }
     if (url.pathname === '/api/share' && req.method === 'POST') {
       const b = await body(req, res), cf = b.via === 'cloudflare';
-      if (b.on && (cf ? tunnel : CONFIG.tailnet) && shareReady()) { const no = shareRefusal({ caller: await callerSquiggle(req), owner: () => { try { return pass.session(req); } catch { return false; } }, user: USER, where: cf ? 'on the internet' : 'on the tailnet' }); if (no) return json(res, { error: no.error, ...(no.unlock && { unlock: true }) }, no.status); }
+      const sc = await callerSquiggle(req), owner = () => { try { return pass.session(req); } catch { return false; } };
+      const no = b.on ? (cf ? tunnel : CONFIG.tailnet) && shareReady() && shareRefusal({ caller: sc, owner, user: USER, where: cf ? 'on the internet' : 'on the tailnet' })
+        : unshareRefusal({ caller: sc, callerLead: !!(sc && loadSquiggle(sc)?.lead), owner, passcode: !!roomCfg().passcode?.hash, user: USER });
+      if (no) return json(res, { error: no.error, ...(no.unlock && { unlock: true }) }, no.status);
       return json(res, await (cf ? shareCloudflare : share)(!!b.on));
     }
     if (url.pathname === '/api/share') return json(res, await shareStatus());
@@ -1700,7 +1703,11 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/defaults') return json(res, teamDefaults());
     if (url.pathname === '/api/room') { const { passcode, ...c } = roomCfg(); return json(res, { ...c, fileRoots: files.SOURCES, fileReal: realRoots(), home: os.homedir(), piModels: PI_MODELS, cursorModels: CURSOR_MODELS }); } // never the passcode hash; fileRoots: chat images; fileReal: the same behind symlinks (CLI paths are realpaths)
     if (url.pathname === '/api/board') return json(res, { goals: board.goals(), tasks: board.view() });
-    if (url.pathname === '/api/goals' && req.method === 'POST') return json(res, board.goalOp(await body(req, res)));
+    if (url.pathname === '/api/goals' && req.method === 'POST') {
+      const gb = await body(req, res), gc = await callerSquiggle(req), no = goalsRefusal({ caller: gc, lead: !!(gc && loadSquiggle(gc)?.lead), page: await pass.page(req), passcode: !!roomCfg().passcode?.hash });
+      if (no) return json(res, { error: no.error, ...(no.unlock && { unlock: true }) }, no.status);
+      return json(res, board.goalOp(gb));
+    }
     if (url.pathname === '/api/tasks' && req.method === 'POST') {
       const b = await body(req, res);
       if (writesNote(b)) {

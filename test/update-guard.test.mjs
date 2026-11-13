@@ -45,8 +45,19 @@ test('a non-lead squiggle changes only itself, charter included', () => {
 
 test('every field the sheet, Settings and `set` change is accepted', () => {
   const me = { caller: 'security' };
-  for (const f of ['name', 'role', 'every', 'paused', 'look', 'lookSeed', 'maxTurns', 'chrome', 'effort', 'awake', 'autocompact', 'voice'])
+  for (const f of ['name', 'role', 'every', 'paused', 'look', 'lookSeed', 'maxTurns', 'effort', 'awake', 'autocompact', 'voice'])
     assert.equal(updateRefusal({ [f]: 'x' }, s, me), null, f);
+});
+
+test('a browser and skills are granted by the owner or the lead, not by the squiggle itself', () => {
+  for (const f of ['chrome', 'skills']) {
+    assert.match(updateRefusal({ [f]: true }, s, { caller: 'security' })?.error || '', new RegExp(`${f} is set by`), f);
+    assert.equal(updateRefusal({ [f]: true }, s, { caller: 'lead', callerLead: true }), null, `${f} by the lead`);
+    assert.equal(updateRefusal({ [f]: true }, s, { passcode: true, owner: () => false })?.unlock, true, `${f} from a locked terminal`);
+    assert.equal(updateRefusal({ [f]: true }, s, { passcode: true, owner: () => true }), null, `${f} unlocked`);
+    assert.equal(updateRefusal({ [f]: true }, s, { passcode: false }), null, `${f} with no passcode`);
+    assert.equal(updateRefusal({ [f]: false }, { ...s, [f]: false }, { caller: 'security' }), null, `${f} unchanged`);
+  }
 });
 
 test('no caller and no passcode: lead and lead-only fields need one set; a charter stays open', () => {

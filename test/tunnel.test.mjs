@@ -6,7 +6,7 @@ import path from 'node:path';
 import { createTunnel, killStale, urlIn, MIN_CODE } from '../tunnel.mjs';
 import { makeGuard } from '../guard.mjs';
 import { makePasscode } from '../passcode.mjs';
-import { shareRefusal } from '../trust.mjs';
+import { shareRefusal, unshareRefusal } from '../trust.mjs';
 
 const stub = (body) => { const f = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'cf-')), 'cloudflared'); fs.writeFileSync(f, `#!/bin/sh\n${body}\n`, { mode: 0o755 }); return f; };
 const HOST = 'brave-otter-pine.trycloudflare.com';
@@ -63,6 +63,16 @@ test('only the user turns public sharing on', () => {
   assert.equal(shareRefusal({ owner: () => false }).unlock, true);
   assert.equal(shareRefusal({ owner: () => true }), null);
   assert.match(shareRefusal({ caller: 'bo', where: 'on the tailnet' }).error, /bo can't share the room on the tailnet/);
+});
+
+test('turning sharing off is the owner\'s or the lead\'s', () => {
+  assert.match(unshareRefusal({ caller: 'bo' }).error, /bo can't turn sharing off/);
+  assert.equal(unshareRefusal({ caller: 'lead', callerLead: true }), null);
+  assert.equal(unshareRefusal({ owner: () => false }).unlock, true);
+  assert.equal(unshareRefusal({ owner: () => true }), null);
+  assert.equal(unshareRefusal({ passcode: false }), null);
+  const src = fs.readFileSync(new URL('../server.mjs', import.meta.url), 'utf8');
+  assert.match(src, /: unshareRefusal\(/, 'the server gates turning off');
 });
 
 test('a spoofed X-Forwarded-For gets no fresh bucket, and remote guessing never locks out this Mac', () => {

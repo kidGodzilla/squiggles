@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import { execFileSync, spawn } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
-import { sender, askerOf, askSeen, writesNote, noteRefusal, labelled, screenRefusal, humansRefusal, roomRefusal, peersRefusal, squiggleRefusal, peerRefusal } from '../gates.mjs';
+import { sender, askerOf, askSeen, writesNote, noteRefusal, labelled, screenRefusal, humansRefusal, roomRefusal, peersRefusal, goalsRefusal, squiggleRefusal, peerRefusal } from '../gates.mjs';
 import { firstFile, isBrowserFile, browserSignature, signedBy } from '../caller.mjs';
 import { makePasscode } from '../passcode.mjs';
 
@@ -174,6 +174,15 @@ test('peers: a page or the lead, never a plain squiggle or terminal', () => {
   assert.equal(peersRefusal({ caller: 'ann' })?.status, 403);
   assert.equal(peersRefusal({ caller: 'ann', page: true })?.status, 403);
   assert.equal(peersRefusal({})?.unlock, true);
+});
+
+test('goals: a page or the lead, never a plain squiggle; the server checks before it acts', () => {
+  assert.equal(goalsRefusal({ caller: 'lead', lead: true }), null);
+  assert.equal(goalsRefusal({ page: true }), null);
+  assert.match(goalsRefusal({ caller: 'ann', page: true })?.error || '', /Only the owner and the lead change goals/);
+  assert.equal(goalsRefusal({})?.unlock, true);
+  const src = fs.readFileSync(new URL('../server.mjs', import.meta.url), 'utf8'), at = src.indexOf("url.pathname === '/api/goals' && req.method === 'POST'");
+  assert.ok(at > 0 && src.indexOf('goalsRefusal({', at) < src.indexOf('board.goalOp(', at), 'gated before goalOp');
 });
 
 test('with no passcode a refusal offers no unlock: there is no code to type', () => {

@@ -409,5 +409,8 @@ test('only the owner turns tailnet sharing on, never a terminal or a squiggle', 
   assert.equal(served(), false, 'nothing reached tailscale');
   assert.equal((await api('/api/share', { on: true }, me)).status, 200);
   assert.equal(served(), true, 'the owner did');
-  assert.equal((await api('/api/share', { on: false })).status, 200, 'anyone can turn it off');
+  const off = await api('/api/share', { on: false });
+  assert.equal(off.status, 403, 'a locked terminal can\'t turn it off');
+  assert.equal((await off.json()).unlock, true);
+  assert.equal((await api('/api/share', { on: false }, me)).status, 200, 'the owner turns it off');
 });
