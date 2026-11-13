@@ -56,3 +56,12 @@ test('a task shipped after local midnight but before UTC midnight counts today, 
   assert.deepEqual(out.days, [['2026-10-23', 0], ['2026-10-24', 1]]);
   fs.rmSync(root, { recursive: true });
 });
+
+test('load skips stall-log lines under 1s that only carry slow sync work', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'load-sync-')), runs = path.join(dir, 'runs'); fs.mkdirSync(runs);
+  const now = Date.now();
+  fs.writeFileSync(path.join(runs, 'stalls.jsonl'), [{ ts: now, ms: 1300, ops: [] }, { ts: now, ms: 400, ops: [], sync: ['wake apps 420ms'] }].map((e) => JSON.stringify(e)).join('\n'));
+  const r = load({ root: dir, days: 1, now }).at(-1);
+  fs.rmSync(dir, { recursive: true });
+  assert.deepEqual([r.stalls, r.stallMax], [1, 1300]);
+});

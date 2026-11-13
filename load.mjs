@@ -34,8 +34,8 @@ export function load({ root, days = 7, now = Date.now() }) {
     else if (f === 'lead.jsonl' && l.includes('"k":"tool"') && l.includes('agents.mjs')) { const e = json(l); if (e?.tid) calls.set(e.tid, e.ts); }
     else if (f === 'lead.jsonl' && calls.size && l.includes('"k":"out"')) { const tid = /"tid":"([^"]+)"/.exec(l)?.[1], at = calls.get(tid), ts = +(/"ts":(\d+)/.exec(l)?.[1]); if (at && ts) { calls.delete(tid); if (day(at) >= from) (waits[day(at)] ??= []).push(ts - at); } }
   }
-  // Event-loop stalls over 1s the server logged.
-  for (const e of lines(path.join(runs, 'stalls.jsonl')).map(json)) if (e?.ts && day(e.ts) >= from) { const r = row(day(e.ts)); r.stalls = (r.stalls || 0) + 1; r.stallMax = Math.max(r.stallMax || 0, e.ms || 0); }
+  // Event-loop stalls over 1s the server logged; shorter lines carry only slow sync work.
+  for (const e of lines(path.join(runs, 'stalls.jsonl')).map(json)) if (e?.ts && e.ms >= 1000 && day(e.ts) >= from) { const r = row(day(e.ts)); r.stalls = (r.stalls || 0) + 1; r.stallMax = Math.max(r.stallMax || 0, e.ms || 0); }
   const pct = (a, q) => a[Math.min(a.length - 1, Math.floor(q * a.length))];
   for (const [d, a] of Object.entries(waits)) { a.sort((x, y) => x - y); Object.assign(row(d), { calls: a.length, callP50: pct(a, 0.5), callP90: pct(a, 0.9) }); }
   const list = []; for (let i = days - 1; i >= 0; i--) { const d = day(now - i * 864e5); list.push({ ...row(d), actions: KEYS.reduce((n, k) => n + row(d)[k], 0) }); }

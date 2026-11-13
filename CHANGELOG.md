@@ -241,6 +241,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - The lead's "Handled." replies fold with the reports they answer into one line that opens to list them.
 - Settings number inputs show an accent border on focus and are 44px tall on touch screens.
 
+- The stall log also records sync work over 200 ms when no 1-second stall happened; the load view still counts only real stalls.
 ### Fixed
 - Wakes, ticks and the board page share one read of the task list per change instead of parsing it again for every caller.
 - The worktrees listing reads every repo's worktree list at once and checks uncommitted files in six worktrees at a time, instead of one after another, so a long list loads in seconds.

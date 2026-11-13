@@ -1536,11 +1536,11 @@ async function peerJoin(req, res) {
   broadcast('*room', { k: 'room', action: 'peers' });
   return json(res, r);
 }
-// Event-loop stalls over 1s: logged to runs/stalls.jsonl with the requests in flight, so slow ops can be found and moved off the loop.
+// Event-loop stalls over 1s, and any timed sync work over 200ms: logged to runs/stalls.jsonl with the requests in flight, so slow ops can be found and moved off the loop.
 // cpu: our CPU time over the gap. Near ms means our code ran; near 0 means the process was paused (App Nap, sleep, swap), not our code.
 const inflight = new Map(); let reqN = 0, tick = Date.now(), cpu0 = process.cpuUsage();
 setInterval(() => {
-  const now = Date.now(), ms = now - tick - 250, sync = slowSync.splice(0), c = process.cpuUsage(cpu0); tick = now; cpu0 = process.cpuUsage(); if (ms < 1000) return;
+  const now = Date.now(), ms = now - tick - 250, sync = slowSync.splice(0), c = process.cpuUsage(cpu0); tick = now; cpu0 = process.cpuUsage(); if (ms < 1000 && !sync.length) return; // sync over 200ms is logged even without a 1s stall
   const cpu = Math.round((c.user + c.system) / 1000);
   const ops = [...inflight.values()].map((o) => `${o.what} ${now - o.at}ms`);
   fs.appendFile(path.join(RUNS, 'stalls.jsonl'), JSON.stringify({ ts: now, ms, cpu, ops, ...(sync.length ? { sync } : {}) }) + '\n', () => {});
