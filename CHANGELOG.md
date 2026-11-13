@@ -5,6 +5,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 ## 0.1.2 (unreleased)
 
 ### Security
+- The private-data fence checks 1,000 repeated brace words in about a third of a second instead of several: each distinct word and glob is checked once per command, so a long command no longer nears the hook timeout.
 - Fence guards stop at 30 seconds of wall time and refuse: a guard blocked on I/O spends no CPU, so the CPU limit never fired and the client's hook timeout let the command run.
 - The private-data fence refuses a FIFO or other special file named as a script, instead of hanging until the client's hook timeout let the command run unchecked.
 - The fence refuses shell and edit-tool writes to `room.json`: it holds the passcode hash, and a swapped hash would unlock the page after a restart.

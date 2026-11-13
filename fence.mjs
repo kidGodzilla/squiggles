@@ -77,7 +77,28 @@ const globTables = (g) => {
   const close = new Int32Array(g.length).fill(-1), shut = new Int32Array(g.length + 4).fill(-1), open = [];
   for (let i = 0; i < g.length; i++) { if (g[i] === '{') open.push(i); else if (g[i] === '}' && open.length) close[open.pop()] = i; }
   for (let i = g.length - 1; i >= 0; i--) shut[i] = g[i] === ']' ? i : shut[i + 1];
-  return { close, shut, units: new Map() };
+  const t = { close, shut, units: new Map() };
+  t.min = globMin(g, t, 0, g.length, 0);
+  return t;
+};
+// The fewest characters the glob can match, read the way globWalk reads it: a target shorter than that can't match, so the
+// walk is skipped. Fenced folder names are short, and a long word of *{a,b} cost 50 ms walking each one. A lower bound
+// only: past 64 deep it says 0 and the walk throws as before.
+const globMin = (g, { close, shut }, a, b, depth) => {
+  if (depth > 64) return 0;
+  let n = 0;
+  for (let i = a; i < b; i++) {
+    const ch = g[i], neg = ch === '[' && i + 1 < b && /[!^]/.test(g[i + 1]), c = ch === '[' ? shut[i + (neg ? 3 : 2)] : -1, j = c >= b ? -1 : ch === '{' ? close[i] : c;
+    if (ch === '*') continue;
+    if (ch === '[' && j > 0) { n++; i = j; }
+    else if (ch === '{' && j > 0) {
+      let s = i + 1, m = Infinity;
+      const alt = (e) => { m = Math.min(m, globMin(g, { close, shut }, s, e, depth + 1)); s = e + 1; };
+      for (let k = s; k < j; k++) { if (g[k] === ',') alt(k); else if (g[k] === '{' && close[k] > 0) k = close[k]; }
+      alt(j); n += m; i = j;
+    } else n++;
+  }
+  return n;
 };
 const globWalk = (g, { close, shut, units }, t, at, a, b, depth) => {
   if (depth > 64) throw new Error('glob nested too deep');
@@ -98,12 +119,13 @@ const globWalk = (g, { close, shut, units }, t, at, a, b, depth) => {
   }
   return at;
 };
-// The last one read is kept: callers test one glob against every fenced folder in turn.
-let lastGlob, lastTables;
+// Tables are kept per glob: reach tests a path's segments against each fenced folder in turn, so keeping only the last
+// one rebuilt them for every segment of every folder. Cleared past 256 so a long command can't grow it.
+const TABLES = new Map();
 const globRe = (g) => {
-  if (g !== lastGlob) { lastTables = globTables(g); lastGlob = g; }
-  const tables = lastTables;
-  return { test: (t) => globWalk(g, tables, t, new Set([0]), 0, g.length, 0).has(t.length) };
+  let tables = TABLES.get(g);
+  if (!tables) { if (TABLES.size >= 256) TABLES.clear(); TABLES.set(g, (tables = globTables(g))); }
+  return { test: (t) => t.length >= tables.min && globWalk(g, tables, t, new Set([0]), 0, g.length, 0).has(t.length) };
 };
 // Past this size a word with a brace in it is refused unread: no real command needs one, and spelling it out costs seconds.
 const WORD_MAX = 65536;
@@ -517,12 +539,14 @@ export function privateReason(tool, input = {}, cwd = process.cwd(), home = os.h
   const toHome = (p) => String(p).replace(homeArg(home), home);
   const spelled = names.map((d) => path.resolve(home, toHome(d)).toLowerCase()), dirs = names.map((d) => real(path.resolve(home, toHome(d))).toLowerCase());
   // Once per path for this one check: a repeated word mustn't cost a disk read each time.
-  const hits = new Map(), hit = (p, from) => { const abs = path.resolve(from, toHome(p));
-    if (!hits.has(abs)) hits.set(abs, [abs, real(abs)].some((a) => { a = a.toLowerCase(); return dirs.some((d) => a === d || a.startsWith(d + '/')); }));
-    return hits.get(abs); };
+  const hits = new Map(), hit = (p, from) => { const k = `${from}\0${p}`;
+    if (!hits.has(k)) { const abs = path.resolve(from, toHome(p)); hits.set(k, [abs, real(abs)].some((a) => { a = a.toLowerCase(); return dirs.some((d) => a === d || a.startsWith(d + '/')); })); }
+    return hits.get(k); };
   // A path that can name something inside a private folder ('in': ~/cl*/a, ~/**) or a parent of one ('above': ~, ~/work),
   // which only matters to something that walks down (grep -r, find, a Glob tool).
-  const reach = (p, from) => {
+  // Remembered per call: a repeated word was walked against every private folder each time it appeared.
+  const reached = new Map(), reach = (p, from) => { const k = `${from}\0${p}`; if (!reached.has(k)) reached.set(k, reachOnce(p, from)); return reached.get(k); };
+  const reachOnce = (p, from) => {
     const gs = path.resolve(from, toHome(p)).toLowerCase().split('/').filter(Boolean); let out = '';
     // A glob can't be resolved, so it's held against both spellings: a home reached through a symlink differs from its real path.
     for (const d of new Set([...dirs, ...spelled])) {
@@ -724,7 +748,8 @@ function privateCommand(cmd, cwd, home, o, depth, outer = '') {
     }
   }
   if (!o.dirs.length) return false;
-  const words = text.split(/[\s;|&()<>`]+/).filter(Boolean).flatMap((w) => braces(w));
+  // Each distinct word once: 1,000 copies of one long word cost 1,000 resolves and regex passes.
+  const words = [...new Set(text.split(/[\s;|&()<>`]+/).filter(Boolean).flatMap((w) => braces(w)))];
   // `cat ~/te$(echo am)/alpha/a`: a substitution inside a path counts as a glob.
   const globs = strict ? masked(rest).replace(/["'\\]/g, '').replace(new RegExp(SUBST, 'g'), '*').split(/[\s;|&()<>=]+/).filter((w) => w.includes('*') && w.includes('/')) : [];
   if (here.some((dir) => globs.some((w) => o.reach(w, dir) === 'in'))) return true;
