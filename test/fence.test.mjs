@@ -65,6 +65,13 @@ test('fence: push through a shell alias for git', () => {
     assert.equal(commandReason(c, '/tmp/w'), '', c);
 });
 
+test('fence: git with a subcommand computed at run time', () => {
+  for (const c of ["git $'\\x70ush' origin", 'git $(echo push)', 'git `echo push`', 'git -C . $(printf p; printf ush)', "sh -c 'git $(echo push)'", 'git $SUB origin'])
+    assert.equal(commandReason(c, '/tmp/w'), REASONS.push, c);
+  for (const c of ['git commit -m "$(cat msg.txt)"', 'git -C $(pwd) status', 'g() { git "$@"; }; g status', 'git log --format=%h $(git merge-base a b)..b'])
+    assert.equal(commandReason(c, '/tmp/w'), '', c);
+});
+
 test('fence: relative paths and globs to home folders, cd spelled other ways, subtree and lfs push', () => {
   const sub = path.join(H, 'code');
   for (const c of ['ls ../D*', 'cat ../Docu*/x', 'builtin cd ..; ls D*', 'command cd .. && ls De*', 'env -C .. ls D*', 'cd ~someone; ls D*'])

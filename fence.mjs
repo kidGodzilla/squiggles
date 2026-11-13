@@ -247,7 +247,12 @@ export function fencedCommand(cmd, cwd = process.cwd(), home = os.homedir()) {
 export const mentionReason = (text, home = os.homedir()) => mentionsHome(text, home) ? REASONS.dirs : mentionsSsh(text, home) ? REASONS.ssh : '';
 // git [-C dir] [-c k=v] [--work-tree dir] [--flags] push, anywhere in a chain or subshell.
 // Also git send-pack, subtree or lfs push, an alias set to push, a shell alias for git, and push reached through a variable or eval (c=push; git $c).
-export const pushes = (cmd) => /\bgit\b(\s+(-[Cc]\s+\S+|--(git-dir|work-tree|namespace|exec-path|config-env|super-prefix|attr-source|shallow-file)\s+\S+|--?[\w-]+(=\S+)?))*\s+push\b/.test(cmd) || /\bgit\b.*\bsend-pack\b/.test(cmd) || /\bgit\b[^;&|\n]*\b(subtree|lfs)\b[^;&|\n]*\bpush\b/.test(cmd)
+const GIT_OPTS = String.raw`(\s+(-[Cc]\s+\S+|--(git-dir|work-tree|namespace|exec-path|config-env|super-prefix|attr-source|shallow-file)\s+\S+|--?[\w-]+(=\S+)?))*`;
+// A subcommand computed at run time ($(...), a backtick, $var, $'\x70...') can't be read: refused as one. "$@" in a wrapper is fine.
+const ARG_OPTS = 'git-dir|work-tree|namespace|exec-path|config-env|super-prefix|attr-source|shallow-file';
+// Here a flag that takes a value (-C dir) must take it, so the value isn't read as the subcommand.
+const computedSub = new RegExp(String.raw`\bgit\b(\s+(-[Cc]\s+\S+|--(${ARG_OPTS})\s+\S+|--?(?!(?:[Cc]|${ARG_OPTS})(?![\w=-]))[\w-]+(=\S+)?))*\s+(?:\$(?![@*])|\x60)`);
+export const pushes = (cmd) => computedSub.test(cmd) || new RegExp(String.raw`\bgit\b` + GIT_OPTS + String.raw`\s+push\b`).test(cmd) || /\bgit\b.*\bsend-pack\b/.test(cmd) || /\bgit\b[^;&|\n]*\b(subtree|lfs)\b[^;&|\n]*\bpush\b/.test(cmd)
   || /\balias\.[\w-]+[\s=]+!?(git\s+)?push\b/.test(cmd) || (/\balias\s+[\w-]+=[^;&|\n]*\bgit\b/.test(cmd) && /\bpush\b/.test(cmd)) || (/\bpush\b/.test(cmd) && (/\$\{?\w|\beval\b/.test(cmd) || /\bxargs\b[^;&|\n]*\bgit\b/.test(cmd)) && /\bgit\b/.test(cmd));
 // Recursive reads and copies (grep -r, rg, find, cp -r, tar, du, ls -R, rsync -a, zip -r, tree) rooted at home or above reach
 // every fenced folder at once. Each simple command is checked from the folder it runs in, following cd and env -C; no path means that folder.
