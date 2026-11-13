@@ -6,3 +6,5 @@ __sq_node=$( { [ -f .nvmrc ] && __sq_pick "$(tr -d '[:space:]' < .nvmrc)"; } || 
 [ -n "$__sq_node" ] || __sq_node=$(__sq_pick "$(cat "$HOME/.nvm/alias/default" 2>/dev/null)")
 [ -x "$__sq_node/bin/node" ] && export PATH="$__sq_node/bin:$PATH"
 unset __sq_node; unset -f __sq_pick
+# Builds go through the cap (bin/builds). Again here because a login shell reorders the PATH the server gave.
+[ -n "$AGENTS_BUILDS" ] && export PATH="$AGENTS_BUILDS:$PATH"

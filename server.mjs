@@ -285,6 +285,9 @@ const modelFor = (s) => pickModel(s, CONFIG.model);
 const compactAt = (s) => s.autocompact ?? (s.lead ? 300000 : 120000);
 const launchSig = (s) => JSON.stringify([!!s.chrome, modelFor(s), s.permissionMode, compactAt(s), s.maxTurns, s.effort, s.cwd, readText(path.join(sqDir(s.id), 'settings.json'), ''), 'fence:chrome', 'mcp', s.mcp || '', toolsFor(s), systemPrompt(s)]);
 // Busy Mac: every squiggle but the lead runs at nice 10 and its builds and tests inherit it, so the lead and the page stay quick.
+// Build cap: bin/builds holds xcodebuild and gradle to two at once; ./gradlew can't be caught by PATH, so its workers are capped instead.
+const BUILDS = path.join(ROOT, 'bin', 'builds');
+const buildEnv = () => ({ PATH: `${BUILDS}:${process.env.PATH}`, AGENTS_BUILDS: BUILDS, GRADLE_OPTS: [process.env.GRADLE_OPTS, '-Dorg.gradle.workers.max=2'].filter(Boolean).join(' ') });
 const lowPriority = (s, proc) => { if (!s.lead && proc.pid) try { os.setPriority(proc.pid, 10); } catch {} };
 function launch(s) {
   const r = R(s.id); r.sig = launchSig(s);
@@ -315,7 +318,7 @@ function launch(s) {
   r.resumedFrom = r.sessionId || null;
 
   // CLAUDE_ENV_FILE runs before each Bash command: nvm's Node, not Homebrew's.
-  const proc = spawn('claude', args, { cwd: home(s.cwd), stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, AGENTS_ID: s.id, AGENTS_NODE: process.execPath, CLAUDE_ENV_FILE: path.join(ROOT, 'bin', 'squiggle-env.sh'), ...mcp.env } });
+  const proc = spawn('claude', args, { cwd: home(s.cwd), stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, ...buildEnv(), AGENTS_ID: s.id, AGENTS_NODE: process.execPath, CLAUDE_ENV_FILE: path.join(ROOT, 'bin', 'squiggle-env.sh'), ...mcp.env } });
   lowPriority(s, proc);
   r.proc = proc;
   let buf = '', lastText = '';
@@ -420,7 +423,7 @@ function codexServer(s) {
   const proc = spawn(codexBin(), ['app-server', '-c', codexHook.hookConfig(), '-c', 'sandbox_mode="workspace-write"', '-c', 'approval_policy="never"',
     // The agents CLI talks to this server over HTTP; the journal lives in the squiggle's folder.
     '-c', 'sandbox_workspace_write.network_access=true', '-c', `sandbox_workspace_write.writable_roots=${JSON.stringify(roots)}`],
-  { cwd: home(s.cwd), stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, AGENTS_ID: s.id, AGENTS_NODE: process.execPath, SQUIGGLES_HOME: DATA } });
+  { cwd: home(s.cwd), stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, ...buildEnv(), AGENTS_ID: s.id, AGENTS_NODE: process.execPath, SQUIGGLES_HOME: DATA } });
   lowPriority(s, proc);
   const cx = r.cx = { proc, n: 0, wait: new Map(), on: null };
   cx.req = (method, params) => new Promise((res, rej) => { const id = ++cx.n; cx.wait.set(id, { res, rej }); proc.stdin.write(JSON.stringify({ id, method, params }) + '\n'); });
@@ -519,7 +522,7 @@ function piServer(s) {
   const proc = spawn(process.env.PI_BIN || 'pi', ['--mode', 'rpc', '--no-approve', '--model', s.model, '--models', s.model, '--session-id', r.piSession,
     '--no-extensions', ...ext.flatMap((e) => ['-e', e]), '-e', path.join(ROOT, 'pi', 'guard.ts'),
     '--no-skills', '--no-prompt-templates', '--no-mcp', '--append-system-prompt', systemPrompt(s)],
-  { cwd: home(s.cwd), stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, AGENTS_ID: s.id, SQUIGGLES_HOME: DATA } });
+  { cwd: home(s.cwd), stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, ...buildEnv(), AGENTS_ID: s.id, SQUIGGLES_HOME: DATA } });
   lowPriority(s, proc);
   const cx = r.cx = { pi: true, model: s.model, proc, on: null, cmd: (m) => proc.stdin.write(JSON.stringify(m) + '\n') };
   let buf = '';
@@ -587,7 +590,7 @@ function cursorTurn(s, prompt) {
   if (!r.cursorSession) prompt = `${systemPrompt(s)}\n\n---\n\n${prompt}`;
   const proc = spawn(process.env.CURSOR_BIN || 'cursor-agent', ['-p', '--output-format', 'stream-json', '--model', s.model, '--force', '--trust',
     '--workspace', home(s.cwd), ...(r.cursorSession ? ['--resume', r.cursorSession] : []), '--', prompt],
-  { cwd: home(s.cwd), stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, AGENTS_ID: s.id, AGENTS_NODE: process.execPath, SQUIGGLES_HOME: DATA } });
+  { cwd: home(s.cwd), stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, ...buildEnv(), AGENTS_ID: s.id, AGENTS_NODE: process.execPath, SQUIGGLES_HOME: DATA } });
   let lastText = '', ended = false, stopped = false, done = null, errText = '';
   const end = (text, err, subtype) => {
     if (ended) return; ended = true; r.proc = null; turnEnded(s, text, err, subtype);
@@ -1076,7 +1079,7 @@ function precheck(s, r, due) {
   const mins = Math.round((Date.now() - (Date.parse(r.lastWake || 0) || 0)) / 60000);
   const prompt = precheckPrompt({ s, user: USER, charter: rd('charter.md'), journal: rd('journal.md'), notes, lastEnd: `${String(r.endStatus).toUpperCase()}${r.note ? `: ${r.note}` : ''}`, sinceWake: mins >= 120 ? `${Math.round(mins / 60)} hours` : `${mins} minutes` });
   let own = {}; try { own = JSON.parse(rd('settings.json') || '{}'); } catch {}
-  runPrecheck({ prompt, settings: JSON.stringify(claudeFence(own)), cwd: home(s.cwd), env: { ...process.env, AGENTS_ID: s.id, AGENTS_NODE: process.execPath, CLAUDE_ENV_FILE: path.join(ROOT, 'bin', 'squiggle-env.sh') } }).then((v) => {
+  runPrecheck({ prompt, settings: JSON.stringify(claudeFence(own)), cwd: home(s.cwd), env: { ...process.env, ...buildEnv(), AGENTS_ID: s.id, AGENTS_NODE: process.execPath, CLAUDE_ENV_FILE: path.join(ROOT, 'bin', 'squiggle-env.sh') } }).then((v) => {
     r.prechecking = false;
     try { ledger.add({ id: s.id, precheck: true, provider: 'claude', model: PRECHECK_MODEL, in: v.in, out: v.out, cost: v.cost }); } catch {}
     if (!v.wake) { r.skipAt = new Date().toISOString(); emit(s.id, { k: 'log', text: `scheduled wake deferred by pre-check ($${v.cost.toFixed(2)}): ${v.why}` }); saveState(); return; }

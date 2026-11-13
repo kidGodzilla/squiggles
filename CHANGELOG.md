@@ -173,6 +173,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Settings > Defaults > Turns at once, and `slots`, set how many turns each provider runs at once.
 - Review lists watches waiting for approval, with the command, folder, schedule and reason, plus Approve and Drop. They count on the Review tab, in a chat's waiting line and in `needs`.
 ### Changed
+- Squiggle builds run two at a time: `xcodebuild` and `gradle` wait for a free slot (at most 15 minutes), and `./gradlew` gets two workers.
 - Merge steps must be jobs: the board refuses a step that opens with approve or sign off, and points to `pick ask` for a yes or no.
 - Steps tagged Owner must be complete when filed: the board refuses blanks like `<host>` or TBD, a secret with no command, and "see the note". Long steps wrap in the Review tab.
 - Shared prompt: the code in a squiggle's area is theirs to shape; in code a task touches they merge repeats and fix small related problems, named in the review note, keeping existing behavior.
@@ -327,6 +328,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Views, the open chat, board filters, merge diff and calendar week live in the URL: back, forward, reload and copied links work.
 
 ### Changed
+- Squiggle builds run two at a time: `xcodebuild` and `gradle` wait for a free slot (at most 15 minutes), and `./gradlew` gets two workers.
 - The scheduler staggers wakes per provider, 2 minutes apart (was 10 minutes across all).
 
 ### Fixed
