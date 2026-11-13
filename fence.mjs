@@ -20,8 +20,11 @@ export const REASONS = { dirs: 'Downloads, Desktop and Documents are off limits'
   tree: 'a recursive read or copy from home or above reaches Downloads, Desktop, Documents and ~/.ssh: name a folder inside home',
   room: "the room is your user's login: in their Chrome you would act as them. Use bin/agents.mjs",
   word: 'a word this long with braces in it is too big to check, so it is refused; put it in a file',
+  long: 'a command over 64 KB is too big to check, so it is refused; put it in a script file',
   crash: 'guard could not read the tool call, so it is refused' };
 export const REASON = REASONS.dirs;
+// Past this a command is refused unread: every check stays bounded however the text is built.
+const MAX_COMMAND = 64 * 1024;
 // The main of every hook guard: exit 2 with a reason refuses. Codex runs the tool on any other exit, and on exit 2 with empty stderr.
 export function hookMain(check, allow = '') {
   let r; try { r = check(JSON.parse(fs.readFileSync(0, 'utf8'))); } catch { r = REASONS.crash; }
@@ -324,8 +327,10 @@ function treeReason(cmd, cwd, home) {
 // running code, before the name. Linear: the regexes this replaces rescanned from every > or command word (82 s on 200 KB),
 // and a hook that slow times out, which Codex reads as allow.
 const OWNED_FILES = [['watches.json', 'watches'], ['squiggle.json', 'squiggle'], ['room.json', 'roomFile']];
-const FILE_TOOL = /\b(?:cp|mv|ln|install|rsync|ditto|tee|truncate|dd|patch|touch|rm|ed|ex|vim?|nano)\b/g;
-const IN_PLACE = /\b(?:g?sed|perl|ruby)\b/g, IN_PLACE_FLAG = /\s-\w*i\S*\s/g;
+const FILE_TOOL = /\b(?:cp|mv|ln|install|rsync|ditto|tee|truncate|dd|patch|touch|rm|ed|ex|vim?|nano|uniq|tar|unzip)\b/g;
+const IN_PLACE = /\b(?:g?sed|perl|ruby)\b/g, IN_PLACE_FLAG = /\s-\w*i\S*\s|\s--in-place\S*\s/g;
+// Tools that read the name as data but write to the word after an output flag: sort -o, curl -o or -O, wget -O.
+const OUT_TOOL = /\b(?:sort|curl|wget)\b/g, OUT_FLAG = /\s-\w*[oO]\S*|\s--output(?:-document)?\b/g;
 const INTERP = /\b(?:node|bun|deno|python[\d.]*|ruby|perl|php|osascript)\b/g, CODE_FLAG = /\s-\w*[ecp]\b|\s--eval\b|\s--print\b|\s-(?:\s|$)|<</gm;
 const SEP = /[\n;|&]/g;
 const find = (re, s, from) => { re.lastIndex = from; const m = re.exec(s); return m && { i: m.index, end: m.index + m[0].length }; };
@@ -371,7 +376,7 @@ function ownedWrite(cmd) {
   for (const [name, reason] of OWNED_FILES) {
     const at = [];
     for (let i = s.indexOf(name); i !== -1; i = s.indexOf(name, i + 1)) at.push(i);
-    if (at.length && (redirectsInto(s, at) || toolBefore(s, at, FILE_TOOL) || toolBefore(s, at, IN_PLACE, IN_PLACE_FLAG) || toolBefore(s, at, INTERP, CODE_FLAG))) return REASONS[reason];
+    if (at.length && (redirectsInto(s, at) || toolBefore(s, at, FILE_TOOL) || toolBefore(s, at, IN_PLACE, IN_PLACE_FLAG) || toolBefore(s, at, OUT_TOOL, OUT_FLAG) || toolBefore(s, at, INTERP, CODE_FLAG))) return REASONS[reason];
   }
   return '';
 }
@@ -454,6 +459,7 @@ export function hookSkipReason(raw, dirs) {
   return [...at].some(hooked) ? REASONS.hooks : '';
 }
 export function commandReason(cmd, cwd = process.cwd(), home = os.homedir()) {
+  if (String(cmd).length > MAX_COMMAND) return REASONS.long;
   if (bigBrace(cmd)) return REASONS.word;
   if (fencedCommand(cmd, cwd, home)) return REASONS.dirs;
   const raw = cmd; cmd = unquote(cmd);
@@ -491,10 +497,12 @@ const lead = (words) => `(?:(?:\\w+=(?:"[^"\\n]*"|[^\\s"])*|-\\S+|\\d+[smh]?|(?:
 const LEAD = lead(WRAPS), RUNS_TEXT = [...SHELLS, 'source', '.'];
 // `echo 'ssh x' | nohup sh`, `| sh -s -- a`, `| sh 2>&1`, `| sh -`: the script is only on the pipe.
 // `bash -o pipefail`, `bash --rcfile f`: options whose value is the next word.
-const SHELL_OPT = '\\s+[-+]\\w*[oO]\\s+[\\w-]+|\\s+--(?:rc|init-)file\\s+\\S+';
-const PIPED = new RegExp(`\\|&?[\\s(]*(?:[({](?:[^(){}]*[;&]\\s*|\\s*))?${LEAD}${SHELL}(?:(?:${SHELL_OPT}|\\s+-\\S*|\\s*\\d*&?[<>]+[&|]?\\s*[^\\s;&|)'"]+)*(?:\\s+#.*)?\\s*(?:$|[;&|)])|(?:\\s+-\\S+)*\\s+-\\w*s\\b)`, 'm');
+// Each word is taken whole (the lookaheads), and an option's value can't be an option: two ways to split one run of words
+// made these regexes exponential (20 repeats of -o -o took 48 s).
+const SHELL_OPT = '\\s+[-+]\\w*[oO]\\s+[a-zA-Z][\\w-]*(?![\\w-])|\\s+--(?:rc|init-)file\\s+\\S+(?!\\S)';
+const PIPED = new RegExp(`\\|&?[\\s(]*(?:[({](?:[^(){}]*[;&]\\s*|\\s*))?${LEAD}${SHELL}(?:(?:${SHELL_OPT}|\\s+-[^\\s<>]*(?![^\\s<>])|\\s*\\d*&?[<>]+[&|]?\\s*[^\\s;&|)'"<>]+(?![^\\s;&|)'"<>]))*(?:\\s+#.*)?\\s*(?:$|[;&|)])|(?:\\s+-\\S+)*\\s+-\\w*s\\b)`, 'm');
 // `/bin/zsh -lc '...'`: the quoted text is the command, not data. The -c text is one shell word: `"rg -n "a" b"` is `rg -n a b`, and `'it'\''s'` is `it's`.
-const C_BODY = `${SHELL}(?:${SHELL_OPT}|\\s+[-+]\\S+)*?\\s+-\\w*c\\w*\\s+((?:'[^']*'|"(?:[^"\\\\]|\\\\[\\s\\S])*"|\\\\[\\s\\S]|[^\\s;&|()<>'"\\\\])+)`;
+const C_BODY = `${SHELL}(?:${SHELL_OPT}|\\s+[-+]\\S+(?!\\S))*?\\s+-\\w*c\\w*\\s+((?:'[^']*'|"(?:[^"\\\\]|\\\\[\\s\\S])*"|\\\\[\\s\\S]|[^\\s;&|()<>'"\\\\])+)`;
 const SHELL_C = new RegExp(`(?:^|[\\s;&|(])${C_BODY}`, 'g'), WRAPPED = new RegExp(`^\\s*${C_BODY}\\s*$`);
 const shellBody = (m) => m[1].replace(/'([^']*)'|"((?:[^"\\]|\\[\s\S])*)"|\\([\s\S])/g, (_, one, two, esc) => one ?? esc ?? two.replace(/\\([\s\S])/g, '$1'));
 // plain() blanks what a double-quoted body runs, so bodies come from the raw text. Not those inside quotes, which are data, unless a substitution there runs them. A heredoc, escaped quote, $'' or # comment makes quotes unreliable: then all of them.
@@ -618,7 +626,7 @@ export function privateReason(tool, input = {}, cwd = process.cwd(), home = os.h
   const strings = []; const walk = (v, k) => { if (typeof v === 'string') strings.push([k, v]); else if (v && typeof v === 'object') for (const [k2, v2] of Object.entries(v)) walk(v2, Array.isArray(v) ? k : k2); };
   walk(input, '');
   for (const [k, s] of strings) {
-    if (k === 'command' || k === 'cmd') { if (privateCommand(s, cwd, home, { hit, reach, remote, dirs }, 0)) return REASONS.private; continue; }
+    if (k === 'command' || k === 'cmd') { if (s.length > MAX_COMMAND) return REASONS.long; if (privateCommand(s, cwd, home, { hit, reach, remote, dirs }, 0)) return REASONS.private; continue; }
     const p = s.trim();
     if (!dirs.length || !p || p.includes('\n') || p.length >= 4096) continue;
     const r = reach(p, cwd);

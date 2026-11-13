@@ -1,14 +1,14 @@
 // The owned-file write check must stay linear when a long command names the file. Codex runs the tool when a hook times out,
-// so a slow check is an open fence. The old regexes took 82 s on 200 KB of > and 32 s on a tail of cp.
+// so a slow check is an open fence. The old regexes took 82 s on 200 KB of > and 32 s on a tail of cp; over 64 KB is refused unread.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { commandReason, REASONS } from '../fence.mjs';
 
-const N = 200000, f = 'squiggle' + '.json';
+const N = 60000, f = 'squiggle' + '.json';
 // CPU time, so a loaded machine doesn't count against the check.
 const fast = (name, fn) => { const t = process.cpuUsage(); const r = fn(); const { user, system } = process.cpuUsage(t), ms = (user + system) / 1000; assert.ok(ms < 1000, `${name}: ${Math.round(ms)} ms`); return r; };
 
-test('200 KB commands naming the file take under 1 s, and the verdict is unchanged', () => {
+test('60 KB commands naming the file take under 1 s, and the verdict is unchanged', () => {
   const cases = {
     gt: ['>'.repeat(N) + ' x ' + f, ''],
     cpTail: ['echo ' + f + ' ' + 'cp '.repeat(N / 3), ''],
