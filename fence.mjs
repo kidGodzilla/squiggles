@@ -16,6 +16,7 @@ export const REASONS = { dirs: 'Downloads, Desktop and Documents are off limits'
   roomFile: 'room.json is written only by the server: set the passcode from the page. Reading it is fine',
   peer: "that squiggle's transcript, journal and private notes are closed to other squiggles: ask the lead",
   secret: 'credentials stay off the screen',
+  hooks: 'the pre-commit check stays on for squiggles: no --no-verify or -n, core.hooksPath or AGENTS_ID changes. Stage only your own hunks instead',
   tree: 'a recursive read or copy from home or above reaches Downloads, Desktop, Documents and ~/.ssh: name a folder inside home',
   room: "the room is your user's login: in their Chrome you would act as them. Use bin/agents.mjs",
   word: 'a word this long with braces in it is too big to check, so it is refused; put it in a file',
@@ -406,12 +407,58 @@ function pushesInside(cmd) {
   do { if (pushes(w)) return true; was = w; w = w.replace(/\$\([^()]*\)|`[^`]*`/g, '_'); } while (w !== was);
   return quotedBodies(cmd).some(pushesInside);
 }
+// The pre-commit check (commit-guard.mjs) is skipped by git commit --no-verify / -n, by pointing core.hooksPath elsewhere,
+// or by clearing AGENTS_ID. Skipping is refused in a repo that runs our hook (the server sets it only where the repo has no
+// hooks of its own, so there --no-verify skips nothing else); moving the hook or the id is refused anywhere.
+const HOOKS = path.join(path.dirname(new URL(import.meta.url).pathname), 'bin', 'hooks');
+function hooked(dir) {
+  for (let d = path.resolve(dir); ; d = path.dirname(d)) {
+    const g = path.join(d, '.git');
+    let st; try { st = fs.statSync(g); } catch { if (d === path.dirname(d)) return false; continue; }
+    let common = g;
+    if (st.isFile()) {
+      try {
+        const gd = path.resolve(d, fs.readFileSync(g, 'utf8').match(/gitdir:\s*(.+)/)[1].trim());
+        try { common = path.resolve(gd, fs.readFileSync(path.join(gd, 'commondir'), 'utf8').trim()); } catch { common = gd; }
+      } catch { return false; }
+    }
+    let conf = ''; try { conf = fs.readFileSync(path.join(common, 'config'), 'utf8'); } catch {}
+    return conf.split('\n').some((l) => { const m = l.match(/^\s*hookspath\s*=\s*"?(.*?)"?\s*$/i); return m && path.resolve(m[1]) === HOOKS; });
+  }
+}
+// Every folder a command runs in: the start, then each cd / pushd target.
+function cdDirs(cmd, cwd, home) {
+  let cur = path.resolve(cwd); const out = [cur];
+  for (const seg of cmd.split(/[;&|\n()`]|\$\(/)) {
+    const [c, t] = seg.trim().split(/\s+/);
+    if (c !== 'cd' && c !== 'pushd') continue;
+    const to = t ? t.replace(homeArg(home), home) : home; cur = /^[-~]|\$/.test(to) ? home : path.resolve(cur, to); out.push(cur);
+  }
+  return out;
+}
+const COMMIT = new RegExp(String.raw`\bgit\b` + GIT_OPTS + String.raw`\s+commit(?![\w-])`); // the hook is pre-commit only
+const SKIP = /\s(--no-v[\w-]*|-[^\s\-mFcCtSu]*n[^\s]*)(?=\s|$)/; // -n inside a short cluster before any flag that takes a value
+export function hookSkipReason(raw, dirs) {
+  let w = oneWord(raw);
+  for (const [, a] of w.matchAll(/\balias\s+([\w-]+)=[^\s;&|]*\bgit\b/g)) w = w.replace(new RegExp(`(^|[\\s;&|(])${a}(?=\\s)`, 'g'), '$1git'); // alias g=git
+  // git config core.hooksPath alone reads it; a value after the key, or --unset/--add/--edit/unset, writes it.
+  const setsHook = String(raw).split(/[;&|\n]+/).some((g) => /\bconfig\b/.test(g) && /\bcore\.hookspath\b/i.test(g)
+    && (/\bcore\.hookspath\s+\S/i.test(g) || /--(unset|replace|add|edit|rename|remove)|\s-e\b|\bconfig\s+(\S+\s+)*?(unset|edit|rename-section|remove-section)\b/i.test(g)));
+  if (/\bgit\b/.test(w) && (setsHook || /(^|\s)-c\s*core\.hookspath|\bGIT_CONFIG_(COUNT|PARAMETERS|GLOBAL|SYSTEM)\b|--config-env/i.test(w))) return REASONS.hooks;
+  if (!COMMIT.test(w)) return '';
+  if (/\bunset\s+([\w\s]*\s)?AGENTS_ID\b|\bAGENTS_ID=|\benv\s+(-\S+\s+)*-(i|u\s*AGENTS_ID)\b|--ignore-environment|--unset[=\s]AGENTS_ID/.test(w)) return REASONS.hooks;
+  const seg = w.split(/[;&|\n]+/).filter((s) => COMMIT.test(s) && SKIP.test(s.slice(s.search(COMMIT))));
+  if (!seg.length) return '';
+  const at = new Set(dirs);
+  for (const s of seg) for (const m of s.matchAll(/\bgit\b[^;&|\n]*?\s-C\s+(\S+)/g)) for (const d of dirs) for (const x of new Set([m[1], m[1].replace(/_/g, ' ')])) at.add(path.resolve(d, x)); // oneWord turned spaces into _
+  return [...at].some(hooked) ? REASONS.hooks : '';
+}
 export function commandReason(cmd, cwd = process.cwd(), home = os.homedir()) {
   if (bigBrace(cmd)) return REASONS.word;
   if (fencedCommand(cmd, cwd, home)) return REASONS.dirs;
   const raw = cmd; cmd = unquote(cmd);
   if (mentionsSsh(cmd, home) || (startsHome(cmd, cwd, home) && /(^|[\s=;&|(`])\.ssh\b/i.test(cmd)) || relReason(cmd, cwd, home) === REASONS.ssh) return REASONS.ssh;
-  return treeReason(cmd, cwd, home) || (pushes(cmd) || pushesInside(raw) ? REASONS.push : '') || ownedWrite(cmd);
+  return treeReason(cmd, cwd, home) || (pushes(cmd) || pushesInside(raw) ? REASONS.push : '') || ownedWrite(cmd) || hookSkipReason(raw, cdDirs(cmd, cwd, home));
 }
 
 // Private data (config privateDirs, privateTools, privateRemote): folders, tools and remote machines only Claude squiggles may

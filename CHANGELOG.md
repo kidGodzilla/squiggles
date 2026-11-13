@@ -5,6 +5,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 ## 0.1.2 (unreleased)
 
 ### Security
+- The fence refuses skipping the shared-checkout pre-commit check: `--no-verify` or `-n` in a repo that runs it, and anywhere, moving the hooks folder or clearing the squiggle's id before a commit.
 - The git push fence refuses git with a subcommand computed at run time (`git $(...)`, a backtick, `$var`, `$'\x70...'`), since it can't tell that isn't a push.
 - The git push fence also refuses push through a shell alias for git (`alias g=git` then `g push`).
 - Command output masking also hides values after --api_key, --access_key, --private_key and --key.
