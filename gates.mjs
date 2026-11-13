@@ -30,9 +30,12 @@ export function askSeen({ claim, turn = [], seen = {}, leadId = '', peers = [], 
 // The writes that make or relabel a note. A Low trust turn gets none of them, bar splitting a note marked for it (add is askSeen's).
 // A detached child looks like the owner's terminal, so while any squiggle is Low, those two need the code. With none, a terminal needs nothing.
 export const writesNote = (b) => ['add', 'split', 'accept'].includes(b.op) || (b.op === 'edit' && ['title', 'asked', 'split'].some((k) => b[k] !== undefined));
-export function noteRefusal({ b, caller = '', low = false, lowInRoom = false, page = false, marked = false, passcode = true }) {
+// watch: the request's process chain runs through a watch whose owner isn't Low. Its command is one the user approved;
+// it files plain alert notes, nothing else: no asked label, status, split or parent.
+const watchAlert = (b) => b.op === 'add' && ['serious', 'normal'].includes(b.alert) && ['asked', 'status', 'split', 'parent'].every((k) => b[k] === undefined);
+export function noteRefusal({ b, caller = '', low = false, lowInRoom = false, page = false, marked = false, passcode = true, watch = false }) {
   if (!writesNote(b)) return null;
-  if (!caller) return page || !lowInRoom ? null : passcode ? UNLOCK : NOCODE;
+  if (!caller) return page || !lowInRoom || (watch && watchAlert(b)) ? null : passcode ? UNLOCK : NOCODE;
   if (!low || b.op === 'add' || (b.op === 'split' && marked)) return null;
   return { status: 403, error: 'Low trust: suggest it instead, the owner or the lead files it' };
 }

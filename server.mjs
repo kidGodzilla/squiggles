@@ -1688,7 +1688,8 @@ const server = http.createServer(async (req, res) => {
       const b = await body(req, res);
       if (writesNote(b)) {
         const c = await callerSquiggle(req), cs = c && loadSquiggle(c), isLow = (x) => !x.lead && trustOf(x) === 'low';
-        const no = noteRefusal({ b, caller: c, low: !!cs && isLow(cs), lowInRoom: listSquiggles().some(isLow), page: !c && await pass.page(req), marked: !!board.tasks().find((t) => t.id === b.id)?.split, passcode: !!roomCfg().passcode?.hash });
+        const ws = !c && loadSquiggle(watches.watchOf(await callerChain(req)));
+        const no = noteRefusal({ b, caller: c, low: !!cs && isLow(cs), lowInRoom: listSquiggles().some(isLow), page: !c && await pass.page(req), marked: !!board.tasks().find((t) => t.id === b.id)?.split, passcode: !!roomCfg().passcode?.hash, watch: !!ws && !isLow(ws) });
         if (no) return json(res, { error: no.error, ...(no.unlock && { unlock: true }) }, no.status);
       }
       // Filed in a turn the user or the lead started: their ask, not the squiggle's own idea (Proactive).

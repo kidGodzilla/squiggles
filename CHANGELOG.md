@@ -225,6 +225,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Settings number inputs show an accent border on focus and are 44px tall on touch screens.
 
 ### Fixed
+- Watches: while any squiggle is Low, an approved watch can still file a plain alert note (serious or normal). Any other note write from a watch still needs the passcode.
 - Hiring: a create with no usable name is refused instead of making an "undefined" squiggle; the CLI prints `create` usage when arguments are missing.
 - `upgrade` restarts the login item only when it runs this clone, so upgrading a second copy can't restart your room.
 - Merge: a branch named after its task (`t12-x`, `me/t12`) is found in every goal's repos, so a repo only another goal lists merges with the rest; generic branch names stay in their goal.

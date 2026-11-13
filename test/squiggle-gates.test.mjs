@@ -321,4 +321,14 @@ test('note writes while a squiggle is Low', () => {
   assert.equal(writesNote({ op: 'edit', note: 'x' }), false);
 });
 
+test('a watch files plain alert notes while a squiggle is Low, and nothing else', () => {
+  const alert = { op: 'add', alert: 'serious' }, no = (b, o) => noteRefusal({ b, lowInRoom: true, ...o });
+  assert.equal(no(alert, { watch: true }), null, 'serious');
+  assert.equal(no({ ...alert, alert: 'normal' }, { watch: true }), null, 'normal');
+  assert.equal(no(alert).unlock, true, 'the flag alone proves nothing: a detached child can send it');
+  for (const b of [{ op: 'add' }, { op: 'add', alert: 'loud' }, { op: 'split', alert: 'serious' }, { op: 'accept', alert: 'serious' }, { op: 'edit', title: 'x', alert: 'serious' }]) assert.equal(no(b, { watch: true }).unlock, true, JSON.stringify(b));
+  for (const extra of [{ asked: 'owner' }, { status: 'done' }, { split: true }, { parent: 't1' }]) assert.equal(no({ ...alert, ...extra }, { watch: true }).unlock, true, JSON.stringify(extra));
+  assert.equal(no({ ...alert, title: 'x', goal: 'g', owner: 'o' }, { watch: true }), null, 'a plain alert note');
+});
+
 test('the CLI offers the code for note writes', () => assert.match(src('bin/agents.mjs'), /const UNLOCKS = .*\|tasks\)/));

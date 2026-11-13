@@ -40,7 +40,7 @@ export function lineDiff(a, b, max = DIFF_MAX) {
   return d.length > max ? `${d.slice(0, max)}\n[diff cut at ${max / 1024} KB]` : d;
 }
 // sh -c in the watch's cwd, env cut to PATH/HOME/AGENTS_ID/SQUIGGLES_HOME, no stdin, timeout, capped. Resolves { exit, out }.
-export function runWatch(w, { exec = execFile } = {}) {
+export function runWatch(w, { exec = execFile, started } = {}) {
   const ms = w.timeout || (/\bssh\b/.test(w.cmd) ? 90000 : 60000);
   const env = { PATH: process.env.PATH, HOME: process.env.HOME, AGENTS_ID: w.owner, ...(process.env.SQUIGGLES_HOME && { SQUIGGLES_HOME: process.env.SQUIGGLES_HOME }) };
   return new Promise((res) => {
@@ -48,7 +48,7 @@ export function runWatch(w, { exec = execFile } = {}) {
       const exit = e ? (typeof e.code === 'number' ? e.code : e.killed ? 'timeout' : 'error') : 0;
       res({ exit, out: `${String(out || '')}${er ? `\n${String(er)}` : ''}`.slice(0, MAX_OUT) });
     });
-    p?.stdin?.end?.();
+    p?.stdin?.end?.(); started?.(p?.pid);
   });
 }
 
@@ -110,6 +110,9 @@ export function createWatches({ file, outDir, now = () => Date.now(), data = dat
   // One pass over due watches, run side by side: a 10-minute watch doesn't hold back the rest.
   // running: a watch still in flight from an earlier tick is skipped, never started twice.
   const running = new Set();
+  // pid of each watch's shell -> owner. A request whose process chain runs through one came from an approved command.
+  const pids = new Map();
+  const watchOf = (chain) => chain.map((p) => pids.get(p)).find(Boolean) || '';
   async function tick({ exec, skip = () => false, onWake } = {}) {
     const due = load().watches.filter((w) => (w.state === 'on' || w.state === 'failing') && now() >= (w.next || 0) && !skip(w.owner) && !running.has(w.id));
     // onWake: sent the moment it happens, not when the slowest watch in this tick ends.
@@ -120,7 +123,7 @@ export function createWatches({ file, outDir, now = () => Date.now(), data = dat
       const g = guard(w0.owner, w0.cmd, w0.cwd);
       if (g) { set(w0.id, { state: 'paused', why: `guard: ${g}` }); out(wake(w0, `Watch ${w0.id} is paused: your guard now refuses \`${w0.cmd}\` (${g}).`)); return; }
       running.add(w0.id);
-      let r; try { r = await runWatch(w0, { exec }).catch((e) => ({ exit: 'error', out: e.message })); } finally { running.delete(w0.id); }
+      let r, pid; try { r = await runWatch(w0, { exec, started: (p) => { pid = p; if (p) pids.set(p, w0.owner); } }).catch((e) => ({ exit: 'error', out: e.message })); } finally { running.delete(w0.id); pids.delete(pid); }
       // Load, change, save with no await between: parallel runs can't overwrite each other.
       const s = load(), w = s.watches.find((x) => x.id === w0.id); if (!w || (w.state !== 'on' && w.state !== 'failing')) return;
       w.lastRun = now(); w.next = now() + w.every; w.lastExit = r.exit;
@@ -152,5 +155,5 @@ export function createWatches({ file, outDir, now = () => Date.now(), data = dat
   }
   const set = (id, patch) => { const s = load(), w = s.watches.find((x) => x.id === id); if (w) { Object.assign(w, patch); save(s); } };
   const wake = (w, prompt) => ({ owner: w.owner, id: w.id, ...(w.task && { task: w.task }), prompt });
-  return { add, approve, drop, list, tick, outFile };
+  return { add, approve, drop, list, tick, outFile, watchOf };
 }

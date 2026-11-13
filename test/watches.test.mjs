@@ -243,3 +243,17 @@ test('a slow --ignore on the old output also pauses, with no crash', async () =>
     assert.equal(W.list({ owner: 'alpha' })[0].state, 'paused');
   } finally { done(); }
 });
+
+test('a running watch is known by its pid, and only while it runs', async () => {
+  const { W, done: end } = setup();
+  try {
+    const w = W.add({ owner: 'alpha', cmd: 'node tools/x.mjs', cwd: H, every: '5m' }); W.approve(w.id, w.hash);
+    let done; const seen = [];
+    const t = W.tick({ exec: (c, a, o, cb) => { done = cb; return { pid: 4242 }; } });
+    await new Promise((r) => setImmediate(r));
+    seen.push(W.watchOf([9, 4242, 1]), W.watchOf([9, 1]));
+    done(null, 'x', ''); await t;
+    seen.push(W.watchOf([9, 4242, 1]));
+    assert.deepEqual(seen, ['alpha', '', '']);
+  } finally { end(); }
+});
