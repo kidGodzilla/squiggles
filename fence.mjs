@@ -492,8 +492,8 @@ const SHELLS = ['sh', 'bash', 'zsh', 'dash', 'ksh', 'ash', 'csh', 'tcsh', 'fish'
 const WRAPS = ['sudo', 'exec', 'env', 'nohup', 'time', 'command', 'builtin', 'xargs', 'timeout', 'nice', 'busybox', 'setsid', 'stdbuf', 'caffeinate', ...SHELLS, 'source', '.',
   'do', 'then', 'else', 'elif', 'if', 'while', 'until', '{', ')', '!'];
 // Code hidden from the word-by-word check below. LEAD is what may stand before a program, as in that check's wrapper loop.
-const SHELL = `(?:\\S*/)?(?:${SHELLS.join('|')})`;
-const lead = (words) => `(?:(?:\\w+=(?:"[^"\\n]*"|[^\\s"])*|-\\S+|\\d+[smh]?|(?:\\S*/)?(?:${words.map((w) => w.replace(/[.{)!]/, '\\$&')).join('|')}))\\s+)*`;
+const SHELL = `(?:[^\\s;&|()<>]*/)?(?:${SHELLS.join('|')})`;
+const lead = (words) => `(?:(?:\\w+=(?:"[^"\\n]*"|[^\\s";&|])*|-[^\\s;&|]+|\\d+[smh]?|(?:[^\\s;&|()<>]*/)?(?:${words.map((w) => w.replace(/[.{)!]/, '\\$&')).join('|')}))\\s+)*`;
 const LEAD = lead(WRAPS), RUNS_TEXT = [...SHELLS, 'source', '.'];
 // `echo 'ssh x' | nohup sh`, `| sh -s -- a`, `| sh 2>&1`, `| sh -`: the script is only on the pipe.
 // `bash -o pipefail`, `bash --rcfile f`: options whose value is the next word.
@@ -511,7 +511,7 @@ const spokenBodies = (raw) => {
   return [...raw.matchAll(SHELL_C)].filter((m) => shown[m.index] !== '\0');
 };
 // `$(echo ssh) box`, `"a $(echo ssh)" box`, `sh <(echo x)`, `sh -c "$(cat x)"`: the program or script only exists once it runs. Not `x=$(date)`, nor `sh -c "echo $(date)"`.
-const BUILT = new RegExp(`(?:^|[;&|\\n(]|\\$\\()\\s*${LEAD}(?:<+\\s*)?[^\\s=)]*(?:\\$\\(|\`|<\\()|(?:^|[;&|\\n(]|\\$\\()\\s*${lead(WRAPS.filter((w) => !RUNS_TEXT.includes(w)))}"[^"\\n]*(?:\\$\\(|\`)`, 'm');
+const BUILT = new RegExp(`(?:^|[;&|\\n(]|\\$\\()\\s*${LEAD}(?:<+\\s*)?[^\\s=);&|]*(?:\\$\\(|\`|<\\()|(?:^|[;&|\\n(]|\\$\\()\\s*${lead(WRAPS.filter((w) => !RUNS_TEXT.includes(w)))}"[^"\\n]*(?:\\$\\(|\`)`, 'm');
 const SUBST = '\\$\\((?:[^()]|\\((?:[^()]|\\([^()]*\\))*\\))*\\)|`[^`]*`';
 // Inside "a; $(x)" only the $(x) is code: the ; around it is text.
 // A `case x in a)` closes SUBST early, so such a quote stays as it is.
@@ -572,14 +572,14 @@ function plain(raw) {
 }
 // `p=dumps; cat ~/$p/a.txt`, `for p in a b`: the command read again with the values it set.
 function expanded(text) {
-  const sets = new Map(), add = (k, v) => sets.set(k, [...(sets.get(k) || []), ...v]);
+  const sets = new Map(), add = (k, v) => { const had = sets.get(k) || sets.set(k, new Set()).get(k); for (const x of v) had.add(x); };
   for (const m of text.matchAll(/(?:^|[\s;&|(])(\w+)=([^\s;&|`$()<>"]+)(?=[\s;&|)]|$)/gm)) add(m[1], [m[2]]);
   for (const m of text.matchAll(/\bfor\s+(\w+)\s+in\s+([^;\n$`]+)/g)) add(m[1], m[2].trim().split(/\s+/));
   let out = [text];
   for (const [k, vals] of sets) {
     const use = new RegExp(`\\$(?:${k}\\b|\\{${k}\\})`, 'g');
     if (!out.some((t) => t.search(use) >= 0)) continue;
-    out = out.flatMap((t) => vals.map((v) => t.replace(use, () => v)));
+    out = out.flatMap((t) => [...vals].map((v) => t.replace(use, () => v)));
     // Past the cap the values aren't all read, so the command is judged with $p unknown, not on the first 32.
     if (out.length > 32) return [];
   }
@@ -647,8 +647,14 @@ function inlineHelpers(cmd) {
 }
 // Does the command, before this point, write the script it runs? What's on disk then isn't what will run, so it can't be checked.
 // A heredoc is exempt: its lines are read as part of the command.
-const writes = (cmd, base) => { const re = new RegExp(`(?:>|\\btee\\s+(?:-a\\s+)?|\\b(?:cp|mv|ln)\\s[^;&|]*\\s|\\b(?:curl|wget)\\s(?:[^;&|]*\\s)?(?:-o|-O|--output)[\\s=]*)\\s*(?:\\S*/)?${esc(base)}(?=[\\s;&|)]|$)`);
-  return !!base && cmd.split('\n').some((l) => re.test(l) && !l.includes('<<')); };
+// Where the first such write ends, so each script it runs compares against one pass of the command, not a rescan per segment.
+const firstWrite = (cmd, base) => {
+  if (!base) return Infinity;
+  const re = new RegExp(`(?:>|\\btee\\s+(?:-a\\s+)?|\\b(?:cp|mv|ln)\\s[^;&|]*\\s|\\b(?:curl|wget)\\s(?:[^;&|]*\\s)?(?:-o|-O|--output)[\\s=]*)\\s*(?:[^\\s;&|()<>]*/)?${esc(base)}(?=[\\s;&|)]|$)`, 'g');
+  let at = 0, end = Infinity;
+  for (const l of cmd.split('\n')) { if (!l.includes('<<')) for (const m of l.matchAll(re)) end = Math.min(end, at + m.index + m[0].length); at += l.length + 1; }
+  return end;
+};
 // /bin/sh is sh. System folders only: ~/bin/sh is a script and gets read as one.
 const sysBin = (w) => w.replace(/^\/(?:usr\/(?:local\/)?|opt\/homebrew\/)?s?bin\/(?=[^/]+$)/, '');
 // Git reads private files out of history or the index without naming them: git log -p, git show <rev>, git grep, git diff, git cat-file,
@@ -727,6 +733,7 @@ function privateCommand(cmd, cwd, home, o, depth, outer = '') {
   if ((o.seen ||= new Set()).has(key)) return false;
   o.seen.add(key);
   const text = inlineHelpers(unquote(raw)), here = [...new Set(places(text, cwd, home))];
+  const wrote = new Map();
   // Code the fence can't read is refused once there is a folder or machine to protect. Tools alone are matched by name.
   const strict = o.remote || o.dirs.length > 0;
   const again = strict ? respelled(raw) : raw;
@@ -794,12 +801,18 @@ function privateCommand(cmd, cwd, home, o, depth, outer = '') {
     // Its own $(dirname "$0") reads as the script's folder.
     if (depth < 2 && (viaShell || ws[0].includes('/') || /\.(sh|bash|zsh)$/.test(ws[0]))) {
       const rel = ws[0].replace(homeArg(home), home);
-      if (strict && !depth && /^[\w.~\/-]+$/.test(rel) && writes(text.slice(0, text.lastIndexOf(seg)), path.basename(rel))) return true;
+      if (strict && !depth && /^[\w.~\/-]+$/.test(rel)) {
+        const base = path.basename(rel);
+        if (!wrote.has(base)) wrote.set(base, firstWrite(text, base));
+        if (wrote.get(base) <= text.lastIndexOf(seg)) return true;
+      }
       for (const f of new Set(here.map((dir) => path.resolve(dir, rel)))) {
         // Opened without blocking and checked on the open file: a FIFO hung the guard with no CPU use, past its CPU limit, until
         // the client's hook timeout ran the tool. Its body is unknown, so anything but a regular file or folder refuses.
-        let body = '', odd = false;
-        try { const fd = fs.openSync(f, fs.constants.O_RDONLY | fs.constants.O_NONBLOCK); try { const st = fs.fstatSync(fd); odd = !st.isFile() && !st.isDirectory(); if (st.isFile() && st.size < 256 * 1024) body = fs.readFileSync(fd, 'utf8'); } finally { fs.closeSync(fd); } } catch {}
+        const seen = (o.files ||= new Map()).get(f);
+        let body = seen?.body ?? '', odd = seen?.odd ?? false;
+        if (!seen) try { const fd = fs.openSync(f, fs.constants.O_RDONLY | fs.constants.O_NONBLOCK); try { const st = fs.fstatSync(fd); odd = !st.isFile() && !st.isDirectory(); if (st.isFile() && st.size < 256 * 1024) body = fs.readFileSync(fd, 'utf8'); } finally { fs.closeSync(fd); } } catch {}
+        if (!seen) o.files.set(f, { body, odd });
         if (odd) return true;
         if (!body || body.includes('\0') || !(viaShell || new RegExp(`^#!.*\\b(${SHELLS.join('|')})\\b`).test(body))) continue;
         body = body.replace(/\$\(\s*dirname\s+(?:--\s+)?["']?\$\{?(?:0|BASH_SOURCE(?:\[0\])?)\}?["']?\s*\)|\$\{(?:0|BASH_SOURCE(?:\[0\])?)%\/\*\}/g, () => path.dirname(f));

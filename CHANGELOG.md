@@ -6,6 +6,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 
 ### Security
 - `room` commands reach pages as their own action and fields only, as text: they can no longer forge a reaction or send a value that breaks the page. Chat images show only for png, jpg, gif and webp files.
+- The fence answers commands made of many short segments in well under a second; 64 KB of them took up to 12 s.
 - The fence stays fast on long runs of shell options, refuses commands over 64 KB unread, and counts `sort -o`, `curl -o`, `wget -O`, `uniq`, `tar`, `unzip` and `--in-place` as writes to the room's own files.
 - Changing goals, turning sharing off, and granting a squiggle a browser or skills are now the owner's or the lead's: a squiggle can no longer open a gated goal, cut the owner's share link, or give itself tools.
 - The screen refuses the data folder's own files (room, config, people, board) and its backups, including by a changed letter case or a hard link. Journals keep their peer rules; files/ and research/ still show.
