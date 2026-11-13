@@ -5,6 +5,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 ## 0.1.2 (unreleased)
 
 ### Security
+- `room` commands reach pages as their own action and fields only, as text: they can no longer forge a reaction or send a value that breaks the page. Chat images show only for png, jpg, gif and webp files.
 - Changing goals, turning sharing off, and granting a squiggle a browser or skills are now the owner's or the lead's: a squiggle can no longer open a gated goal, cut the owner's share link, or give itself tools.
 - The screen refuses the data folder's own files (room, config, people, board) and its backups, including by a changed letter case or a hard link. Journals keep their peer rules; files/ and research/ still show.
 - The fence refuses skipping the shared-checkout pre-commit check: `--no-verify` or `-n` in a repo that runs it, and anywhere, moving the hooks folder or clearing the squiggle's id before a commit.

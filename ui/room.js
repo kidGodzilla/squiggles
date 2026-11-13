@@ -400,6 +400,7 @@ function sharing() { const on = !!S.present && presenter() === S.present; if (do
 const IMG_PATH = /(?:~|\/)[^\s`'"()<>\[\]]*\.(?:png|jpe?g|gif|webp)(?=$|[\s`'"()<>\[\].,;:!?])/gi;
 function fileUrl(p) {
   p = String(p || '').replace(/^~(?=\/)/, S.home || '~');
+  if (!/\.(?:png|jpe?g|gif|webp)$/i.test(p)) return null; // images only, on every branch
   if (/^\/files\/[^?#\\%]+$/.test(p) && !/\/\.|\.\./.test(p)) return p; // no %2e or \: the browser would resolve them out of /files/
   for (const [src, dir] of [...Object.entries(S.roots || {}), ...Object.entries(S.realRoots || {})]) {
     if (!p.startsWith(dir + '/')) continue;

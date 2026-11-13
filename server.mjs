@@ -930,6 +930,21 @@ function removeSquiggle(id) {
   broadcast('*room', { k: 'removed', id });
   return `${s.name} removed (archived in squiggles/.archive)`;
 }
+// POST /api/room broadcasts only these actions and fields, as strings: no forged events, nothing that breaks the page.
+const ROOM_FIELDS = { radio: [], volume: [], voices: [], chatter: [], theme: [], reactions: [], burn: [], characters: [], view: ['id'], fold: [], unfold: [], chat: ['text'], lock: [], reload: [] };
+const roomEvent = (raw) => {
+  const action = raw?.action;
+  if (action === 'react') return { error: 'reactions go through /api/react' };
+  if (typeof action !== 'string' || !Object.hasOwn(ROOM_FIELDS, action)) return { error: `room actions: ${Object.keys(ROOM_FIELDS).join(', ')}` };
+  const ev = { action };
+  for (const f of ['value', ...ROOM_FIELDS[action]]) {
+    const v = raw[f];
+    if (v == null) continue;
+    if (!['string', 'number', 'boolean'].includes(typeof v)) return { error: `${f} must be text` };
+    ev[f] = String(v);
+  }
+  return ev;
+};
 function broadcast(id, ev) {
   const line = `data: ${JSON.stringify({ id, ev })}\n\n`;
   for (const res of clients) res.write(line);
@@ -1665,9 +1680,11 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/voice') return json(res, kokoro.status());
     // Room controls (radio, voices, chatter, tabs, chat windows) so the lead can do whatever the user can.
     if (url.pathname === '/api/room' && req.method === 'POST') {
-      const b = await body(req, res), rc = await callerSquiggle(req);
-      const no = roomRefusal({ action: b.action, caller: rc, lead: !!(rc && loadSquiggle(rc)?.lead), page: await pass.page(req), passcode: !!roomCfg().passcode?.hash });
+      const raw = await body(req, res), rc = await callerSquiggle(req);
+      const no = roomRefusal({ action: raw?.action, caller: rc, lead: !!(rc && loadSquiggle(rc)?.lead), page: await pass.page(req), passcode: !!roomCfg().passcode?.hash });
       if (no) return json(res, { error: no.error, ...(no.unlock && { unlock: true }) }, no.status);
+      const b = roomEvent(raw);
+      if (b.error) return json(res, { error: b.error }, 400);
       if (b.action === 'burn') { // every frequent Claude squiggle back to back until off (burn.mjs)
         const v = String(b.value || '').toLowerCase();
         if (!['on', 'off'].includes(v)) return json(res, { error: 'burn on|off' }, 400);
