@@ -35,7 +35,7 @@ test('open steps around a merge sit on their own clock, even on a finished note'
   const l = run([
     note('t1', 'done', 5, { finished: ago(5), after: [{ t: 'Owner: run it', who: 'owner' }, { t: 'closed', done: true }] }),
     note('t2', 'done', 1, { finished: ago(1), after: [{ t: 'too new' }] }),
-    note('t3', 'review', 1, { reviewed: ago(2), needs: [{ t: 'Otto: sync', who: 'ops' }] }),
+    note('t3', 'review', 1, { reviewed: ago(2), needs: [{ t: 'Remy: sync', who: 'ops' }] }),
   ]);
   assert.deepEqual(kinds(l), ['after t1', 'needs t3']);
   assert.equal(l[0].owner, 'owner');

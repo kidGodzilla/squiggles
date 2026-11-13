@@ -13,7 +13,7 @@ const rig = () => {
     { id: 't1', title: 'x', goal: 'g', owner: 'builder', status: 'review', needs: [{ t: 'set <secret> on the app', done: false, who: 'ops' }] },
     { id: 't2', title: 'y', goal: 'g', owner: 'builder', status: 'done' },
   ] }));
-  const sq = { ops: 'Otto', builder: 'Builder', lead: 'Lead' };
+  const sq = { ops: 'Remy', builder: 'Builder', lead: 'Lead' };
   const whoIs = (w, namesOnly) => { const k = w.toLowerCase(); if (k === 'owner') return 'owner'; return Object.keys(sq).find((id) => (!namesOnly && id === k) || sq[id].toLowerCase() === k) || null; };
   return { b: createBoard(dir, () => {}, { whoIs, onSteps: () => {} }), dir };
 };
@@ -39,7 +39,7 @@ for (const t of [
   'set the DSN to {{dsn}}',
   'set MAIL_FROM to YOUR_ADDRESS',
   'set the region, TBD',
-  'ask Otto for the token, then paste it into the dashboard',
+  'ask Remy for the token, then paste it into the dashboard',
   'see the note for what to change',
   'values are in the journal',
 ]) test(`refused: ${t}`, () => { const { b, dir } = rig(); assert.throws(() => add(b, `Owner: ${t}`), WHY); fs.rmSync(dir, { recursive: true, force: true }); });
@@ -55,7 +55,7 @@ for (const t of [
   fs.rmSync(dir, { recursive: true, force: true });
 });
 test('a squiggle\'s own step can stay short: it has the context', () => {
-  const { b, dir } = rig(); add(b, 'Otto: set <secret> on the app');
+  const { b, dir } = rig(); add(b, 'Remy: set <secret> on the app');
   assert.equal(b.tasks().find((x) => x.id === 't2').after[0].who, 'ops');
   fs.rmSync(dir, { recursive: true, force: true });
 });
