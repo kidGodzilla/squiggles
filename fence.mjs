@@ -691,7 +691,9 @@ const firstWrite = (cmd, base) => {
 const sysBin = (w) => w.replace(/^\/(?:usr\/(?:local\/)?|opt\/homebrew\/)?s?bin\/(?=[^/]+$)/, '');
 // Git reads private files out of history or the index without naming them: git log -p, git show <rev>, git grep, git diff, git cat-file,
 // HEAD:private/a.md. So in a repo holding a private folder (or inside one) those are refused unless the output can't hold file
-// contents or is limited to paths outside the fence. Other repos are untouched. Rough: a copy or clone first gets round it.
+// contents or is limited to paths outside the fence. Other repos are untouched. Rough: a copy first gets round it.
+// Subcommands are an allowlist: one not named below (range-diff, pack-objects, difftool) is refused there. Aliases, set in config
+// or with -c, are read as what they run. Flags git gets from xargs, a substitution or a variable are unknown, so read as a patch.
 const repoRoot = (dir) => { for (let d = real(dir); ; d = path.dirname(d)) { if (fs.existsSync(path.join(d, '.git'))) return d; if (d === path.dirname(d)) return ''; } };
 const holds = (root, dirs) => { const r = root.toLowerCase(); return !!r && dirs.some((d) => d === r || d.startsWith(r + '/') || r.startsWith(d + '/')); };
 const NAMES_ONLY = /^(-s|--no-patch|--stat|--shortstat|--numstat|--name-only|--name-status|--summary)$/;
@@ -699,25 +701,58 @@ const PATCH = /^(-\w*[puc]\w*|-U\d*|--patch\S*|--unified\S*|--cc|--dd|--remerge-
 const REV_PATH = /^[^:]*:(?!\/\/)(.+)$/;
 // A real rev:path. Not :/text or HEAD^{/a:b}, which name a commit, nor :0:path, whose path REV_PATH misreads.
 const REV_ONLY = /^(?!.*\^\{\/)[^-:][^:]*:.+/;
-function gitHistory(ws, here, home, o) {
+// Can't print or copy out a file's contents. worktree and stash are judged by their own forms below.
+const GIT_SAFE = new Set(('add am apply bisect branch check-attr check-ignore checkout cherry cherry-pick clean commit config count-objects describe '
+  + 'fetch for-each-ref gc hash-object help init ls-files ls-remote ls-tree merge merge-base mv name-rev notes prune pull push rebase remote repack '
+  + 'replace rerere reset restore revert rev-list rev-parse rm shortlog show-branch show-ref sparse-checkout stash status submodule switch '
+  + 'symbolic-ref tag update-index update-ref var verify-commit verify-tag version').split(' '));
+// Where git is pointed by the environment: `GIT_DIR=x git log`, `env GIT_WORK_TREE=x`, `export GIT_DIR=x; git log`.
+const GIT_ENV = /(?<![\w$])GIT_(?:DIR|WORK_TREE|INDEX_FILE|OBJECT_DIRECTORY|ALTERNATE_OBJECT_DIRECTORIES|COMMON_DIR)=("[^"]*"|'[^']*'|[^\s;&|()]*)/g;
+// `-c alias.x="log -p"`, `-c 'alias.x=log -p'`: read from the raw command, where the quotes still hold the value together.
+const GIT_ALIAS = /(?:^|\s)-c\s*(?:"alias\.([\w-]+)=([^"]*)"|'alias\.([\w-]+)=([^']*)'|alias\.([\w-]+)=("[^"]*"|'[^']*'|[^\s;&|()]*))/gi;
+const gitAliases = (raw) => new Map([...raw.matchAll(GIT_ALIAS)].map((m) => [(m[1] ?? m[3] ?? m[5]).toLowerCase(), (m[2] ?? m[4] ?? m[6]).replace(/^(["'])(.*)\1$/, '$2')]));
+// Config from the environment or --config-env can alias anything, so an unknown subcommand there is refused.
+const GIT_CONFIG_ENV = /(?<![\w$])GIT_CONFIG(?:_PARAMETERS|_COUNT|_KEY_\d+|_VALUE_\d+|_GLOBAL|_SYSTEM)?=|--config-env\b/;
+const gitEnv = (text) => [...text.matchAll(GIT_ENV)].map((m) => m[1].replace(/^(["'])(.*)\1$/, '$2'));
+function gitHistory(ws, here, home, o, how = {}, depth = 0) {
   let dirs = here, blind = false, i = 1;
   for (; ws[i]?.startsWith('-'); i++) {
     const m = ws[i].match(/^(-[Cc]|--git-dir|--work-tree)(?:=(.*))?$/); if (!m) continue;
     const v = (m[2] ?? ws[++i] ?? '').replace(homeArg(home), home); if (m[1] === '-c') continue;
     if (/\$|^~/.test(v)) blind = true; else dirs = dirs.map((d) => path.resolve(d, v));
   }
+  // GIT_DIR=x after -C is read from the -C folder.
+  for (const v of how.env || []) { const p = v.replace(homeArg(home), home); if (/\$|`|^~|^$/.test(p)) blind = true; else dirs = [...dirs, ...dirs.map((d) => path.resolve(d, p))]; }
   const sub = ws[i], rest = ws.slice(i + 1), roots = dirs.map(repoRoot), inside = dirs.filter((d, k) => holds(roots[k], o.dirs));
   // rev:path starts at the repo root, not the cwd.
   if (rest.some((w) => { const p = w.match(REV_PATH)?.[1]; return p && [...dirs, ...roots.filter(Boolean)].some((d) => o.hit(p, d)); })) return true;
+  // git clone ~/repo /tmp/c copies the private folder out, wherever it runs.
+  if (sub === 'clone' && rest.some((w) => !w.startsWith('-') && dirs.some((d) => holds(repoRoot(path.resolve(d, w.replace(homeArg(home), home))), o.dirs)))) return true;
   if (!inside.length && !blind) return false;
+  if (!sub) return false;
+  if (/\$|`/.test(sub)) return true;
+  // An alias: read what it runs. A shell alias (!cmd) could print anything.
+  if (!BUILTIN.has(sub.toLowerCase()) && !GIT_SAFE.has(sub)) {
+    const name = sub.toLowerCase();
+    if (how.config) return true;
+    const v = how.aliases?.get(name) ?? [...new Set(inside.length ? inside : dirs)].map((d) => aliases(d).get(name)).find((x) => x != null);
+    if (v == null) return true;
+    if (v.trim().startsWith('!') || depth >= 10) return true;
+    return gitHistory(['git', ...ws.slice(1, i), ...v.trim().split(/\s+/), ...rest], here, home, o, how, depth + 1);
+  }
   if (['format-patch', 'archive', 'bundle', 'fast-export'].includes(sub)) return true;
+  // A second checkout outside the repo holds every private file.
+  if (sub === 'worktree') return !['list', 'prune', 'remove', 'lock', 'unlock', 'repair'].includes(rest[0]);
+  if (sub === 'clone') return false;
   // Only rev:path words: each was just checked. git show HEAD:a <rev> still shows <rev>.
   const named = rest.filter((w) => !w.startsWith('-')), revOnly = !blind && named.length > 0 && named.every((w) => REV_ONLY.test(w));
   if (sub === 'cat-file') return !revOnly && !rest.some((w) => /^-[est]$/.test(w));
   // Read like log: names only until a patch flag. stash -u is a write, so only its read forms count.
   const logs = ['log', 'whatchanged', 'reflog', 'diff-tree', 'diff-index', 'diff-files', 'request-pull'].includes(sub) || sub === 'stash' && ['show', 'list'].includes(rest[0]);
-  const patch = rest.some((w) => PATCH.test(w));
-  if (logs ? !patch : !['show', 'diff', 'grep'].includes(sub)) return false;
+  const patch = how.hidden || rest.some((w) => PATCH.test(w) || /\$|`/.test(w));
+  const reads = ['show', 'diff', 'grep', 'blame', 'annotate'].includes(sub);
+  if (!logs && !reads) return !GIT_SAFE.has(sub);
+  if (logs && !patch) return false;
   if (sub !== 'grep' && !patch && (rest.some((w) => NAMES_ONLY.test(w)) || !logs && revOnly)) return false;
   const dash = rest.indexOf('--'), operands = named.slice(sub === 'grep' ? 1 : 0);
   const paths = dash >= 0 ? rest.slice(dash + 1) : operands.filter((w) => inside.some((d) => fs.existsSync(path.resolve(d, w))));
@@ -790,10 +825,13 @@ function privateCommand(cmd, cwd, home, o, depth, outer = '') {
     for (const m of text.matchAll(DB_URL)) if (!LOCAL.test(m[1])) return true;
   }
   // Each segment's program, past env assignments and wrappers: `grep ssh x.js` passes, `sudo ssh x` doesn't.
+  // git with a substitution among its words: the split below cuts at it, so it is seen here.
+  const gitHow = o.dirs.length && /(?<![\w./-])git\s/.test(text) ? { env: gitEnv(`${outer}\n${raw}`), aliases: gitAliases(raw), config: GIT_CONFIG_ENV.test(`${outer}\n${raw}`), hidden: /(?<![\w./-])git\s[^;&|\n()`]{0,400}(?:\$\(|`)/.test(text) } : {};
   for (const seg of text.split(/[;&|`\n(]|\$\(/)) {
-    const ws = seg.trim().split(/\s+/).filter(Boolean); let viaShell = false;
+    const ws = seg.trim().split(/\s+/).filter(Boolean); let viaShell = false, fed = false;
     while (ws.length && (/^\w+=/.test(ws[0]) || WRAPS.includes(sysBin(ws[0])) || /^-/.test(ws[0]) || /^\d+[smh]?$/.test(ws[0]))) {
       if ([...SHELLS, 'source', '.'].includes(sysBin(ws[0]))) viaShell = true;
+      if (sysBin(ws[0]) === 'xargs') fed = true;
       ws.splice(0, viaShell && /^[-+]\w*[oO]$/.test(ws[0]) ? 2 : 1);
       // `sh < x.sh`, `bash <<< 'ssh x'`: what follows is the script.
       if (viaShell && ws[0]?.startsWith('<')) { ws[0] = ws[0].replace(/^<+/, ''); if (!ws[0]) ws.shift(); }
@@ -820,7 +858,7 @@ function privateCommand(cmd, cwd, home, o, depth, outer = '') {
       }
     }
     if (o.dirs.length) {
-      if (prog === 'git' && gitHistory(ws, here, home, o)) return true;
+      if (prog === 'git' && gitHistory(ws, here, home, o, { ...gitHow, hidden: gitHow.hidden || fed })) return true;
       // grep -r ~/work, find ~: a walk from a parent reaches the private folders under it.
       const flags = rest.filter((w) => /^-/.test(w)).join(' '), args = rest.filter((w) => !/^-/.test(w));
       const walks = WALKERS.includes(prog) || /(^|\s)--recursive\b/.test(flags)

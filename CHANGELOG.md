@@ -5,6 +5,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 ## 0.1.2 (unreleased)
 
 ### Security
+- In a repo holding a private folder, git history checks read aliases, `GIT_DIR` and `GIT_WORK_TREE`, and flags from xargs or a substitution. Subcommands not on a reviewed list, such as `range-diff`, `worktree add` and `clone`, are refused.
 - The publish check also refuses `git push` reached through a shell function, a subcommand or program built by substitution, or an alias already in git config or written into a config file.
 - A private squiggle's live events and reactions reach only it and the lead. A reaction must land on a real message, and names a person only from their unlocked page. Wrong passcodes from scripts with browser headers count against the scripts' limit, not the page's.
 - `room` commands reach pages as their own action and fields only, as text: they can no longer forge a reaction or send a value that breaks the page. Chat images show only for png, jpg, gif and webp files.
