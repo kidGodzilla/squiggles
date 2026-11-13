@@ -457,14 +457,16 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
     let wtReal = WT; try { wtReal = fs.realpathSync(WT); } catch {}
     const t = tasks(), seen = new Set(), out = [], rc = {}, realOf = (r) => r ? (rc[r] ??= (() => { try { return fs.realpathSync(expand(r)); } catch { return ''; } })()) : '';
     const temp = (p) => /\/(merge-t\d+-|branch-d-)[^/]+$/.test(p); // the Review tab's own temp worktrees, gone in a moment
+    const check = []; // rows whose dirty count is read at the end, several at once (one at a time, 134 took 9-43 s)
     const scan = async (repo) => {
       let real; try { real = fs.realpathSync(expand(repo)); } catch { return; } if (seen.has(real)) return; seen.add(real);
       for (const w of await worktreesOfA(repo)) { // off the loop
         if (temp(w.path)) continue;
         const task = t.find((x) => x.status !== 'done' && ((x.worktrees || []).includes(w.path) || (w.branch && x.branch === w.branch && realOf(x.repo) === real))) || null;
-        let dirty = 0; try { dirty = fs.existsSync(w.path) ? (await dirtyOfA(w.path)).length : 0; } catch {}
-        out.push({ repo: real, path: w.path, branch: w.branch, head: w.head, dirty, missing: !fs.existsSync(w.path), home: w.path.startsWith(wtReal + '/'),
+        const missing = !fs.existsSync(w.path);
+        out.push({ repo: real, path: w.path, branch: w.branch, head: w.head, dirty: 0, missing, home: w.path.startsWith(wtReal + '/'),
           task: task?.id || '', status: task?.status || '', owner: task?.owner || '', title: task?.title || '', orphan: !task });
+        if (!missing) check.push(out.at(-1));
       }
     };
     for (const repo of TIERS.flatMap((x) => goals()[x]).flatMap((g) => g.repos || [])) await scan(repo);
@@ -479,6 +481,7 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
       const task = t.find((x) => x.status !== 'done' && (x.worktrees || []).includes(p)) || null;
       out.push({ repo: '', path: p, branch: '', head: '', dirty: 0, missing: false, home: true, plain: true, task: task?.id || '', status: task?.status || '', owner: task?.owner || '', title: task?.title || '', orphan: !task });
     }
+    await pool(check, 6, async (r) => { try { r.dirty = (await dirtyOfA(r.path)).length; } catch {} });
     return out;
   }
   // The lead keeps one note listing orphan worktrees: refreshed when the list changes, done when there are none.
