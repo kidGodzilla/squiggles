@@ -161,6 +161,16 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
     return { t: text };
   }
   // A step is a job someone does, never a permission. Only the opening verb counts: "open the page and press Approve" is a job.
+  // A step tagged Owner is done from the Review tab with nothing else to go on: what's still unwritten in it, or ''.
+  // A floor, not a proof: it catches the blanks a filer leaves; the prompt asks for the rest.
+  function stepGap(t) {
+    const m = t.match(/<[a-z][^<>\n]{0,40}>|\{\{[^}\n]*\}\}|\bYOUR_[A-Z]\w*|\b(?:TBD|TODO|FIXME)\b/);
+    if (m) return `${m[0]} is a blank: put the real value`;
+    if (/\b(generate|make up|come up with|pick|choose)\b[^.\n]*\b(secret|password|passphrase|token|key)\b/i.test(t) && !t.includes('`')) return 'it leaves them to make a secret: give the exact command in backticks';
+    if (/\bask \w+ (for|to)\b|\bsee (the )?(note|journal|thread|chat|docs?)\b|\b(details|instructions|values?|steps?) (is |are )?(in|on) (the )?(note|journal|thread|chat|docs?)\b/i.test(t)) return 'it points somewhere else: paste what they need into the step';
+    return '';
+  }
+  const fullStep = (t, id) => { const g = stepGap(t); if (g) throw new Error(`the owner does this step from the Review tab with nothing else to go on, and ${g}. Give real values, exact commands in backticks and the page to open. If you can't yet, tag a squiggle to finish it, not Owner (${id}).`); };
   const APPROVAL = /^(\d+\.\s*)?(please\s+)?(approve|sign[- ]off|give (the|a|your) (go|ok|okay)\b|green[- ]?light|ok(ay)?\s+(the|this|running)\b|authori[sz]e)/i;
   const plainJob = (t, id) => { if (APPROVAL.test(t)) throw new Error(`a step is a job someone does, not a permission. For a yes or no from the owner: pick ask "<question>" "Yes" "No" --task ${id}, then file the job itself once they answer. A console click is a job: say it as one ("open <page> and press Approve")`); };
   // Each tagged squiggle hears its open steps; the user's stay theirs, in the Review tab. Untagged ones go to the task's owner to tag.
@@ -367,12 +377,14 @@ export function createBoard(root, onChange, { onConflict, whoIs, onSteps } = {})
         const g = tagStep(t);
         if (whoIs && !g.who) throw new Error(`tag the step's owner first, a squiggle or Owner: task ${op} ${task.id} add "Owner: ${t.replace(/"/g, "'")}"`);
         plainJob(g.t, task.id);
+        if (g.who === 'owner') fullStep(g.t, task.id);
         list.push({ t: g.t, done: false, ...(g.who ? { who: g.who } : {}) });
         if (op === 'needs' ? task.status === 'review' : task.status === 'done') { task[op] = list; tellSteps(task, op, [list.length - 1]); }
       }
       else if (act === 'tag') {
         if (!list[i]) throw new Error(`no ${what} ${n} on ${task.id}`);
         const w = whoIs?.(String(who || '').replace(/^@/, '')); if (!w) throw new Error(`tag ${n} with a squiggle's id or name, or Owner`);
+        if (w === 'owner') fullStep(list[i].t, task.id);
         list[i].who = w;
         if (op === 'needs' ? task.status === 'review' : task.status === 'done') { task[op] = list; tellSteps(task, op, [i]); }
       }

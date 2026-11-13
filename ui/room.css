@@ -486,7 +486,7 @@ html[data-theme=clean] .mrow .mres { color: var(--dim) } html[data-theme=clean] 
 .mafter { display: grid; gap: 8px; margin: 0 0 14px } .mabox .mneeds { margin: 0 } .mabox { min-width: 0 } .mabox h5 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
 .mmore { margin-left: 6px; padding: 0 6px; border: 0; background: none; color: var(--accent, #d9a24a); font: inherit; cursor: pointer; text-decoration: underline } .mdfull ol { padding-left: 22px } .mdfull li { margin: 6px 0 } .mdfull a { color: var(--accent); overflow-wrap: anywhere }
 @media (pointer: coarse) { .mmore { min-height: 44px; min-width: 44px } }
-.mstep { display: flex; gap: 8px; align-items: baseline; padding: 2px 0 } .mstep.done span { color: var(--dim); text-decoration: line-through } .mtick { cursor: pointer } .mwho { font-weight: 600 } .mstep.theirs:not(.done) span { color: var(--dim) }
+.mstep { display: flex; gap: 8px; align-items: baseline; padding: 2px 0 } .mstep > span { white-space: pre-wrap; overflow-wrap: anywhere; min-width: 0 } .mstep.done span { color: var(--dim); text-decoration: line-through } .mtick { cursor: pointer } .mwho { font-weight: 600 } .mstep.theirs:not(.done) span { color: var(--dim) }
 .mabox { cursor: pointer } .mabox.open h5 { white-space: normal } /* click reads, the box ticks */
 @media (pointer: coarse) { .mstep { min-height: 44px; align-items: center } .mtick { display: flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; margin: 0 -10px } } /* tick a step with a thumb */
 .mdbox dl { display: grid; grid-template-columns: 100px 1fr; gap: 4px 12px; margin: 0; font-size: 12.5px } .mdbox dt { color: var(--dim) } .mdbox dd { margin: 0; word-break: break-word }

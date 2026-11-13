@@ -174,6 +174,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 - Review lists watches waiting for approval, with the command, folder, schedule and reason, plus Approve and Drop. They count on the Review tab, in a chat's waiting line and in `needs`.
 ### Changed
 - Merge steps must be jobs: the board refuses a step that opens with approve or sign off, and points to `pick ask` for a yes or no.
+- Steps tagged Owner must be complete when filed: the board refuses blanks like `<host>` or TBD, a secret with no command, and "see the note". Long steps wrap in the Review tab.
 - Shared prompt: the code in a squiggle's area is theirs to shape; in code a task touches they merge repeats and fix small related problems, named in the review note, keeping existing behavior.
 - Squiggles that wake every hour or more often now only drift earlier than their schedule, never later, so each wake lands inside the 1-hour prompt cache. Longer cadences still drift both ways.
 - Squiggles launch with only the built-in tools they use (Task, Bash, Edit, Read, Write, WebFetch, WebSearch, ToolSearch, TaskStop), about 12k fewer tokens a cold wake. Skills are off unless turned on in the sheet or with `set <id> skills true`.
