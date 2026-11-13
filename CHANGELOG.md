@@ -5,6 +5,7 @@ Each version lists Added, Changed and Fixed, plus Migrations and Breaking when p
 ## 0.1.2 (unreleased)
 
 ### Security
+- Fence guards stop at 30 seconds of wall time and refuse: a guard blocked on I/O spends no CPU, so the CPU limit never fired and the client's hook timeout let the command run.
 - The private-data fence refuses a FIFO or other special file named as a script, instead of hanging until the client's hook timeout let the command run unchecked.
 - The fence refuses shell and edit-tool writes to `room.json`: it holds the passcode hash, and a swapped hash would unlock the page after a restart.
 - The owned-file write check (`watches.json`, `squiggle.json`, `room.json`) is linear: a 200 KB command naming the file checks in under a second instead of over a minute, so a hook can't time out into allow.
