@@ -712,8 +712,11 @@ function privateCommand(cmd, cwd, home, o, depth, outer = '') {
       const rel = ws[0].replace(homeArg(home), home);
       if (strict && !depth && /^[\w.~\/-]+$/.test(rel) && writes(text.slice(0, text.lastIndexOf(seg)), path.basename(rel))) return true;
       for (const f of new Set(here.map((dir) => path.resolve(dir, rel)))) {
-        let body = '';
-        try { if (fs.statSync(f).size < 256 * 1024) body = fs.readFileSync(f, 'utf8'); } catch {}
+        // Opened without blocking and checked on the open file: a FIFO hung the guard with no CPU use, past its CPU limit, until
+        // the client's hook timeout ran the tool. Its body is unknown, so anything but a regular file or folder refuses.
+        let body = '', odd = false;
+        try { const fd = fs.openSync(f, fs.constants.O_RDONLY | fs.constants.O_NONBLOCK); try { const st = fs.fstatSync(fd); odd = !st.isFile() && !st.isDirectory(); if (st.isFile() && st.size < 256 * 1024) body = fs.readFileSync(fd, 'utf8'); } finally { fs.closeSync(fd); } } catch {}
+        if (odd) return true;
         if (!body || body.includes('\0') || !(viaShell || new RegExp(`^#!.*\\b(${SHELLS.join('|')})\\b`).test(body))) continue;
         body = body.replace(/\$\(\s*dirname\s+(?:--\s+)?["']?\$\{?(?:0|BASH_SOURCE(?:\[0\])?)\}?["']?\s*\)|\$\{(?:0|BASH_SOURCE(?:\[0\])?)%\/\*\}/g, () => path.dirname(f));
         if (privateCommand(body, path.dirname(f), home, o, depth + 1)) return true;
